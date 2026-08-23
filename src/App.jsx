@@ -7,6 +7,7 @@ import {
 import { useFields } from "./hooks/useFields";
 import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
+import { useFavorites } from "./hooks/useFavorites";
 
 /* ---------- design tokens ---------- */
 const FONTS = `
@@ -72,13 +73,6 @@ const STATUS_LABEL = {
   unscrapable: null,
   facebook_only: null,
 };
-
-const favoritesData = [
-  { name: "Outdoor Fields", count: "3 saved", grad: "linear-gradient(160deg,#1a2018,#090b08)" },
-  { name: "Tournaments", count: "2 saved", grad: "linear-gradient(160deg,#1c1c1a,#09090a)" },
-  { name: "Indoor Fields", count: "3 saved", grad: "linear-gradient(160deg,#191b1e,#08090b)" },
-  { name: "MilSim", count: "2 saved", grad: "linear-gradient(160deg,#191c15,#08090a)" },
-];
 
 const scheduleUpcomingSuggested = [
   { title: "Rec Day: Chaos at the Fort", venue: "Cedar Airsoft Field", date: "May 18, 2024" },
@@ -442,7 +436,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields }) 
   );
 }
 
-function EventDetailScreen({ ev, field, onBack, onOpenField }) {
+function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   return (
     <div className="h-full flex flex-col" style={flatBg}>
@@ -451,6 +445,9 @@ function EventDetailScreen({ ev, field, onBack, onOpenField }) {
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
+            </button>
+            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+              <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
             </button>
           </div>
           <div className="absolute bottom-4 left-5 right-5">
@@ -540,7 +537,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField }) {
   );
 }
 
-function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField }) {
+function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite }) {
   if (!field) {
     return (
       <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
@@ -566,6 +563,9 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
+            </button>
+            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+              <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
             </button>
           </div>
           <div className="absolute bottom-4 left-5 right-5">
@@ -681,20 +681,77 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
   );
 }
 
-function FavoritesScreen({ onNavigate }) {
+function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, events, onOpenField, onOpenEvent }) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const savedFieldIds = favorites.filter((f) => f.type === "field").map((f) => f.refId);
+  const savedFields = fields.filter((f) => savedFieldIds.includes(f.id));
+
+  const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
+  const savedEvents = events
+    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <ScreenHeader title="Favorites" />
       <div className="px-6 pt-5">
-        <Eyebrow>Saved Categories</Eyebrow>
-        <div className="grid grid-cols-2 gap-3">
-          {favoritesData.map((f) => (
-            <div key={f.name} className="h-32 relative p-3 flex flex-col justify-end" style={{ background: f.grad, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              <div className="font-semibold text-[14px]" style={{ ...display, color: T.ash }}>{f.name}</div>
-              <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>{f.count}</div>
-            </div>
-          ))}
-        </div>
+        {favoritesLoading ? (
+          <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading favorites…</div>
+        ) : (
+          <>
+            <Eyebrow>Saved Fields</Eyebrow>
+            {savedFields.length === 0 ? (
+              <p className="text-[13px] mb-6" style={{ ...body, color: T.ashFaint }}>
+                No fields saved yet — tap the heart on any field's page to save it here.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3 mb-6">
+                {savedFields.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => onOpenField(f)}
+                    className="p-3 flex items-center gap-3 text-left"
+                    style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+                  >
+                    <div className="w-14 h-14" style={{ ...heroStyle(f.imageUrl, f.id), borderRadius: 4 }} />
+                    <div className="flex-1">
+                      <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}</div>
+                      <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{f.city}</div>
+                    </div>
+                    <ChevronRight size={16} color={T.ashFaint} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <Eyebrow>Saved Events</Eyebrow>
+            {savedEvents.length === 0 ? (
+              <p className="text-[13px]" style={{ ...body, color: T.ashFaint }}>
+                No upcoming saved events — tap the heart on any event's page to save it here. Past events drop off automatically.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {savedEvents.map((ev) => (
+                  <button
+                    key={ev.id}
+                    onClick={() => onOpenEvent(ev)}
+                    className="p-3 flex items-center gap-3 text-left"
+                    style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+                  >
+                    <div className="w-14 h-14" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
+                    <div className="flex-1">
+                      <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
+                      <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+                      <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
+                    </div>
+                    <ChevronRight size={16} color={T.ashFaint} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
       <BottomNav active="favorites" onNavigate={onNavigate} />
     </div>
@@ -884,6 +941,7 @@ export default function App() {
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signOut } = useAuth();
+  const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
 
   const [stack, setStack] = useState(["home"]);
   const [activeEventId, setActiveEventId] = useState(null);
@@ -936,7 +994,14 @@ export default function App() {
     );
   } else if (screen === "event") {
     content = activeEvent ? (
-      <EventDetailScreen ev={activeEvent} field={activeField} onBack={pop} onOpenField={() => openField(activeField)} />
+      <EventDetailScreen
+        ev={activeEvent}
+        field={activeField}
+        onBack={pop}
+        onOpenField={() => openField(activeField)}
+        favorited={isFavorited("event", activeEvent.id)}
+        onToggleFavorite={() => toggleFavorite("event", activeEvent.id)}
+      />
     ) : (
       <div className="h-full flex items-center justify-center" style={flatBg}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading event…</p>
@@ -953,10 +1018,22 @@ export default function App() {
         onNavigate={goTab}
         onOpenEvent={openEvent}
         onOpenField={openField}
+        favorited={activeField ? isFavorited("field", activeField.id) : false}
+        onToggleFavorite={() => activeField && toggleFavorite("field", activeField.id)}
       />
     );
   } else if (screen === "favorites") {
-    content = <FavoritesScreen onNavigate={goTab} />;
+    content = (
+      <FavoritesScreen
+        onNavigate={goTab}
+        favorites={favorites}
+        favoritesLoading={favoritesLoading}
+        fields={fields}
+        events={events}
+        onOpenField={openField}
+        onOpenEvent={openEvent}
+      />
+    );
   } else if (screen === "schedule") {
     content = <ScheduleScreen onNavigate={goTab} filled={scheduleFilled} setFilled={setScheduleFilled} />;
   } else if (screen === "inbox") {
