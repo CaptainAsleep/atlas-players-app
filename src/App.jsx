@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useFields } from "./hooks/useFields";
 import { useEvents } from "./hooks/useEvents";
+import { useAuth } from "./hooks/useAuth";
 
 /* ---------- design tokens ---------- */
 const FONTS = `
@@ -169,10 +170,43 @@ function BottomNav({ active, onNavigate }) {
 }
 
 /* ---------- screens ---------- */
-function LoginScreen({ onContinue }) {
+function LoginScreen({ signIn, signUp }) {
+  const [mode, setMode] = useState("signin"); // "signin" | "signup"
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [callsign, setCallsign] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const friendlyError = (code) => {
+    if (code === "auth/email-already-in-use") return "That email already has an account — try signing in instead.";
+    if (code === "auth/invalid-email") return "That doesn't look like a valid email address.";
+    if (code === "auth/weak-password") return "Password needs to be at least 6 characters.";
+    if (code === "auth/invalid-credential" || code === "auth/wrong-password") return "Incorrect email or password.";
+    if (code === "auth/user-not-found") return "No account found with that email.";
+    return "Something went wrong — try again.";
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        await signUp(email.trim(), password, callsign.trim());
+      } else {
+        await signIn(email.trim(), password);
+      }
+    } catch (err) {
+      setError(friendlyError(err.code));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col px-6" style={flatBg}>
-      <div className="flex flex-col items-center mt-12 mb-10">
+    <div className="h-full flex flex-col px-6 overflow-y-auto" style={flatBg}>
+      <div className="flex flex-col items-center mt-12 mb-8">
         <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4 }}>
           <Crosshair color={T.ash} size={24} strokeWidth={1.6} />
         </div>
@@ -180,53 +214,81 @@ function LoginScreen({ onContinue }) {
       </div>
 
       <h1 className="text-[23px] font-semibold mb-2" style={{ ...display, color: T.ash, letterSpacing: "-0.01em" }}>
-        Welcome to Atlas
+        {mode === "signup" ? "Create your account" : "Welcome back"}
       </h1>
       <p className="text-[14px] leading-relaxed mb-6" style={{ ...body, color: T.ashDim }}>
         Discover local fields, RSVP to upcoming rec games or milsim events, and track your gameplay roster profile.
       </p>
 
-      <div className="px-4 py-3.5 flex items-center gap-2 mb-2" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}>
-        <span className="font-semibold text-[15px]" style={{ ...mono, color: T.ash }}>+1</span>
-        <span className="w-px h-5" style={{ background: T.line }} />
-        <span className="text-[15px]" style={{ ...body, color: T.ashFaint }}>Mobile Phone Number</span>
-      </div>
-      <p className="text-[12px] mb-5" style={{ ...body, color: T.ashFaint }}>
-        We'll send a secure SMS verification code to verify your profile. Standard carrier message rates apply.
-      </p>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        {mode === "signup" && (
+          <input
+            value={callsign}
+            onChange={(e) => setCallsign(e.target.value)}
+            placeholder="Callsign / Username"
+            className="px-4 py-3.5 text-[15px] bg-transparent outline-none"
+            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+          />
+        )}
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          type="email"
+          autoComplete="email"
+          placeholder="Email"
+          className="px-4 py-3.5 text-[15px] bg-transparent outline-none"
+          style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+        />
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          type="password"
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+          placeholder="Password"
+          className="px-4 py-3.5 text-[15px] bg-transparent outline-none"
+          style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+        />
+
+        {error && (
+          <p className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mt-2"
+          style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: busy ? 0.6 : 1 }}
+        >
+          {busy ? "Please wait…" : mode === "signup" ? "Create Account" : "Sign In"} <ArrowRight size={16} />
+        </button>
+      </form>
 
       <button
-        onClick={onContinue}
-        className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mb-5"
-        style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(""); }}
+        className="text-center text-[13px] font-medium mt-4"
+        style={{ ...body, color: T.accent }}
       >
-        Continue <ArrowRight size={16} />
+        {mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
       </button>
 
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3 my-5">
         <div className="flex-1 h-px" style={{ background: T.line }} />
         <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>or</span>
         <div className="flex-1 h-px" style={{ background: T.line }} />
       </div>
 
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-2.5 mb-6">
         {["Continue with Google", "Continue with Apple", "Continue with Facebook"].map((label) => (
           <button
             key={label}
-            className="w-full py-3 font-medium text-[13px]"
-            style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}
+            disabled
+            className="w-full py-3 font-medium text-[13px] flex items-center justify-center gap-2"
+            style={{ ...body, border: `1px solid ${T.line}`, color: T.ashFaint, borderRadius: 4, opacity: 0.5, cursor: "not-allowed" }}
           >
             {label}
+            <span className="text-[10px]" style={{ ...mono }}>(soon)</span>
           </button>
         ))}
-      </div>
-
-      <div className="flex-1" />
-      <button className="text-center text-[12px] font-medium underline pb-2" style={{ ...body, color: T.ashDim }}>
-        Need help?
-      </button>
-      <div className="flex justify-center pb-2">
-        <div style={{ width: 120, height: 4, borderRadius: 2, background: T.line }} />
       </div>
     </div>
   );
@@ -767,28 +829,33 @@ function ProfileRow({ label, value }) {
   );
 }
 
-function ProfileScreen({ onNavigate, onLogout }) {
+function ProfileScreen({ profile, user, onNavigate, onLogout }) {
+  const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <ScreenHeader title="Profile" />
       <div className="px-6 pt-4">
         <div className="p-4 flex items-center gap-3 mb-5" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-          <div className="w-14 h-14" style={{ background: T.panelAlt, borderRadius: 4 }} />
+          <div
+            className="w-14 h-14 flex items-center justify-center text-[18px] font-semibold"
+            style={{ ...display, background: T.panelAlt, borderRadius: 4, color: T.ash }}
+          >
+            {initial}
+          </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Wingman</span>
-              <Tag tone="accent">PRO</Tag>
+              <span className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>
+                {profile?.callsign || "Loading…"}
+              </span>
             </div>
-            <span className="text-[12px] font-medium underline" style={{ ...body, color: T.accent }}>Show profile</span>
+            <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>{user?.email}</span>
           </div>
         </div>
 
         <Eyebrow>Account Settings</Eyebrow>
         <div className="px-4 mb-5 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
-          <ProfileRow label="Personal Info" />
-          <ProfileRow label="Account Settings" />
-          <ProfileRow label="One-Click Register" value="Enabled" />
-          <ProfileRow label="Payment Info" value="Visa •••• 1234" />
+          <ProfileRow label="Email" value={user?.email} />
+          <ProfileRow label="Callsign" value={profile?.callsign} />
         </div>
 
         <Eyebrow>Support & Preferences</Eyebrow>
@@ -816,8 +883,9 @@ function ProfileScreen({ onNavigate, onLogout }) {
 export default function App() {
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
+  const { user, profile, authLoading, signUp, signIn, signOut } = useAuth();
 
-  const [stack, setStack] = useState(["login"]);
+  const [stack, setStack] = useState(["home"]);
   const [activeEventId, setActiveEventId] = useState(null);
   const [activeFieldId, setActiveFieldId] = useState(null);
   const [scheduleFilled, setScheduleFilled] = useState(true);
@@ -842,10 +910,20 @@ export default function App() {
     setActiveFieldId(typeof fieldOrId === "string" ? fieldOrId : fieldOrId?.id || activeEvent?.fieldId);
     push("field");
   };
+  const handleLogout = async () => {
+    await signOut();
+    setStack(["home"]); // reset navigation so the next sign-in starts clean
+  };
 
   let content;
-  if (screen === "login") {
-    content = <LoginScreen onContinue={() => goTab("home")} />;
+  if (authLoading) {
+    content = (
+      <div className="h-full flex items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
+      </div>
+    );
+  } else if (!user) {
+    content = <LoginScreen signIn={signIn} signUp={signUp} />;
   } else if (screen === "home") {
     content = (
       <HomeScreen
@@ -884,7 +962,7 @@ export default function App() {
   } else if (screen === "inbox") {
     content = <InboxScreen onNavigate={goTab} />;
   } else if (screen === "profile") {
-    content = <ProfileScreen onNavigate={goTab} onLogout={() => goTab("login")} />;
+    content = <ProfileScreen profile={profile} user={user} onNavigate={goTab} onLogout={handleLogout} />;
   }
 
   return (
