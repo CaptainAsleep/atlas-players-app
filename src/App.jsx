@@ -232,11 +232,11 @@ function LoginScreen({ onContinue }) {
   );
 }
 
-function EventCard({ ev, onClick }) {
+function EventCard({ ev, fallbackImageUrl, onClick }) {
   const isToday = ev.date === new Date().toISOString().slice(0, 10);
   return (
     <button onClick={onClick} className="text-left w-full mb-4">
-      <div className="h-36 relative mb-2" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }}>
+      <div className="h-36 relative mb-2" style={{ ...heroStyle(ev.imageUrl || fallbackImageUrl, ev.id || ev.title), borderRadius: 4 }}>
         <div className="absolute top-3 left-3 flex gap-2">
           {ev.type && <Tag>{ev.type}</Tag>}
           {isToday && <Tag tone="live">TODAY</Tag>}
@@ -254,7 +254,7 @@ function EventCard({ ev, onClick }) {
   );
 }
 
-function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading }) {
+function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields }) {
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("Featured");
 
@@ -366,7 +366,12 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading }) {
           </div>
         ) : (
           filteredEvents.map((ev) => (
-            <EventCard key={ev.id} ev={ev} onClick={() => onOpenEvent(ev)} />
+            <EventCard
+              key={ev.id}
+              ev={ev}
+              fallbackImageUrl={fields.find((f) => f.id === ev.fieldId)?.imageUrl}
+              onClick={() => onOpenEvent(ev)}
+            />
           ))
         )}
       </div>
@@ -380,7 +385,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField }) {
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
-        <div className="h-60 relative" style={heroStyle(ev.imageUrl, ev.id || ev.title)}>
+        <div className="h-60 relative" style={heroStyle(ev.imageUrl || field?.imageUrl, ev.id || ev.title)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
@@ -834,6 +839,7 @@ export default function App() {
       <HomeScreen
         events={events}
         eventsLoading={eventsLoading}
+        fields={fields}
         onOpenEvent={openEvent}
         onNavigate={goTab}
       />
