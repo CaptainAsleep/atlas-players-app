@@ -9,5 +9,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+    // A signed-in user can read and write ONLY their own profile document —
+    // never anyone else's, and never before they're authenticated.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }
