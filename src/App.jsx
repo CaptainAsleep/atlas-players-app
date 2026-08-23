@@ -691,6 +691,9 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
   const savedEvents = events
     .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
+  const pastEvents = events
+    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
+    .sort((a, b) => b.date.localeCompare(a.date)); // most recently attended first
 
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
@@ -727,11 +730,11 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
 
             <Eyebrow>Saved Events</Eyebrow>
             {savedEvents.length === 0 ? (
-              <p className="text-[13px]" style={{ ...body, color: T.ashFaint }}>
+              <p className="text-[13px] mb-6" style={{ ...body, color: T.ashFaint }}>
                 No upcoming saved events — tap the heart on any event's page to save it here. Past events drop off automatically.
               </p>
             ) : (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 mb-6">
                 {savedEvents.map((ev) => (
                   <button
                     key={ev.id}
@@ -746,6 +749,32 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
                       <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
                     </div>
                     <ChevronRight size={16} color={T.ashFaint} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <Eyebrow>Past Events</Eyebrow>
+            {pastEvents.length === 0 ? (
+              <p className="text-[13px]" style={{ ...body, color: T.ashFaint }}>
+                Events you've saved will move here after they're over — a record of what you've attended.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {pastEvents.map((ev) => (
+                  <button
+                    key={ev.id}
+                    onClick={() => onOpenEvent(ev)}
+                    className="p-3 flex items-center gap-3 text-left"
+                    style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.65 }}
+                  >
+                    <div className="w-14 h-14" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
+                    <div className="flex-1">
+                      <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
+                      <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+                      <div className="text-[11px] font-medium" style={{ ...mono, color: T.ashFaint }}>{formatDate(ev.date, ev.endDate)}</div>
+                    </div>
+                    <Tag tone="good">ATTENDED</Tag>
                   </button>
                 ))}
               </div>
@@ -886,8 +915,75 @@ function ProfileRow({ label, value }) {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onLogout }) {
+function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, changePassword }) {
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
+
+  const [editingCallsign, setEditingCallsign] = useState(false);
+  const [callsignInput, setCallsignInput] = useState("");
+  const [callsignSaving, setCallsignSaving] = useState(false);
+  const [callsignError, setCallsignError] = useState("");
+
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  const openCallsignEdit = () => {
+    setCallsignInput(profile?.callsign || "");
+    setCallsignError("");
+    setEditingCallsign(true);
+  };
+
+  const saveCallsign = async () => {
+    const trimmed = callsignInput.trim();
+    if (!trimmed) {
+      setCallsignError("Callsign can't be empty.");
+      return;
+    }
+    setCallsignSaving(true);
+    setCallsignError("");
+    try {
+      await updateCallsign(trimmed);
+      setEditingCallsign(false);
+    } catch (err) {
+      setCallsignError("Couldn't save — try again.");
+    } finally {
+      setCallsignSaving(false);
+    }
+  };
+
+  const friendlyPasswordError = (code) => {
+    if (code === "auth/invalid-credential" || code === "auth/wrong-password") return "Current password is incorrect.";
+    if (code === "auth/weak-password") return "New password needs to be at least 6 characters.";
+    if (code === "auth/too-many-requests") return "Too many attempts — wait a bit and try again.";
+    return "Something went wrong — try again.";
+  };
+
+  const submitPasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess(false);
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords don't match.");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setPasswordSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPasswordError(friendlyPasswordError(err.code));
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <ScreenHeader title="Profile" />
@@ -900,20 +996,105 @@ function ProfileScreen({ profile, user, onNavigate, onLogout }) {
             {initial}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>
-                {profile?.callsign || "Loading…"}
-              </span>
-            </div>
-            <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>{user?.email}</span>
+            <span className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>
+              {profile?.callsign || "Loading…"}
+            </span>
+            <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{user?.email}</div>
           </div>
         </div>
 
         <Eyebrow>Account Settings</Eyebrow>
-        <div className="px-4 mb-5 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
+        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
           <ProfileRow label="Email" value={user?.email} />
-          <ProfileRow label="Callsign" value={profile?.callsign} />
+          {!editingCallsign ? (
+            <button onClick={openCallsignEdit} className="w-full flex items-center justify-between py-3.5">
+              <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Callsign</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{profile?.callsign}</span>
+                <ChevronRight size={15} color={T.ashFaint} />
+              </div>
+            </button>
+          ) : (
+            <div className="py-3.5">
+              <div className="flex gap-2">
+                <input
+                  value={callsignInput}
+                  onChange={(e) => setCallsignInput(e.target.value)}
+                  autoFocus
+                  className="flex-1 px-3 py-2 text-[14px] bg-transparent outline-none"
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+                />
+                <button
+                  onClick={saveCallsign}
+                  disabled={callsignSaving}
+                  className="px-4 py-2 text-[12px] font-semibold"
+                  style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: callsignSaving ? 0.6 : 1 }}
+                >
+                  {callsignSaving ? "…" : "Save"}
+                </button>
+                <button
+                  onClick={() => setEditingCallsign(false)}
+                  className="px-3 py-2 text-[12px] font-medium"
+                  style={{ ...body, color: T.ashFaint }}
+                >
+                  Cancel
+                </button>
+              </div>
+              {callsignError && <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{callsignError}</p>}
+            </div>
+          )}
         </div>
+
+        <button
+          onClick={() => { setShowPasswordForm(!showPasswordForm); setPasswordError(""); setPasswordSuccess(false); }}
+          className="w-full flex items-center justify-between py-3 px-4 mb-6"
+          style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+        >
+          <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Change Password</span>
+          <ChevronRight size={15} color={T.ashFaint} style={{ transform: showPasswordForm ? "rotate(90deg)" : "none" }} />
+        </button>
+
+        {showPasswordForm && (
+          <form onSubmit={submitPasswordChange} className="flex flex-col gap-2.5 mb-6 -mt-4">
+            <input
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              type="password"
+              autoComplete="current-password"
+              placeholder="Current password"
+              className="px-4 py-3 text-[14px] bg-transparent outline-none"
+              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            />
+            <input
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              type="password"
+              autoComplete="new-password"
+              placeholder="New password"
+              className="px-4 py-3 text-[14px] bg-transparent outline-none"
+              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            />
+            <input
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              type="password"
+              autoComplete="new-password"
+              placeholder="Confirm new password"
+              className="px-4 py-3 text-[14px] bg-transparent outline-none"
+              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            />
+            {passwordError && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{passwordError}</p>}
+            {passwordSuccess && <p className="text-[12px]" style={{ ...body, color: T.good }}>Password updated.</p>}
+            <button
+              type="submit"
+              disabled={passwordSaving}
+              className="w-full py-3 font-semibold text-[13px]"
+              style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: passwordSaving ? 0.6 : 1 }}
+            >
+              {passwordSaving ? "Updating…" : "Update Password"}
+            </button>
+          </form>
+        )}
 
         <Eyebrow>Support & Preferences</Eyebrow>
         <div className="px-4 mb-6 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
@@ -940,7 +1121,7 @@ function ProfileScreen({ profile, user, onNavigate, onLogout }) {
 export default function App() {
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signOut } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
 
   const [stack, setStack] = useState(["home"]);
@@ -1039,7 +1220,16 @@ export default function App() {
   } else if (screen === "inbox") {
     content = <InboxScreen onNavigate={goTab} />;
   } else if (screen === "profile") {
-    content = <ProfileScreen profile={profile} user={user} onNavigate={goTab} onLogout={handleLogout} />;
+    content = (
+      <ProfileScreen
+        profile={profile}
+        user={user}
+        onNavigate={goTab}
+        onLogout={handleLogout}
+        updateCallsign={updateCallsign}
+        changePassword={changePassword}
+      />
+    );
   }
 
   return (
