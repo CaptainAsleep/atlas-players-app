@@ -255,13 +255,28 @@ function EventCard({ ev, onClick }) {
 }
 
 function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading }) {
+  const [search, setSearch] = useState("");
+  const [activeCat, setActiveCat] = useState("Featured");
+
   const cats = [
-    { key: "Featured", icon: Star, active: true },
-    { key: "Outdoor", icon: Compass },
-    { key: "Indoor", icon: MapPin },
-    { key: "Tournament", icon: Ticket },
-    { key: "MilSim", icon: Crosshair },
+    { key: "Featured", icon: Star },
+    { key: "Outdoor", icon: Compass, type: "OUTDOOR" },
+    { key: "MilSim", icon: Crosshair, type: "MILSIM" },
+    { key: "Indoor", icon: MapPin, type: "INDOOR" },
+    { key: "Tournament", icon: Ticket, type: "TOURNAMENT" },
   ];
+
+  const filteredEvents = events.filter((ev) => {
+    const cat = cats.find((c) => c.key === activeCat);
+    if (cat?.type && ev.type !== cat.type) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const haystack = `${ev.title} ${ev.fieldName}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <div className="px-6 pt-2 pb-4 flex items-center justify-between">
@@ -291,7 +306,13 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading }) {
 
       <div className="mx-6 mb-4 flex items-center gap-2 px-3 py-3" style={{ border: `1px solid ${T.line}`, background: T.panel, borderRadius: 4 }}>
         <Search size={16} color={T.ashFaint} />
-        <span className="flex-1 text-[13px]" style={{ ...body, color: T.ashFaint }}>Where would you like to pew?</span>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Where would you like to pew?"
+          className="flex-1 text-[13px] bg-transparent outline-none"
+          style={{ ...body, color: T.ash }}
+        />
         <SlidersHorizontal size={16} color={T.ashDim} />
       </div>
 
@@ -312,16 +333,17 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading }) {
       <div className="flex gap-3 px-6 mb-5 overflow-x-auto">
         {cats.map((cat) => {
           const Icon = cat.icon;
+          const active = activeCat === cat.key;
           return (
-            <div key={cat.key} className="flex flex-col items-center gap-1.5">
+            <button key={cat.key} onClick={() => setActiveCat(cat.key)} className="flex flex-col items-center gap-1.5">
               <div
                 className="w-14 h-14 flex items-center justify-center"
-                style={{ background: cat.active ? T.ash : T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}
+                style={{ background: active ? T.ash : T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}
               >
-                <Icon size={19} color={cat.active ? "#0A0A0B" : T.ashDim} strokeWidth={1.7} />
+                <Icon size={19} color={active ? "#0A0A0B" : T.ashDim} strokeWidth={1.7} />
               </div>
-              <span className="text-[11px] font-medium" style={{ ...body, color: T.ashDim }}>{cat.key}</span>
-            </div>
+              <span className="text-[11px] font-medium" style={{ ...body, color: active ? T.ash : T.ashDim }}>{cat.key}</span>
+            </button>
           );
         })}
       </div>
@@ -338,8 +360,12 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading }) {
           <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
             No events loaded yet — check the Firestore connection.
           </div>
+        ) : filteredEvents.length === 0 ? (
+          <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
+            No events match "{search || activeCat}".
+          </div>
         ) : (
-          events.map((ev) => (
+          filteredEvents.map((ev) => (
             <EventCard key={ev.id} ev={ev} onClick={() => onOpenEvent(ev)} />
           ))
         )}
@@ -354,7 +380,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField }) {
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
-       <div className="h-60 relative" style={heroStyle(ev.imageUrl, ev.id || ev.title)}>
+        <div className="h-60 relative" style={heroStyle(ev.imageUrl, ev.id || ev.title)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
@@ -469,7 +495,7 @@ function FieldDetailScreen({ field, fieldEvents, onBack, onNavigate, onOpenEvent
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
-                <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
+        <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
