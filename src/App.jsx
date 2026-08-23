@@ -469,7 +469,7 @@ function FieldDetailScreen({ field, fieldEvents, onBack, onNavigate, onOpenEvent
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
-        <div className="h-60 relative" style={{ background: gradFor(field.id) }}>
+                <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
