@@ -478,7 +478,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField }) {
   );
 }
 
-function FieldDetailScreen({ field, fieldEvents, onBack, onNavigate, onOpenEvent }) {
+function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField }) {
   if (!field) {
     return (
       <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
@@ -519,7 +519,19 @@ function FieldDetailScreen({ field, fieldEvents, onBack, onNavigate, onOpenEvent
         <div className="px-5 mt-4 flex flex-col gap-3">
           {field.notes && (
             <div className="p-4" style={{ background: statusLabel ? "rgba(240,85,74,0.1)" : T.panel, border: `1px solid ${statusLabel ? T.alert : T.line}`, borderRadius: 6 }}>
-              <p className="text-[12px] leading-relaxed" style={{ ...body, color: statusLabel ? T.ashDim : T.ashDim }}>{field.notes}</p>
+              <p className="text-[12px] leading-relaxed mb-2" style={{ ...body, color: T.ashDim }}>{field.notes}</p>
+              {relocatedField && (
+                <button
+                  onClick={() => onOpenField(relocatedField)}
+                  className="flex items-center justify-between w-full mt-1 px-3 py-2"
+                  style={{ background: T.panelAlt, borderRadius: 4 }}
+                >
+                  <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>
+                    View events at {relocatedField.name}
+                  </span>
+                  <ArrowRight size={14} color={T.ashDim} />
+                </button>
+              )}
             </div>
           )}
 
@@ -853,13 +865,16 @@ export default function App() {
       </div>
     );
   } else if (screen === "field") {
+    const relocatedField = activeField?.relocatedTo ? fields.find((f) => f.id === activeField.relocatedTo) : null;
     content = (
       <FieldDetailScreen
         field={activeField}
         fieldEvents={activeFieldEvents}
+        relocatedField={relocatedField}
         onBack={pop}
         onNavigate={goTab}
         onOpenEvent={openEvent}
+        onOpenField={openField}
       />
     );
   } else if (screen === "favorites") {
