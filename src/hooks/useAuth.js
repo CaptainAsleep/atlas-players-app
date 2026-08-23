@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  updatePassword,
   updateProfile,
 } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
 export function useAuth() {
@@ -53,5 +56,25 @@ export function useAuth() {
     await firebaseSignOut(auth);
   }
 
-  return { user, profile, authLoading, signUp, signIn, signOut };
+  // Updates the callsign everywhere it's stored: the Firestore profile doc
+  // (what the app actually displays) and Auth's displayName (kept in sync
+  // for consistency, in case anything reads it directly later).
+  async function updateCallsign(newCallsign) {
+    if (!auth.currentUser) return;
+    await updateDoc(doc(db, "users", auth.currentUser.uid), { callsign: newCallsign });
+    await updateProfile(auth.currentUser, { displayName: newCallsign });
+  }
+
+  // Firebase requires proving the current password (re-authenticating)
+  // before allowing a password change — this isn't optional, it's how
+  // Firebase Auth protects against someone with a stale open session
+  // changing the password on a shared/unlocked device.
+  async function changePassword(currentPassword, newPassword) {
+    if (!auth.currentUser?.email) return;
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    await updatePassword(auth.currentUser, newPassword);
+  }
+
+  return { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword };
 }
