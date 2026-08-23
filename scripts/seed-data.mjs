@@ -35,6 +35,7 @@ const fields = [
     admission: "$20/player/day",
     about:
       "10-acre outdoor field north of Grand Rapids running an event-style schedule of rec days and larger events.",
+    imageURL: "https://images.squarespace-cdn.com/content/v1/6262f3f5e4f2770c486b0829/4c8e4e03-2dfb-4c5f-a445-ff70d4613b84/539384491_1254797379773738_374968517996269722_n.jpg",
     status: "active",
     dataSource: "website",
     lastScraped: "2026-08-23",
@@ -52,6 +53,7 @@ const fields = [
     indoorOutdoor: "outdoor",
     about:
       "38-acre outdoor field running open plays and larger milsim-style operations; standard open-play schedule is gates at 9am, briefing 10am, games 10:30am-5pm.",
+    imageURL: "https://static.wixstatic.com/media/6282e125651246cf8362f57d8d5a9b67.jpg/v1/fill/w_1920,h_1280,al_c,q_90,enc_avif,quality_auto/6282e125651246cf8362f57d8d5a9b67.jpg",
     status: "active",
     dataSource: "website",
     lastScraped: "2026-08-23",
@@ -88,6 +90,7 @@ const fields = [
     admission: "$20/person",
     about:
       "Outdoor field running capped open-play events (50 players) with custom scenario rounds, roughly quarterly.",
+    imageURL: "https://img1.wsimg.com/isteam/ip/ec5d8dd8-d89f-4c7e-90be-3eaf25e1aa35/2.0.jpg",
     status: "active",
     dataSource: "website",
     lastScraped: "2026-08-23",
@@ -103,6 +106,7 @@ const fields = [
     indoorOutdoor: "outdoor",
     hours: "Open play Sundays 12-5pm at the Copemish field, no reservation needed",
     about: "Paintball and airsoft park with a Traverse City retail shop and a Copemish playing field.",
+    imageURL: "https://static.wixstatic.com/media/274f48_2d410502d70b48019e12ff14f3ffa8b5~mv2.jpg/v1/fill/w_1920,h_932,al_c,q_85,enc_avif,quality_auto/store%20field.jpg",
     status: "active",
     dataSource: "website",
     lastScraped: "2026-08-23",
@@ -168,6 +172,7 @@ const fields = [
     youtube: "https://www.youtube.com/channel/UCA06NW8H1VyyIOszXZH9H9A",
     indoorOutdoor: "outdoor",
     about: "Themed outdoor paintball field with multiple battle zones; booking runs through an embedded FareHarbor calendar.",
+    imageURL: "https://static.wixstatic.com/media/78a56e_97bd927a2b284e82bbd82f882e0d3788~mv2.jpg/v1/fill/w_642,h_492,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/440957598_999534732178694_6331911926097574916_n.jpg",
     status: "active",
     dataSource: "website",
     lastScraped: "2026-08-23",
@@ -183,6 +188,7 @@ const fields = [
     facebook: "https://www.facebook.com/Totalcontrolpb",
     indoorOutdoor: "outdoor",
     hours: "Pro shop: Tue-Fri 11am-7pm, Sat 12-5pm, closed Sun/Mon",
+    imageURL: "https://images.squarespace-cdn.com/content/v1/61d7b2bfa282352059b4cd24/251e9c3e-9870-485e-b4c2-d992d51e2690/TCP+Field+Sign.jpg",
     status: "active",
     notes: "Playing field listed as CLOSED as of last scrape — confirm before listing as bookable.",
     dataSource: "website",
@@ -304,6 +310,7 @@ const fields = [
 // and seed the app with genuine near-term content.
 const events = [
   {
+    id: "cedar-airsoft-field-2026-08-22-tdm-day",
     fieldId: "cedar-airsoft-field",
     fieldName: "Cedar Airsoft Field",
     title: "Cedar Airsoft TDM Day",
@@ -314,8 +321,11 @@ const events = [
     type: "OUTDOOR",
     description: "Team-vs-team scenario rounds, standard chrono limits and safety rules apply.",
     sourceUrl: "https://www.cedarairsoftfield.com/events/0mu1a2w3s1wy9aa1wc95v8ld3q1yzi",
+    imageUrl:
+      "https://images.squarespace-cdn.com/content/v1/6262f3f5e4f2770c486b0829/1787081148035-DI8LMN19X9E7AZCTI073/587583723_1330918685494940_5519340731808511556_n.jpg",
   },
   {
+    id: "cedar-airsoft-field-2026-09-05-rampage-2026",
     fieldId: "cedar-airsoft-field",
     fieldName: "Cedar Airsoft Field",
     title: "Rampage 2026",
@@ -326,8 +336,11 @@ const events = [
     type: "MILSIM",
     description: "Two-day flagship event, no player cap or pre-registration, large-team objective gameplay.",
     sourceUrl: "https://www.cedarairsoftfield.com/events/rampage-2026",
+    imageUrl:
+      "https://images.squarespace-cdn.com/content/v1/6262f3f5e4f2770c486b0829/1777410862219-UE008B5Z3ZBMH33QLF42/541426977_1261001485819994_308724288471227800_n.jpg",
   },
   {
+    id: "cedar-airsoft-field-2026-09-20-gas-blow-back-day",
     fieldId: "cedar-airsoft-field",
     fieldName: "Cedar Airsoft Field",
     title: "Gas Blow Back Day!",
@@ -338,8 +351,11 @@ const events = [
     type: "OUTDOOR",
     description: "Gas blowback replicas only day — pistols, rifles, SMGs and lever actions, mags capped at 30 rounds.",
     sourceUrl: "https://www.cedarairsoftfield.com/events/gas-blow-back-day",
+    imageUrl:
+      "https://images.squarespace-cdn.com/content/v1/6262f3f5e4f2770c486b0829/1787081338302-LHSFRN2NPMHH3NNJPAQO/505702524_1195631062357037_6038482170686851167_n.jpg",
   },
   {
+    id: "darkfire-airsoft-2026-08-22-summers-end-11",
     fieldId: "darkfire-airsoft",
     fieldName: "Darkfire Airsoft",
     title: "Summers End 11 (Hosted by WASTE)",
@@ -351,6 +367,7 @@ const events = [
     sourceUrl: "https://www.darkfireairsoft.com/events/summers-end-11-hosted-by-waste",
   },
   {
+    id: "darkfire-airsoft-2026-09-05-minisim-nato-vs-rusfor-v",
     fieldId: "darkfire-airsoft",
     fieldName: "Darkfire Airsoft",
     title: "Minisim - NATO vs RUSFOR V (Hosted by VBH)",
@@ -361,6 +378,7 @@ const events = [
     sourceUrl: "https://www.darkfireairsoft.com/events/minisim-nato-vs-rusfor-v-hosted-by-vbh",
   },
   {
+    id: "darkfire-airsoft-2026-10-03-operation-cerberus-viii",
     fieldId: "darkfire-airsoft",
     fieldName: "Darkfire Airsoft",
     title: "Operation Cerberus VIII",
@@ -372,6 +390,7 @@ const events = [
     sourceUrl: "https://www.darkfireairsoft.com/events/operation-cerberus-viii",
   },
   {
+    id: "futureball-2026-09-19-armageddon",
     fieldId: "futureball",
     fieldName: "Futureball",
     title: "Armageddon",
@@ -381,6 +400,7 @@ const events = [
     sourceUrl: "https://www.futureball.com/armageddon-4/",
   },
   {
+    id: "futureball-2026-10-17-zombie-apocalypse",
     fieldId: "futureball",
     fieldName: "Futureball",
     title: "Zombie Apocalypse",
@@ -390,6 +410,7 @@ const events = [
     sourceUrl: "https://www.futureball.com/zombie-apocalypse/",
   },
   {
+    id: "the-compound-2026-09-19-open-play",
     fieldId: "the-compound",
     fieldName: "The Compound",
     title: "Open Play",
@@ -399,6 +420,7 @@ const events = [
     type: "OUTDOOR",
     description: "Capped at 50 players, four custom scenario rounds run through the day.",
     sourceUrl: "https://www.thecompoundairsoft.com/",
+    imageUrl: "https://img1.wsimg.com/isteam/ip/ec5d8dd8-d89f-4c7e-90be-3eaf25e1aa35/2.0.jpg",
   },
 ];
 
@@ -411,8 +433,8 @@ async function seed() {
   }
 
   for (const ev of events) {
-    const ref = db.collection("events").doc();
-    batch.set(ref, ev);
+    const { id, ...data } = ev;
+    batch.set(db.collection("events").doc(id), data, { merge: true });
   }
 
   await batch.commit();
