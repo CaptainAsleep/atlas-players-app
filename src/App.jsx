@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
   ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio
 } from "lucide-react";
+import { useFields } from "./hooks/useFields";
+import { useEvents } from "./hooks/useEvents";
 
 /* ---------- design tokens ---------- */
 const FONTS = `
@@ -28,43 +30,37 @@ const T = {
 
 const flatBg = { backgroundColor: T.void };
 
-/* ---------- mock data (same content as your screens) ---------- */
-const events = [
-  {
-    id: "rec",
-    title: "Cedar Airsoft Rec Game",
-    type: "OUTDOOR",
-    live: true,
-    city: "Cedar Rapids, MI",
-    date: "Saturday, May 11 — Staging opens 0900",
-    dateShort: "Saturday, May 11, 2024",
-    time: "0900 Check-in — 1000 Safety Briefing",
-    rating: "4.8",
-    price: "$25",
-    priceValue: "25.00",
-    grad: "linear-gradient(160deg,#1c1e18,#0a0a09)",
-    venue: "Cedar Airsoft Field",
-    host: "Cedar Airsoft Arena",
-    badges: ["TOP 10% FIELD", "POPULAR"],
-  },
-  {
-    id: "iron",
-    title: "Operation Iron Forge",
-    type: "MILSIM",
-    live: false,
-    city: "MTC Camp, MI",
-    date: "Saturday, June 13 — Staging opens 0800",
-    dateShort: "Saturday, June 13, 2024",
-    time: "0800 Check-in — 0900 Safety Briefing",
-    rating: "4.9",
-    price: "$75",
-    priceValue: "75.00",
-    grad: "linear-gradient(160deg,#1a1a1c,#08080a)",
-    venue: "MTC Camp",
-    host: "MTC Camp Staff",
-    badges: ["MILSIM"],
-  },
+/* ---------- helpers ---------- */
+// Deterministic placeholder gradient per field/event until real photos exist.
+const GRADIENTS = [
+  "linear-gradient(160deg,#1c1e18,#0a0a09)",
+  "linear-gradient(160deg,#1a1a1c,#08080a)",
+  "linear-gradient(160deg,#191c17,#08090a)",
+  "linear-gradient(160deg,#1b1a1c,#09080a)",
+  "linear-gradient(160deg,#17191c,#07080a)",
 ];
+function gradFor(seed = "") {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return GRADIENTS[h % GRADIENTS.length];
+}
+function formatDate(dateStr, endDateStr) {
+  if (!dateStr) return "";
+  const opts = { weekday: "short", month: "short", day: "numeric" };
+  const start = new Date(dateStr + "T00:00:00");
+  const startFmt = start.toLocaleDateString("en-US", opts);
+  if (!endDateStr) return startFmt;
+  const end = new Date(endDateStr + "T00:00:00");
+  return `${startFmt} – ${end.toLocaleDateString("en-US", opts)}`;
+}
+const STATUS_LABEL = {
+  active: null,
+  closing: "FIELD CLOSING",
+  relocated: "RELOCATED",
+  rebranded: "REBRANDED",
+  unscrapable: null,
+  facebook_only: null,
+};
 
 const favoritesData = [
   { name: "Outdoor Fields", count: "3 saved", grad: "linear-gradient(160deg,#1a2018,#090b08)" },
@@ -110,24 +106,6 @@ function Tag({ children, tone = "neutral" }) {
     >
       {children}
     </span>
-  );
-}
-
-function StatusBar() {
-  return (
-    <div className="flex items-center justify-between px-6 pt-3 pb-1 text-[13px] font-semibold" style={{ ...mono, color: T.ash }}>
-      <span>12:30</span>
-      <div className="flex items-center gap-1">
-        <div className="flex items-end gap-[2px] h-2.5">
-          {[3, 5, 7, 9].map((h, i) => (
-            <div key={i} style={{ width: 3, height: h, background: T.ash, borderRadius: 1 }} />
-          ))}
-        </div>
-        <div style={{ width: 22, height: 11, border: `1.4px solid ${T.ash}`, borderRadius: 2, padding: 1.5 }}>
-          <div style={{ width: "80%", height: "100%", background: T.ash }} />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -245,28 +223,28 @@ function LoginScreen({ onContinue }) {
 }
 
 function EventCard({ ev, onClick }) {
+  const isToday = ev.date === new Date().toISOString().slice(0, 10);
   return (
     <button onClick={onClick} className="text-left w-full mb-4">
-      <div className="h-36 relative mb-2" style={{ background: ev.grad, borderRadius: 4 }}>
+      <div className="h-36 relative mb-2" style={{ background: gradFor(ev.id || ev.title), borderRadius: 4 }}>
         <div className="absolute top-3 left-3 flex gap-2">
-          <Tag>{ev.type}</Tag>
-          {ev.live && <Tag tone="live">LIVE</Tag>}
+          {ev.type && <Tag>{ev.type}</Tag>}
+          {isToday && <Tag tone="live">TODAY</Tag>}
         </div>
       </div>
-      <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.city}</div>
+      <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
       <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
-      <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{ev.date}</div>
-      <div className="flex items-center justify-between mt-1.5">
-        <div className="flex items-center gap-1 text-[13px] font-semibold" style={{ ...mono, color: T.ash }}>
-          <Star size={13} fill={T.ash} color={T.ash} /> {ev.rating}
+      <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{formatDate(ev.date, ev.endDate)}{ev.startTime ? ` · ${ev.startTime}` : ""}</div>
+      {ev.price && (
+        <div className="flex items-center justify-end mt-1.5">
+          <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{ev.price}</div>
         </div>
-        <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{ev.price} / person</div>
-      </div>
+      )}
     </button>
   );
 }
 
-function HomeScreen({ onOpenEvent, onNavigate }) {
+function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading }) {
   const cats = [
     { key: "Featured", icon: Star, active: true },
     { key: "Outdoor", icon: Compass },
@@ -344,235 +322,243 @@ function HomeScreen({ onOpenEvent, onNavigate }) {
       </div>
 
       <div className="px-6">
-        {events.map((ev) => (
-          <EventCard key={ev.id} ev={ev} onClick={() => onOpenEvent(ev)} />
-        ))}
+        {eventsLoading ? (
+          <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading events…</div>
+        ) : events.length === 0 ? (
+          <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
+            No events loaded yet — check the Firestore connection.
+          </div>
+        ) : (
+          events.map((ev) => (
+            <EventCard key={ev.id} ev={ev} onClick={() => onOpenEvent(ev)} />
+          ))
+        )}
       </div>
       <BottomNav active="home" onNavigate={onNavigate} />
     </div>
   );
 }
 
-function EventDetailScreen({ ev, onBack, onOpenField }) {
-  const [showMore, setShowMore] = useState(false);
-  const amenities = ["Pro Shop on site", "Chrono Verification", "HPA Air Refills", "Gear Rentals", "Accepts Credit Cards"];
-  const rules = [
-    "Full-seal eye protection required at all times.",
-    "No blind firing over barriers; must look down sights.",
-    "Call your hits clearly. Integrity is absolute.",
-    "Chrono testing required for all replica tags on entry.",
-    "Muzzle bags required on replicas in all staging areas.",
-  ];
+function EventDetailScreen({ ev, field, onBack, onOpenField }) {
+  const statusLabel = field ? STATUS_LABEL[field.status] : null;
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
-        <div className="h-60 relative" style={{ background: ev.grad }}>
+        <div className="h-60 relative" style={{ background: gradFor(ev.id || ev.title) }}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <div className="flex gap-2">
-              <button className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
-                <Share2 color={T.ash} size={15} />
-              </button>
-              <button className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
-                <Heart color={T.ash} size={15} />
-              </button>
-            </div>
           </div>
           <div className="absolute bottom-4 left-5 right-5">
             <div className="flex gap-2 mb-2">
-              {ev.badges.map((b) => (
-                <Tag key={b}>{b}</Tag>
-              ))}
+              {ev.type && <Tag>{ev.type}</Tag>}
+              {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
             </div>
             <div className="text-[24px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
           </div>
         </div>
 
         <div className="px-5 mt-4 flex flex-col gap-3">
+          {statusLabel && field?.notes && (
+            <div className="p-4" style={{ background: "rgba(240,85,74,0.1)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
+              <div className="text-[12px] font-semibold mb-1" style={{ ...display, color: T.alert }}>{statusLabel}</div>
+              <p className="text-[12px] leading-relaxed" style={{ ...body, color: T.ashDim }}>{field.notes}</p>
+            </div>
+          )}
+
           <div className="p-4 flex flex-col gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
             <div className="flex gap-3 items-start">
               <Calendar size={17} color={T.ashDim} className="mt-0.5" />
               <div>
-                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.dateShort}</div>
-                <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{ev.time}</div>
+                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{formatDate(ev.date, ev.endDate)}</div>
+                {(ev.startTime || ev.endTime) && (
+                  <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>
+                    {ev.startTime}{ev.endTime ? ` – ${ev.endTime}` : ""}
+                  </div>
+                )}
               </div>
             </div>
             <div className="h-px" style={{ background: T.line }} />
-            <button onClick={onOpenField} className="flex gap-3 items-start text-left">
+            <button onClick={onOpenField} className="flex gap-3 items-start text-left" disabled={!field}>
               <MapPin size={17} color={T.ashDim} className="mt-0.5" />
               <div>
-                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.venue}</div>
-                <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>Cedar Rapids, Michigan — Verified Venue</div>
+                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.fieldName}</div>
+                {field?.city && <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{field.city}</div>}
               </div>
             </button>
           </div>
 
-          <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <div className="w-10 h-10 flex items-center justify-center text-[13px] font-semibold" style={{ ...mono, background: T.panelAlt, color: T.ash, borderRadius: 4 }}>
-              CA
+          {ev.description && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <Eyebrow>Event Details</Eyebrow>
+              <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>{ev.description}</p>
             </div>
-            <div className="flex-1">
-              <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{ev.host}</div>
-              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Owner / Event Moderator</div>
-            </div>
-            <button className="px-4 py-1.5 text-[12px] font-medium flex items-center gap-1" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}>
-              <MessageCircle size={13} /> Message
-            </button>
-          </div>
+          )}
 
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <Eyebrow>Event Details</Eyebrow>
-            <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>
-              Join us for our signature Saturday Open Play. Recommended for players of all experience levels.
-              {showMore && " We will coordinate a rotation of Team Deathmatch, Capture the Flag, and Attack & Defend scenarios across our forest facility. Rentals and BB purchases are fully available at the main field registration deck."}
-            </p>
-            <button onClick={() => setShowMore(!showMore)} className="text-[12px] font-medium mt-1" style={{ ...body, color: T.accent }}>
-              {showMore ? "Show less" : "Show more"}
-            </button>
-          </div>
-
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <Eyebrow>Field Amenities</Eyebrow>
-            <div className="flex flex-col gap-2">
-              {amenities.map((a) => (
-                <div key={a} className="flex items-center gap-2 text-[13px]" style={{ ...body, color: T.ashDim }}>
-                  <Check size={13} color={T.good} /> {a}
-                </div>
-              ))}
+          {field?.about && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <Eyebrow>About {field.name}</Eyebrow>
+              <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>{field.about}</p>
             </div>
-          </div>
+          )}
 
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <Eyebrow>Safety Rules & Policies</Eyebrow>
-            <div className="flex flex-col gap-2">
-              {rules.map((r, i) => (
-                <div key={r} className="flex gap-2 text-[13px]" style={{ ...body, color: T.ashDim }}>
-                  <span className="font-semibold" style={{ ...mono, color: T.ashFaint }}>{String(i + 1).padStart(2, "0")}</span> {r}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <Eyebrow>Chrono & Velocity Limits</Eyebrow>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
-                <div className="text-[10px] font-medium" style={{ ...body, color: T.ashFaint }}>AEG / GBB</div>
-                <div className="text-[16px] font-semibold" style={{ ...mono, color: T.ash }}>400 FPS max</div>
-                <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>0.20g BBs</div>
-              </div>
-              <div className="p-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
-                <div className="text-[10px] font-medium" style={{ ...body, color: T.ashFaint }}>HPA</div>
-                <div className="text-[16px] font-semibold" style={{ ...mono, color: T.ash }}>1.5 J max</div>
-                <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Tournament BBs</div>
-              </div>
-            </div>
-          </div>
+          <a
+            href={ev.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="p-4 flex items-center justify-between"
+            style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+          >
+            <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>View original listing</span>
+            <ArrowRight size={16} color={T.ashDim} />
+          </a>
         </div>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 border-t px-5 py-3 flex items-center justify-between" style={{ background: T.panel, borderColor: T.line }}>
         <div>
-          <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Total Entry Cost</div>
+          <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
           <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>
-            ${ev.priceValue} <span className="text-[11px]" style={{ color: T.ashDim }}>/ person</span>
+            {ev.price || field?.admission || "See listing"}
           </div>
         </div>
-        <button className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}>
-          Confirm RSVP
-        </button>
+        <a
+          href={ev.sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="px-6 py-3 font-semibold text-[13px] inline-block"
+          style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+        >
+          Book / RSVP
+        </a>
       </div>
     </div>
   );
 }
 
-function FieldDetailScreen({ onBack, onNavigate, onOpenEvent }) {
-  const scheduled = [
-    { title: "Saturday Open Rec Play", date: "May 11 · 10:00 AM", price: "$25" },
-    { title: "Operation Iron Forge (Milsim)", date: "May 18 · 8:00 AM", price: "$75" },
-    { title: "Tactical CQB Speedsoft Bracket", date: "May 25 · 12:00 PM", price: "$35" },
-  ];
+function FieldDetailScreen({ field, fieldEvents, onBack, onNavigate, onOpenEvent }) {
+  if (!field) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Field not found.</p>
+        <BottomNav active="home" onNavigate={onNavigate} />
+      </div>
+    );
+  }
+  const statusLabel = STATUS_LABEL[field.status];
+  const links = [
+    { label: "Website", url: field.website },
+    { label: "Facebook", url: field.facebook },
+    { label: "Instagram", url: field.instagram },
+    { label: "Discord", url: field.discord },
+    { label: "YouTube", url: field.youtube },
+    { label: "TikTok", url: field.tiktok },
+  ].filter((l) => l.url);
+
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
-        <div className="h-60 relative" style={{ background: "linear-gradient(160deg,#191c17,#08090a)" }}>
+        <div className="h-60 relative" style={{ background: gradFor(field.id) }}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <button className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
-              <SlidersHorizontal color={T.ash} size={14} />
-            </button>
           </div>
           <div className="absolute bottom-4 left-5 right-5">
             <div className="flex gap-2 mb-2">
-              <Tag>TOP 10% FIELD</Tag>
-              <Tag tone="good">VERIFIED HOST</Tag>
+              {field.indoorOutdoor && <Tag>{field.indoorOutdoor.toUpperCase()}</Tag>}
+              {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
+              {!statusLabel && field.status === "active" && <Tag tone="good">ACTIVE</Tag>}
             </div>
-            <div className="text-[24px] font-semibold" style={{ ...display, color: T.ash }}>Cedar Airsoft Arena</div>
+            <div className="text-[24px] font-semibold" style={{ ...display, color: T.ash }}>{field.name}</div>
           </div>
         </div>
 
         <div className="px-5 mt-4 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              <div className="text-[10px] font-medium" style={{ ...body, color: T.ashFaint }}>Trust Rating</div>
-              <div className="text-[18px] font-semibold flex items-center gap-1" style={{ ...mono, color: T.ash }}>
-                4.8 <Star size={13} fill={T.ash} color={T.ash} />
-              </div>
-              <div className="text-[11px]" style={{ ...body, color: T.good }}>128 active reviews</div>
+          {field.notes && (
+            <div className="p-4" style={{ background: statusLabel ? "rgba(240,85,74,0.1)" : T.panel, border: `1px solid ${statusLabel ? T.alert : T.line}`, borderRadius: 6 }}>
+              <p className="text-[12px] leading-relaxed" style={{ ...body, color: statusLabel ? T.ashDim : T.ashDim }}>{field.notes}</p>
             </div>
-            <div className="p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              <div className="text-[10px] font-medium" style={{ ...body, color: T.ashFaint }}>Capacity</div>
-              <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>150 Players</div>
-              <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>Main staging area</div>
-            </div>
-          </div>
+          )}
 
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <Eyebrow>About the Field</Eyebrow>
-            <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>
-              Cedar Airsoft is Michigan's premier tactical simulated skirmish field. Spanning over 25 acres of lush woodlands, custom built outpost bases, trench systems, and close quarter urban environments.
-            </p>
-          </div>
+          {field.about && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <Eyebrow>About the Field</Eyebrow>
+              <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>{field.about}</p>
+            </div>
+          )}
+
+          {(field.admission || field.hours) && (
+            <div className="p-4 flex flex-col gap-2" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              {field.admission && (
+                <div className="flex justify-between text-[13px]">
+                  <span style={{ ...body, color: T.ashFaint }}>Admission</span>
+                  <span style={{ ...mono, color: T.ash }}>{field.admission}</span>
+                </div>
+              )}
+              {field.hours && (
+                <div className="flex justify-between text-[13px] gap-4">
+                  <span style={{ ...body, color: T.ashFaint }}>Hours</span>
+                  <span className="text-right" style={{ ...mono, color: T.ash }}>{field.hours}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
             <Eyebrow>Scheduled Events</Eyebrow>
-            <div className="flex flex-col">
-              {scheduled.map((s, i) => (
-                <button
-                  key={s.title}
-                  onClick={onOpenEvent}
-                  className="flex items-center gap-3 py-2.5 text-left"
-                  style={{ borderTop: i > 0 ? `1px solid ${T.line}` : "none" }}
+            {fieldEvents.length === 0 ? (
+              <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>No upcoming events loaded for this field yet.</p>
+            ) : (
+              <div className="flex flex-col">
+                {fieldEvents.map((s, i) => (
+                  <button
+                    key={s.id}
+                    onClick={() => onOpenEvent(s)}
+                    className="flex items-center gap-3 py-2.5 text-left"
+                    style={{ borderTop: i > 0 ? `1px solid ${T.line}` : "none" }}
+                  >
+                    <div className="w-11 h-11" style={{ background: T.panelAlt, borderRadius: 4 }} />
+                    <div className="flex-1">
+                      <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{s.title}</div>
+                      <div className="text-[11px]" style={{ ...mono, color: T.ashFaint }}>{formatDate(s.date, s.endDate)}</div>
+                    </div>
+                    {s.price && <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{s.price}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {field.address && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <Eyebrow>Field Location</Eyebrow>
+              <div className="flex items-center gap-2 text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
+                <MapPin size={13} color={T.ashFaint} /> {field.address}
+              </div>
+              {field.phone && (
+                <div className="text-[12px]" style={{ ...mono, color: T.ashFaint }}>{field.phone}</div>
+              )}
+            </div>
+          )}
+
+          {links.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {links.map((l) => (
+                <a
+                  key={l.label}
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3 font-medium text-[13px] text-center"
+                  style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}
                 >
-                  <div className="w-11 h-11" style={{ background: T.panelAlt, borderRadius: 4 }} />
-                  <div className="flex-1">
-                    <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{s.title}</div>
-                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{s.date}</div>
-                  </div>
-                  <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{s.price}</div>
-                </button>
+                  {l.label}
+                </a>
               ))}
             </div>
-          </div>
-
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <Eyebrow>Field Location</Eyebrow>
-            <div className="flex items-center gap-2 text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
-              <MapPin size={13} color={T.ashFaint} /> 4900 Cedar Rapids Road, MI 49301
-            </div>
-            <div className="h-32" style={{ background: "linear-gradient(160deg,#15170f,#08090a)", borderRadius: 4 }} />
-          </div>
-
-          <button className="w-full py-3 font-medium text-[13px]" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}>
-            Message Venue
-          </button>
-          <button className="w-full text-center py-2 font-medium text-[12px]" style={{ ...body, color: T.alert }}>
-            Report Venue Profile
-          </button>
+          )}
         </div>
       </div>
       <BottomNav active="home" onNavigate={onNavigate} />
@@ -775,8 +761,12 @@ function ProfileScreen({ onNavigate, onLogout }) {
 
 /* ---------- app shell ---------- */
 export default function App() {
+  const { fields, loading: fieldsLoading } = useFields();
+  const { events, loading: eventsLoading } = useEvents();
+
   const [stack, setStack] = useState(["login"]);
-  const [activeEvent, setActiveEvent] = useState(events[0]);
+  const [activeEventId, setActiveEventId] = useState(null);
+  const [activeFieldId, setActiveFieldId] = useState(null);
   const [scheduleFilled, setScheduleFilled] = useState(true);
   const screen = stack[stack.length - 1];
 
@@ -784,23 +774,51 @@ export default function App() {
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   const goTab = (tab) => setStack([tab]);
 
+  const activeEvent = events.find((e) => e.id === activeEventId) || null;
+  const activeField =
+    fields.find((f) => f.id === activeFieldId) ||
+    (activeEvent ? fields.find((f) => f.id === activeEvent.fieldId) : null);
+  const activeFieldEvents = activeField ? events.filter((e) => e.fieldId === activeField.id) : [];
+
+  const openEvent = (ev) => {
+    setActiveEventId(ev.id);
+    push("event");
+  };
+  const openField = (fieldOrId) => {
+    setActiveFieldId(typeof fieldOrId === "string" ? fieldOrId : fieldOrId?.id || activeEvent?.fieldId);
+    push("field");
+  };
+
   let content;
   if (screen === "login") {
     content = <LoginScreen onContinue={() => goTab("home")} />;
   } else if (screen === "home") {
     content = (
       <HomeScreen
-        onOpenEvent={(ev) => {
-          setActiveEvent(ev);
-          push("event");
-        }}
+        events={events}
+        eventsLoading={eventsLoading}
+        onOpenEvent={openEvent}
         onNavigate={goTab}
       />
     );
   } else if (screen === "event") {
-    content = <EventDetailScreen ev={activeEvent} onBack={pop} onOpenField={() => push("field")} />;
+    content = activeEvent ? (
+      <EventDetailScreen ev={activeEvent} field={activeField} onBack={pop} onOpenField={() => openField(activeField)} />
+    ) : (
+      <div className="h-full flex items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading event…</p>
+      </div>
+    );
   } else if (screen === "field") {
-    content = <FieldDetailScreen onBack={pop} onNavigate={goTab} onOpenEvent={() => push("event")} />;
+    content = (
+      <FieldDetailScreen
+        field={activeField}
+        fieldEvents={activeFieldEvents}
+        onBack={pop}
+        onNavigate={goTab}
+        onOpenEvent={openEvent}
+      />
+    );
   } else if (screen === "favorites") {
     content = <FavoritesScreen onNavigate={goTab} />;
   } else if (screen === "schedule") {
@@ -814,7 +832,6 @@ export default function App() {
   return (
     <div className="w-full h-screen flex flex-col" style={{ background: T.void }}>
       <style>{FONTS}</style>
-      {screen !== "login" && <StatusBar />}
       <div className="flex-1 min-h-0 relative">
         {content}
       </div>

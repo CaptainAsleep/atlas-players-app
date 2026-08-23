@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /fields/{fieldId} {
+      allow read: if true;
+      allow write: if false; // only the seed/sync script (firebase-admin) can write
+    }
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
