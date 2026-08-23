@@ -782,6 +782,7 @@ export default function App() {
 
   const openEvent = (ev) => {
     setActiveEventId(ev.id);
+    setActiveFieldId(null); // clear any leftover field selection from a prior visit
     push("event");
   };
   const openField = (fieldOrId) => {
