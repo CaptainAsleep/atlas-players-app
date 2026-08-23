@@ -44,6 +44,16 @@ function gradFor(seed = "") {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return GRADIENTS[h % GRADIENTS.length];
 }
+// Real photo when we have one, dark overlay for text legibility; falls back
+// to the deterministic gradient when no imageUrl exists yet.
+function heroStyle(imageUrl, seed) {
+  if (!imageUrl) return { background: gradFor(seed) };
+  return {
+    backgroundImage: `linear-gradient(180deg, rgba(10,10,11,0.15), rgba(10,10,11,0.85)), url("${imageUrl}")`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  };
+}
 function formatDate(dateStr, endDateStr) {
   if (!dateStr) return "";
   const opts = { weekday: "short", month: "short", day: "numeric" };
@@ -226,7 +236,7 @@ function EventCard({ ev, onClick }) {
   const isToday = ev.date === new Date().toISOString().slice(0, 10);
   return (
     <button onClick={onClick} className="text-left w-full mb-4">
-      <div className="h-36 relative mb-2" style={{ background: gradFor(ev.id || ev.title), borderRadius: 4 }}>
+      <div className="h-36 relative mb-2" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }}>
         <div className="absolute top-3 left-3 flex gap-2">
           {ev.type && <Tag>{ev.type}</Tag>}
           {isToday && <Tag tone="live">TODAY</Tag>}
@@ -344,7 +354,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField }) {
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
-        <div className="h-60 relative" style={{ background: gradFor(ev.id || ev.title) }}>
+       <div className="h-60 relative" style={heroStyle(ev.imageUrl, ev.id || ev.title)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
