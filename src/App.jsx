@@ -129,7 +129,7 @@ const schedulePreviousFilled = [
 /* ---------- primitives ---------- */
 function Tag({ children, tone = "neutral" }) {
   const map = {
-    neutral: { border: T.line, color: T.ashDim },
+    neutral: { border: "transparent", color: T.ash, bg: "rgba(10,10,11,0.72)" },
     accent: { border: "transparent", color: "#0A0A0B", bg: T.ash },
     good: { border: "transparent", color: "#06231A", bg: T.good },
     live: { border: "transparent", color: "#fff", bg: T.alert },
