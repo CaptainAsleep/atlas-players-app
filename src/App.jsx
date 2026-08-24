@@ -894,37 +894,11 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           </div>
 
           <div>
-            <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Search Radius</div>
-            <div className="flex gap-2 flex-wrap">
-              {[10, 25, 50, 100].map((mi) => (
-                <button
-                  key={mi}
-                  onClick={() => setRadiusMiles(mi)}
-                  className="px-3 py-1.5 text-[12px] font-medium"
-                  style={{
-                    ...body,
-                    border: `1px solid ${radiusMiles === mi ? T.accent : T.line}`,
-                    background: radiusMiles === mi ? T.accent : "transparent",
-                    color: radiusMiles === mi ? "#fff" : T.ashDim,
-                    borderRadius: 4,
-                  }}
-                >
-                  {mi} mi
-                </button>
-              ))}
-            </div>
-            {!userLocation && (
-              <p className="text-[11px] mt-1.5" style={{ ...body, color: T.ashFaint }}>Only applies once Nearby is turned on.</p>
-            )}
-          </div>
-
-          <div>
             <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Sort By</div>
             <div className="flex gap-2 flex-wrap">
               {[
                 { key: "date", label: "Soonest" },
                 { key: "price", label: "Price" },
-                { key: "distance", label: "Distance", disabled: !userLocation },
               ].map((opt) => (
                 <button
                   key={opt.key}
@@ -972,19 +946,6 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       )}
 
       <div className="mx-6 mb-2 flex items-center gap-2">
-        <button
-          onClick={handleNearbyToggle}
-          className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium"
-          style={{
-            ...body,
-            border: `1px solid ${nearbyOnly ? T.alert : T.line}`,
-            background: nearbyOnly ? T.alert : "transparent",
-            color: nearbyOnly ? "#fff" : T.ash,
-            borderRadius: 4,
-          }}
-        >
-          <MapPin size={12} /> {locationStatus === "loading" ? "Locating…" : "Nearby"}
-        </button>
         <button
           onClick={() => setActiveTodayOnly(!activeTodayOnly)}
           className="px-3 py-1.5 text-[12px] font-medium"
