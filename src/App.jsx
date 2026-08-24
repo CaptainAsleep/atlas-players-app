@@ -185,7 +185,7 @@ function Tag({ children, tone = "neutral" }) {
   const map = {
     neutral: { border: "transparent", color: "#FFFFFF", bg: "rgba(10,10,11,0.72)" },
     accent: { border: "transparent", color: "#FFFFFF", bg: T.ash },
-    good: { border: "transparent", color: "#06231A", bg: T.good },
+    good: { border: "transparent", color: "#FFFFFF", bg: T.good },
     live: { border: "transparent", color: "#fff", bg: T.alert },
   };
   const s = map[tone];
@@ -1257,10 +1257,10 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(ev.imageUrl || field?.imageUrl, ev.id || ev.title)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
-            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
               <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
             </button>
           </div>
@@ -1480,10 +1480,10 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
-            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
               <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
             </button>
           </div>
