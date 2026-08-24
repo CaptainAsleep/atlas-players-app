@@ -202,7 +202,7 @@ function BottomNav({ active, onNavigate }) {
           const Icon = t.icon;
           const isActive = active === t.key;
           return (
-            <button key={t.key} onClick={() => onNavigate(t.key)} className="flex flex-col items-center gap-1 flex-1">
+            <button key={t.key} onClick={() => onNavigate(t.key)} className="flex flex-col items-center gap-1 flex-1 transition-transform duration-100 active:scale-90">
               <Icon size={19} strokeWidth={isActive ? 2.1 : 1.6} color={isActive ? T.ash : T.ashFaint} />
               <span className="text-[9px] font-medium" style={{ ...body, color: isActive ? T.ash : T.ashFaint }}>
                 {t.label}
@@ -305,7 +305,7 @@ function LoginScreen({ signIn, signUp }) {
         <button
           type="submit"
           disabled={busy}
-          className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mt-2"
+          className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mt-2 transition-transform duration-100 active:scale-[0.98]"
           style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: busy ? 0.6 : 1 }}
         >
           {busy ? "Please wait…" : mode === "signup" ? "Create Account" : "Sign In"} <ArrowRight size={16} />
@@ -348,7 +348,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="text-left w-full mb-4 p-3"
+      className="text-left w-full mb-4 p-3 transition-transform duration-100 active:scale-[0.98]"
       style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
     >
       <div className="h-36 relative mb-2" style={{ ...heroStyle(ev.imageUrl || fallbackImageUrl, ev.id || ev.title), borderRadius: 4 }}>
@@ -439,6 +439,69 @@ function FieldsMap({ fields, onOpenField }) {
         ))}
       </MapContainer>
     </div>
+  );
+}
+
+// Shared location card used on both Field Detail and Event Detail. An event
+// can carry its own venueName/address/lat/lng, which take priority — this is
+// what makes an org-hosted event (like a MilSim West game with no home
+// field) show its actual game location instead of nothing, or a field's
+// location when that's genuinely what applies.
+function LocationCard({ label, name, address, lat, lng, phone }) {
+  if (!address) return null;
+  const hasCoords = typeof lat === "number" && typeof lng === "number";
+  const destination = hasCoords ? `${lat},${lng}` : encodeURIComponent(address);
+  const mapsHref = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    ? `https://maps.apple.com/?daddr=${destination}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+
+  return (
+    <a
+      href={mapsHref}
+      target="_blank"
+      rel="noreferrer"
+      className="block overflow-hidden"
+      style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+    >
+      <div className="p-4 pb-3">
+        <Eyebrow>{label}</Eyebrow>
+        {name && (
+          <div className="text-[13px] font-medium mb-1" style={{ ...display, color: T.ash }}>{name}</div>
+        )}
+        <div className="flex items-center gap-2 text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
+          <MapPin size={13} color={T.ashFaint} /> {address}
+        </div>
+        {phone && (
+          <div className="flex items-center gap-2 text-[12px]" style={{ ...mono, color: T.ashFaint }}>
+            <Phone size={12} /> {phone}
+          </div>
+        )}
+      </div>
+
+      {hasCoords ? (
+        <div className="h-36 pointer-events-none">
+          <MapContainer
+            center={[lat, lng]}
+            zoom={13}
+            style={{ width: "100%", height: "100%" }}
+            zoomControl={false}
+            dragging={false}
+            scrollWheelZoom={false}
+            doubleClickZoom={false}
+            touchZoom={false}
+          >
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="" />
+            <Marker position={[lat, lng]} icon={fieldPinIcon} />
+          </MapContainer>
+        </div>
+      ) : (
+        <div className="h-16 flex items-center justify-center border-t" style={{ borderColor: T.line }}>
+          <span className="text-[11px] font-semibold flex items-center gap-1.5" style={{ ...display, color: T.accent }}>
+            Get Directions <ArrowRight size={13} />
+          </span>
+        </div>
+      )}
+    </a>
   );
 }
 
@@ -636,7 +699,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                 <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Ready when you are</span>
                 <button
                   onClick={handleCheckIn}
-                  className="px-4 py-2 text-[11px] font-semibold"
+                  className="px-4 py-2 text-[11px] font-semibold transition-transform duration-100 active:scale-95"
                   style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
                 >
                   Check In Now
@@ -871,7 +934,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           const Icon = cat.icon;
           const active = activeCat === cat.key;
           return (
-            <button key={cat.key} onClick={() => setActiveCat(cat.key)} className="flex flex-col items-center gap-1.5">
+            <button key={cat.key} onClick={() => setActiveCat(cat.key)} className="flex flex-col items-center gap-1.5 transition-transform duration-100 active:scale-90">
               <div
                 className="w-14 h-14 flex items-center justify-center"
                 style={{ background: active ? T.ash : T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}
@@ -958,7 +1021,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
             </button>
           </div>
@@ -1000,6 +1063,14 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               </div>
             </button>
           </div>
+
+          <LocationCard
+            label="Event Location"
+            name={ev.venueName || field?.name}
+            address={ev.address || field?.address}
+            lat={typeof ev.lat === "number" ? ev.lat : field?.lat}
+            lng={typeof ev.lng === "number" ? ev.lng : field?.lng}
+          />
 
           {ev.description && (
             <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
@@ -1084,7 +1155,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           href={ev.sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="px-6 py-3 font-semibold text-[13px] inline-block"
+          className="px-6 py-3 font-semibold text-[13px] inline-block transition-transform duration-100 active:scale-95"
           style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
         >
           Book / RSVP
@@ -1121,7 +1192,7 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
+            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(10,10,11,0.6)", borderRadius: 4 }}>
               <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
             </button>
           </div>
@@ -1195,54 +1266,7 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
             )}
           </div>
 
-          {field.address && (
-            <a
-              href={
-                /iPad|iPhone|iPod/.test(navigator.userAgent)
-                  ? `https://maps.apple.com/?daddr=${
-                      typeof field.lat === "number" ? `${field.lat},${field.lng}` : encodeURIComponent(field.address)
-                    }`
-                  : `https://www.google.com/maps/dir/?api=1&destination=${
-                      typeof field.lat === "number" ? `${field.lat},${field.lng}` : encodeURIComponent(field.address)
-                    }`
-              }
-              target="_blank"
-              rel="noreferrer"
-              className="block overflow-hidden"
-              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
-            >
-              <div className="p-4 pb-3">
-                <Eyebrow>Field Location</Eyebrow>
-                <div className="flex items-center gap-2 text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
-                  <MapPin size={13} color={T.ashFaint} /> {field.address}
-                </div>
-              </div>
-
-              {typeof field.lat === "number" && typeof field.lng === "number" ? (
-                <div className="h-36 pointer-events-none">
-                  <MapContainer
-                    center={[field.lat, field.lng]}
-                    zoom={13}
-                    style={{ width: "100%", height: "100%" }}
-                    zoomControl={false}
-                    dragging={false}
-                    scrollWheelZoom={false}
-                    doubleClickZoom={false}
-                    touchZoom={false}
-                  >
-                    <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="" />
-                    <Marker position={[field.lat, field.lng]} icon={fieldPinIcon} />
-                  </MapContainer>
-                </div>
-              ) : (
-                <div className="h-16 flex items-center justify-center border-t" style={{ borderColor: T.line }}>
-                  <span className="text-[11px] font-semibold flex items-center gap-1.5" style={{ ...display, color: T.accent }}>
-                    Get Directions <ArrowRight size={13} />
-                  </span>
-                </div>
-              )}
-            </a>
-          )}
+          <LocationCard label="Field Location" address={field.address} lat={field.lat} lng={field.lng} />
 
           {field.phone && (
             <a
@@ -1910,7 +1934,7 @@ export default function App() {
   return (
     <div className="w-full h-screen flex flex-col" style={{ background: T.void }}>
       <style>{FONTS}</style>
-      <div className="flex-1 min-h-0 relative">
+      <div key={screen} className="flex-1 min-h-0 relative screen-transition">
         {content}
       </div>
     </div>

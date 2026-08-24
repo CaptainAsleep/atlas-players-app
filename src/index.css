@@ -7,3 +7,16 @@ html, body, #root {
   margin: 0;
   background-color: #0A0A0B;
 }
+
+/* Standard, subtle screen-change transition — fade plus a small upward
+   slide. Plays once whenever a new screen mounts (App.jsx forces a fresh
+   mount per screen via key={screen}), giving navigation a sense of motion
+   instead of an instant cut, without anything flashy or directional enough
+   to feel jarring on back-navigation. */
+@keyframes screenIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.screen-transition {
+  animation: screenIn 200ms ease-out;
+}
