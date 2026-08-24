@@ -58,6 +58,18 @@ function heroStyle(imageUrl, seed) {
     backgroundPosition: "center",
   };
 }
+const NEARBY_RADIUS_MILES = 50;
+// Haversine formula — straight-line distance between two lat/lng points,
+// accurate enough for "how far is this field" without needing a routing API.
+function distanceMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 function timeBasedGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -326,7 +338,7 @@ function LoginScreen({ signIn, signUp }) {
   );
 }
 
-function EventCard({ ev, fallbackImageUrl, onClick }) {
+function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
   const isToday = ev.date === new Date().toISOString().slice(0, 10);
   return (
     <button onClick={onClick} className="text-left w-full mb-4">
@@ -339,11 +351,16 @@ function EventCard({ ev, fallbackImageUrl, onClick }) {
       <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
       <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
       <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{formatDate(ev.date, ev.endDate)}{ev.startTime ? ` · ${ev.startTime}` : ""}</div>
-      {ev.price && (
-        <div className="flex items-center justify-end mt-1.5">
+      <div className="flex items-center justify-between mt-1.5">
+        {typeof distanceMi === "number" ? (
+          <div className="text-[11px] font-medium flex items-center gap-1" style={{ ...mono, color: T.ashFaint }}>
+            <MapPin size={11} /> {distanceMi < 1 ? "<1 mi" : `${Math.round(distanceMi)} mi`}
+          </div>
+        ) : <div />}
+        {ev.price && (
           <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{ev.price}</div>
-        </div>
-      )}
+        )}
+      </div>
     </button>
   );
 }
@@ -420,6 +437,42 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("Featured");
   const [viewMode, setViewMode] = useState("list");
+  const [activeTodayOnly, setActiveTodayOnly] = useState(false);
+  const [nearbyOnly, setNearbyOnly] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationStatus, setLocationStatus] = useState("idle"); // idle | loading | error
+  const today = new Date().toISOString().slice(0, 10);
+  const isLiveToday = (ev) => ev.date <= today && (ev.endDate || ev.date) >= today;
+
+  const fieldDistance = (field) => {
+    if (!userLocation || !field || typeof field.lat !== "number" || typeof field.lng !== "number") return null;
+    return distanceMiles(userLocation.lat, userLocation.lng, field.lat, field.lng);
+  };
+
+  const handleNearbyToggle = () => {
+    if (nearbyOnly) {
+      setNearbyOnly(false);
+      return;
+    }
+    if (userLocation) {
+      setNearbyOnly(true);
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      return;
+    }
+    setLocationStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationStatus("idle");
+        setNearbyOnly(true);
+      },
+      () => setLocationStatus("error"),
+      { timeout: 10000 }
+    );
+  };
 
   const cats = [
     { key: "Featured", icon: Star },
@@ -429,9 +482,14 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     { key: "Tournament", icon: Ticket, type: "TOURNAMENT" },
   ];
 
-  const filteredEvents = events.filter((ev) => {
+  let filteredEvents = events.filter((ev) => {
     const cat = cats.find((c) => c.key === activeCat);
     if (cat?.type && ev.type !== cat.type) return false;
+    if (activeTodayOnly && !isLiveToday(ev)) return false;
+    if (nearbyOnly) {
+      const dist = fieldDistance(fields.find((f) => f.id === ev.fieldId));
+      if (dist === null || dist > NEARBY_RADIUS_MILES) return false;
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       const haystack = `${ev.title} ${ev.fieldName}`.toLowerCase();
@@ -439,6 +497,12 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     }
     return true;
   });
+  if (nearbyOnly) {
+    filteredEvents = [...filteredEvents].sort(
+      (a, b) => (fieldDistance(fields.find((f) => f.id === a.fieldId)) ?? Infinity) -
+                (fieldDistance(fields.find((f) => f.id === b.fieldId)) ?? Infinity)
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
@@ -486,13 +550,33 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         <SlidersHorizontal size={16} color={T.ashDim} />
       </div>
 
-      <div className="mx-6 mb-4 flex items-center gap-2">
-        <div className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}>
-          <MapPin size={12} /> Nearby
-        </div>
-        <div className="px-3 py-1.5 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+      <div className="mx-6 mb-2 flex items-center gap-2">
+        <button
+          onClick={handleNearbyToggle}
+          className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium"
+          style={{
+            ...body,
+            border: `1px solid ${nearbyOnly ? T.alert : T.line}`,
+            background: nearbyOnly ? T.alert : "transparent",
+            color: nearbyOnly ? "#fff" : T.ash,
+            borderRadius: 4,
+          }}
+        >
+          <MapPin size={12} /> {locationStatus === "loading" ? "Locating…" : "Nearby"}
+        </button>
+        <button
+          onClick={() => setActiveTodayOnly(!activeTodayOnly)}
+          className="px-3 py-1.5 text-[12px] font-medium"
+          style={{
+            ...body,
+            border: `1px solid ${activeTodayOnly ? T.alert : T.line}`,
+            background: activeTodayOnly ? T.alert : "transparent",
+            color: activeTodayOnly ? "#fff" : T.ashDim,
+            borderRadius: 4,
+          }}
+        >
           Active Today
-        </div>
+        </button>
         <div className="flex-1" />
         <div className="flex" style={{ border: `1px solid ${T.line}`, borderRadius: 4, overflow: "hidden" }}>
           <button
@@ -511,6 +595,14 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           </button>
         </div>
       </div>
+
+      {locationStatus === "error" && (
+        <div className="mx-6 mb-4 px-3 py-2" style={{ background: "rgba(240,85,74,0.1)", border: `1px solid ${T.alert}`, borderRadius: 4 }}>
+          <p className="text-[11px]" style={{ ...body, color: T.ashDim }}>
+            Couldn't get your location — check that location access is allowed for this site in your browser settings.
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-3 px-6 mb-5 overflow-x-auto">
         {cats.map((cat) => {
@@ -549,6 +641,11 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             const cat = cats.find((c) => c.key === activeCat);
             if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
             if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
+            if (activeTodayOnly && !events.some((ev) => ev.fieldId === f.id && isLiveToday(ev))) return false;
+            if (nearbyOnly) {
+              const dist = fieldDistance(f);
+              if (dist === null || dist > NEARBY_RADIUS_MILES) return false;
+            }
 
             if (search.trim()) {
               const q = search.toLowerCase();
@@ -576,6 +673,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
               key={ev.id}
               ev={ev}
               fallbackImageUrl={fields.find((f) => f.id === ev.fieldId)?.imageUrl}
+              distanceMi={nearbyOnly ? fieldDistance(fields.find((f) => f.id === ev.fieldId)) ?? undefined : undefined}
               onClick={() => onOpenEvent(ev)}
             />
           ))
