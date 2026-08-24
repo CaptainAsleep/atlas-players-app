@@ -93,6 +93,13 @@ function parsePrice(str) {
   const m = (str || "").match(/[\d.]+/);
   return m ? parseFloat(m[0]) : null;
 }
+// A bare "varies" reads as a typo or unfinished UI out of context (event
+// cards, lists) — spelling out "Price varies" only where there's no
+// surrounding label to make that clear. The event's own detail page already
+// has "Entry Cost" right above it, so it stays as the raw value there.
+function displayPrice(price) {
+  return price && price.trim().toLowerCase() === "varies" ? "Price varies" : price;
+}
 // Haversine formula — straight-line distance between two lat/lng points,
 // accurate enough for "how far is this field" without needing a routing API.
 // new Date().toISOString() converts to UTC before formatting, which silently
@@ -392,7 +399,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
           </div>
         ) : <div />}
         {ev.price && (
-          <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{ev.price}</div>
+          <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{displayPrice(ev.price)}</div>
         )}
       </div>
     </button>
@@ -472,6 +479,58 @@ function FieldsMap({ fields, onOpenField }) {
 // what makes an org-hosted event (like a MilSim West game with no home
 // field) show its actual game location instead of nothing, or a field's
 // location when that's genuinely what applies.
+// DEMO/PLACEHOLDER DATA — not scraped or owner-provided yet. Same content
+// shown on both the event page and the field page, since amenities/rules/
+// chrono limits are genuinely field-level facts, not per-event ones. Swap
+// for real field-owner-entered data once that flow exists.
+function DemoFieldFacts() {
+  return (
+    <>
+      <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <Eyebrow>Amenities</Eyebrow>
+          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"].map((a) => (
+            <span key={a} className="text-[11px] font-medium px-2.5 py-1" style={{ ...body, background: T.panelAlt, color: T.ashDim, borderRadius: 4 }}>{a}</span>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <Eyebrow>Field Rules</Eyebrow>
+          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+        </div>
+        <ul className="text-[12px] leading-relaxed pl-4" style={{ ...body, color: T.ashDim, listStyle: "disc" }}>
+          <li>Full-seal eye protection required at all times on the field.</li>
+          <li>Barrel bags/plugs required in all staging areas.</li>
+          <li>Blind fire and physical contact are not permitted.</li>
+          <li>Minimum engagement distances enforced per game mode.</li>
+        </ul>
+      </div>
+
+      <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <Eyebrow>Chrono Limits</Eyebrow>
+          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
+          <div>
+            <div style={{ color: T.ashFaint }}>AEG</div>
+            <div style={{ ...mono, color: T.ash }}>400 FPS max (0.20g)</div>
+          </div>
+          <div>
+            <div style={{ color: T.ashFaint }}>Sniper (bolt-action)</div>
+            <div style={{ ...mono, color: T.ash }}>500 FPS max (0.20g)</div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function LocationCard({ label, name, address, lat, lng, phone }) {
   if (!address) return null;
   const hasCoords = typeof lat === "number" && typeof lng === "number";
@@ -558,7 +617,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   };
 
   useEffect(() => {
-    if (viewMode !== "fields" || stateDetectAttempted) return;
+    if (viewMode === "map" || stateDetectAttempted) return;
     setStateDetectAttempted(true);
     if (userLocation) {
       reverseGeocodeState(userLocation).then((name) => setSelectedState(name && Object.values(US_STATES).includes(name) ? name : "Michigan"));
@@ -686,6 +745,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       const q = search.toLowerCase();
       const haystack = `${ev.title} ${ev.fieldName}`.toLowerCase();
       if (!haystack.includes(q)) return false;
+    }
+    if (selectedState) {
+      const evField = fields.find((f) => f.id === ev.fieldId);
+      if (stateNameFromCity(evField?.city) !== selectedState) return false;
     }
     return true;
   });
@@ -843,23 +906,23 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           <div>
             <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Date Range</div>
             <div className="flex gap-2">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <label className="text-[10px] block mb-1" style={{ ...body, color: T.ashFaint }}>Start Date</label>
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
+                  className="w-full min-w-0 px-3 py-2 text-[13px] bg-transparent outline-none"
                   style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
                 />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <label className="text-[10px] block mb-1" style={{ ...body, color: T.ashFaint }}>End Date</label>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
+                  className="w-full min-w-0 px-3 py-2 text-[13px] bg-transparent outline-none"
                   style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
                 />
               </div>
@@ -1015,7 +1078,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>
           {viewMode === "map" ? "Fields on Map" : viewMode === "fields" ? "All Fields" : "Events Feed"}
         </span>
-        {viewMode === "fields" && (
+        {viewMode !== "map" && (
           <select
             value={selectedState || ""}
             onChange={(e) => setSelectedState(e.target.value)}
@@ -1100,6 +1163,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 
 function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, signature, signWaiver }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
+  const isPast = (ev.endDate || ev.date) < localDateStr();
 
   const [showWaiver, setShowWaiver] = useState(false);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
@@ -1201,7 +1265,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                   <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Signed as {signature.signedName}</div>
                 </div>
               </div>
-            ) : !showWaiver ? (
+            ) : isPast ? null : !showWaiver ? (
               <button
                 onClick={() => setShowWaiver(true)}
                 className="p-4 flex items-center justify-between w-full transition-transform duration-100 active:scale-[0.98]"
@@ -1214,11 +1278,17 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                     <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Read and sign before this event</div>
                   </div>
                 </div>
-                <ChevronRight size={16} color={T.ashFaint} />
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+                  <ChevronRight size={16} color={T.ashFaint} />
+                </div>
               </button>
             ) : (
               <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-                <Eyebrow>{field?.name || ev.fieldName} Waiver</Eyebrow>
+                <div className="flex items-center justify-between mb-2">
+                  <Eyebrow>{field?.name || ev.fieldName} Waiver</Eyebrow>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+                </div>
                 <div
                   onScroll={handleWaiverScroll}
                   className="text-[12px] leading-relaxed p-3 mb-3"
@@ -1283,47 +1353,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           {/* DEMO/PLACEHOLDER DATA — not scraped or owner-provided yet.
               Kept here for showcase purposes per explicit request; swap for
               real field-owner-entered data once that flow exists. */}
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <div className="flex items-center justify-between mb-2">
-              <Eyebrow>Amenities</Eyebrow>
-              <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"].map((a) => (
-                <span key={a} className="text-[11px] font-medium px-2.5 py-1" style={{ ...body, background: T.panelAlt, color: T.ashDim, borderRadius: 4 }}>{a}</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <div className="flex items-center justify-between mb-2">
-              <Eyebrow>Field Rules</Eyebrow>
-              <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
-            </div>
-            <ul className="text-[12px] leading-relaxed pl-4" style={{ ...body, color: T.ashDim, listStyle: "disc" }}>
-              <li>Full-seal eye protection required at all times on the field.</li>
-              <li>Barrel bags/plugs required in all staging areas.</li>
-              <li>Blind fire and physical contact are not permitted.</li>
-              <li>Minimum engagement distances enforced per game mode.</li>
-            </ul>
-          </div>
-
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <div className="flex items-center justify-between mb-2">
-              <Eyebrow>Chrono Limits</Eyebrow>
-              <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
-              <div>
-                <div style={{ color: T.ashFaint }}>AEG</div>
-                <div style={{ ...mono, color: T.ash }}>400 FPS max (0.20g)</div>
-              </div>
-              <div>
-                <div style={{ color: T.ashFaint }}>Sniper (bolt-action)</div>
-                <div style={{ ...mono, color: T.ash }}>500 FPS max (0.20g)</div>
-              </div>
-            </div>
-          </div>
+          <DemoFieldFacts />
 
           <a
             href={ev.sourceUrl}
@@ -1345,15 +1375,21 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             {ev.price || field?.admission || "See listing"}
           </div>
         </div>
-        <a
-          href={ev.sourceUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="px-6 py-3 font-semibold text-[13px] inline-block transition-transform duration-100 active:scale-95"
-          style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
-        >
-          Book / RSVP
-        </a>
+        {isPast ? (
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+            Event Ended
+          </span>
+        ) : (
+          <a
+            href={ev.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="px-6 py-3 font-semibold text-[13px] inline-block transition-transform duration-100 active:scale-95"
+            style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+          >
+            Book / RSVP
+          </a>
+        )}
       </div>
     </div>
   );
@@ -1427,6 +1463,8 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
             </div>
           )}
 
+          <DemoFieldFacts />
+
           {field.hours && (
             <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
               <div className="flex justify-between text-[13px] gap-4">
@@ -1454,7 +1492,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
                       <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{s.title}</div>
                       <div className="text-[11px]" style={{ ...mono, color: T.ashFaint }}>{formatDate(s.date, s.endDate)}</div>
                     </div>
-                    {s.price && <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{s.price}</div>}
+                    {s.price && <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{displayPrice(s.price)}</div>}
                   </button>
                 ))}
               </div>
