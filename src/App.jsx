@@ -1311,7 +1311,8 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   );
 }
 
-function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite }) {
+function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite }) {
+  const [showPastEvents, setShowPastEvents] = useState(false);
   if (!field) {
     return (
       <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
@@ -1411,6 +1412,38 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
               </div>
             )}
           </div>
+
+          {pastFieldEvents.length > 0 && (
+            <div style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, overflow: "hidden" }}>
+              <button
+                onClick={() => setShowPastEvents(!showPastEvents)}
+                className="w-full p-4 flex items-center justify-between transition-transform duration-100 active:scale-[0.99]"
+              >
+                <span className="text-[12px] font-medium" style={{ ...body, color: T.ashFaint }}>
+                  Past Events ({pastFieldEvents.length})
+                </span>
+                <ChevronRight size={14} color={T.ashFaint} style={{ transform: showPastEvents ? "rotate(90deg)" : "none" }} />
+              </button>
+              {showPastEvents && (
+                <div className="px-4 pb-2" style={{ borderTop: `1px solid ${T.line}` }}>
+                  {pastFieldEvents.map((s, i) => (
+                    <button
+                      key={s.id}
+                      onClick={() => onOpenEvent(s)}
+                      className="flex items-center gap-3 py-2.5 text-left w-full"
+                      style={{ borderTop: i > 0 ? `1px solid ${T.line}` : "none", opacity: 0.65 }}
+                    >
+                      <div className="w-11 h-11" style={{ ...heroStyle(s.imageUrl || field.imageUrl, s.id || s.title), borderRadius: 4 }} />
+                      <div className="flex-1">
+                        <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{s.title}</div>
+                        <div className="text-[11px]" style={{ ...mono, color: T.ashFaint }}>{formatDate(s.date, s.endDate)}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <LocationCard label="Field Location" address={field.address} lat={field.lat} lng={field.lng} />
 
@@ -1979,6 +2012,11 @@ export default function App() {
         .filter((e) => e.fieldId === activeField.id && (e.endDate || e.date) >= localDateStr())
         .sort((a, b) => a.date.localeCompare(b.date))
     : [];
+  const activeFieldPastEvents = activeField
+    ? events
+        .filter((e) => e.fieldId === activeField.id && (e.endDate || e.date) < localDateStr())
+        .sort((a, b) => b.date.localeCompare(a.date)) // most recent first
+    : [];
 
   const openEvent = (ev) => {
     setActiveEventId(ev.id);
@@ -2041,6 +2079,7 @@ export default function App() {
       <FieldDetailScreen
         field={activeField}
         fieldEvents={activeFieldEvents}
+        pastFieldEvents={activeFieldPastEvents}
         relocatedField={relocatedField}
         onBack={pop}
         onNavigate={goTab}
