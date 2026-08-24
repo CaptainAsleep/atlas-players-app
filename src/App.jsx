@@ -1642,7 +1642,11 @@ export default function App() {
   const activeField =
     fields.find((f) => f.id === activeFieldId) ||
     (activeEvent ? fields.find((f) => f.id === activeEvent.fieldId) : null);
-  const activeFieldEvents = activeField ? events.filter((e) => e.fieldId === activeField.id) : [];
+  const activeFieldEvents = activeField
+    ? events
+        .filter((e) => e.fieldId === activeField.id && (e.endDate || e.date) >= localDateStr())
+        .sort((a, b) => a.date.localeCompare(b.date))
+    : [];
 
   const openEvent = (ev) => {
     setActiveEventId(ev.id);
