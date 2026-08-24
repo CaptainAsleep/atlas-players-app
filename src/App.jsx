@@ -516,6 +516,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   ];
 
   let filteredEvents = events.filter((ev) => {
+    // Base rule for the whole feed, independent of any toggle: something
+    // that's already over never belongs on a discovery page. Multi-day
+    // events stay visible through their endDate, not just their start.
+    if ((ev.endDate || ev.date) < today) return false;
     const cat = cats.find((c) => c.key === activeCat);
     if (cat?.type && ev.type !== cat.type) return false;
     if (activeTodayOnly && !isLiveToday(ev)) return false;
