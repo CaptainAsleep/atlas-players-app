@@ -646,6 +646,31 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     filteredEvents = [...filteredEvents].sort((a, b) => a.date.localeCompare(b.date));
   }
 
+  // Every field, filtered by the same criteria as the events feed — this is
+  // what makes a field with zero scheduled events still show up here, in
+  // the Fields list and on the Map, instead of only being reachable through
+  // an event that happens to link to it.
+  const filteredFields = fields
+    .filter((f) => {
+      const cat = cats.find((c) => c.key === activeCat);
+      if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
+      if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
+      if (activeTodayOnly && !events.some((ev) => ev.fieldId === f.id && isLiveToday(ev))) return false;
+      if ((dateFrom || dateTo || maxPrice !== null) && !events.some((ev) => ev.fieldId === f.id && eventPassesAdvanced(ev))) return false;
+      if (nearbyOnly) {
+        const dist = fieldDistance(f);
+        if (dist === null || dist > radiusMiles) return false;
+      }
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        if (!`${f.name} ${f.city || ""}`.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) =>
+      nearbyOnly ? (fieldDistance(a) ?? Infinity) - (fieldDistance(b) ?? Infinity) : a.name.localeCompare(b.name)
+    );
+
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <div className="px-6 pt-2 pb-4 flex items-center justify-between">
@@ -906,14 +931,21 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         <div className="flex" style={{ border: `1px solid ${T.line}`, borderRadius: 4, overflow: "hidden" }}>
           <button
             onClick={() => setViewMode("list")}
-            className="px-3 py-1.5 text-[12px] font-semibold"
+            className="px-3 py-1.5 text-[12px] font-semibold transition-transform duration-100 active:scale-95"
             style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#0A0A0B" : T.ashDim }}
           >
             List
           </button>
           <button
+            onClick={() => setViewMode("fields")}
+            className="px-3 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
+            style={{ ...body, background: viewMode === "fields" ? T.ash : "transparent", color: viewMode === "fields" ? "#0A0A0B" : T.ashDim }}
+          >
+            Fields
+          </button>
+          <button
             onClick={() => setViewMode("map")}
-            className="px-3 py-1.5 text-[12px] font-medium"
+            className="px-3 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
             style={{ ...body, background: viewMode === "map" ? T.ash : "transparent", color: viewMode === "map" ? "#0A0A0B" : T.ashDim }}
           >
             Map
@@ -949,38 +981,44 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 
       <div className="px-6 flex items-center justify-between mb-3">
         <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>
-          {viewMode === "map" ? "Fields on Map" : "Events Feed"}
+          {viewMode === "map" ? "Fields on Map" : viewMode === "fields" ? "All Fields" : "Events Feed"}
         </span>
       </div>
 
       {viewMode === "map" ? (
-        <FieldsMap
-          fields={fields.filter((f) => {
-            // Category: Outdoor/Indoor are real properties every field has,
-            // so filter on the field itself — reliable regardless of how
-            // much event data exists. MilSim/Tournament are event-only
-            // concepts with no field-level equivalent, so those check
-            // whether this field has ANY matching event on record (not
-            // limited to the currently filtered event list, which could be
-            // empty for unrelated reasons like date or search text).
-            const cat = cats.find((c) => c.key === activeCat);
-            if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
-            if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
-            if (activeTodayOnly && !events.some((ev) => ev.fieldId === f.id && isLiveToday(ev))) return false;
-            if ((dateFrom || dateTo || maxPrice !== null) && !events.some((ev) => ev.fieldId === f.id && eventPassesAdvanced(ev))) return false;
-            if (nearbyOnly) {
-              const dist = fieldDistance(f);
-              if (dist === null || dist > radiusMiles) return false;
-            }
-
-            if (search.trim()) {
-              const q = search.toLowerCase();
-              if (!`${f.name} ${f.city || ""}`.toLowerCase().includes(q)) return false;
-            }
-            return true;
-          })}
-          onOpenField={onOpenField}
-        />
+        <FieldsMap fields={filteredFields} onOpenField={onOpenField} />
+      ) : viewMode === "fields" ? (
+        <div className="px-6">
+          {filteredFields.length === 0 ? (
+            <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
+              No fields match "{search || activeCat}".
+            </div>
+          ) : (
+            filteredFields.map((f) => {
+              const dist = nearbyOnly ? fieldDistance(f) : null;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => onOpenField(f)}
+                  className="w-full mb-3 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
+                  style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+                >
+                  <div className="w-14 h-14 flex-shrink-0" style={{ ...heroStyle(f.imageUrl, f.id), borderRadius: 4 }} />
+                  <div className="flex-1">
+                    <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}</div>
+                    <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{f.city}</div>
+                    {typeof dist === "number" && (
+                      <div className="text-[11px] font-medium flex items-center gap-1 mt-0.5" style={{ ...mono, color: T.ashDim }}>
+                        <MapPin size={10} /> {dist < 1 ? "<1 mi" : `${Math.round(dist)} mi`}
+                      </div>
+                    )}
+                  </div>
+                  <ChevronRight size={16} color={T.ashFaint} />
+                </button>
+              );
+            })
+          )}
+        </div>
       ) : (
       <div className="px-6">
         {eventsLoading ? (
