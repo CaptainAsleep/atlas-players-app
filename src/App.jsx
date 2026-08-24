@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
@@ -59,6 +59,30 @@ function heroStyle(imageUrl, seed) {
     backgroundSize: "cover",
     backgroundPosition: "center",
   };
+}
+// Full US state list — built in now so the state picker is ready to go the
+// moment we have field data beyond Michigan, without any rework later.
+const US_STATES = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "District of Columbia",
+};
+// Fields store city as "City, ST" — pull the state out of that rather than
+// requiring a schema change across every existing record.
+function stateNameFromCity(city) {
+  if (!city) return null;
+  const match = city.match(/,\s*([A-Z]{2})\s*$/);
+  if (match) return US_STATES[match[1]] || null;
+  const trimmed = city.trim();
+  return Object.values(US_STATES).includes(trimmed) ? trimmed : null; // handles a bare state name like Sektor7's "Michigan"
 }
 const NEARBY_RADIUS_MILES = 50;
 // Prices come from real scraped listings as free text ("$20", "$20/person",
@@ -514,6 +538,45 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   const [nearbyOnly, setNearbyOnly] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("idle"); // idle | loading | error
+
+  // State picker for the Fields view — auto-detects once via reverse
+  // geocoding (reusing userLocation if Nearby already granted it, so this
+  // doesn't trigger a second permission prompt), then falls back to
+  // Michigan if detection fails or the browser has no geolocation at all.
+  // A manual pick always overrides the auto-detected one.
+  const [selectedState, setSelectedState] = useState(null);
+  const [stateDetectAttempted, setStateDetectAttempted] = useState(false);
+
+  const reverseGeocodeState = async (loc) => {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${loc.lat}&lon=${loc.lng}`);
+      const data = await res.json();
+      return data?.address?.state || null;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode !== "fields" || stateDetectAttempted) return;
+    setStateDetectAttempted(true);
+    if (userLocation) {
+      reverseGeocodeState(userLocation).then((name) => setSelectedState(name && Object.values(US_STATES).includes(name) ? name : "Michigan"));
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserLocation(loc); // shared with Nearby — no reason to ask twice
+          reverseGeocodeState(loc).then((name) => setSelectedState(name && Object.values(US_STATES).includes(name) ? name : "Michigan"));
+        },
+        () => setSelectedState("Michigan"),
+        { timeout: 8000 }
+      );
+    } else {
+      setSelectedState("Michigan");
+    }
+  }, [viewMode, stateDetectAttempted, userLocation]);
+
   const today = localDateStr();
   const isLiveToday = (ev) => ev.date <= today && (ev.endDate || ev.date) >= today;
 
@@ -666,6 +729,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         const q = search.toLowerCase();
         if (!`${f.name} ${f.city || ""}`.toLowerCase().includes(q)) return false;
       }
+      if (selectedState && stateNameFromCity(f.city) !== selectedState) return false;
       return true;
     })
     .sort((a, b) =>
@@ -984,6 +1048,21 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>
           {viewMode === "map" ? "Fields on Map" : viewMode === "fields" ? "All Fields" : "Events Feed"}
         </span>
+        {viewMode === "fields" && (
+          <select
+            value={selectedState || ""}
+            onChange={(e) => setSelectedState(e.target.value)}
+            className="text-[12px] font-medium px-2 py-1 outline-none"
+            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+          >
+            {!selectedState && <option value="">Detecting…</option>}
+            {Object.values(US_STATES)
+              .sort()
+              .map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+          </select>
+        )}
       </div>
 
       {viewMode === "map" ? (
@@ -991,8 +1070,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       ) : viewMode === "fields" ? (
         <div className="px-6">
           {filteredFields.length === 0 ? (
-            <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
-              No fields match "{search || activeCat}".
+            <div className="text-[13px] py-6 text-center px-6" style={{ ...body, color: T.ashFaint }}>
+              {selectedState && selectedState !== "Michigan" && !search.trim() && activeCat === "Featured"
+                ? `No fields loaded for ${selectedState} yet — coverage starts with Michigan and is expanding.`
+                : `No fields match "${search || activeCat}".`}
             </div>
           ) : (
             filteredFields.map((f) => {
