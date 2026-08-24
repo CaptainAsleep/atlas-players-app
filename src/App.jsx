@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -11,6 +11,7 @@ import { useFields } from "./hooks/useFields";
 import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
+import { useWaiverSignature } from "./hooks/useWaiverSignature";
 
 /* ---------- design tokens ---------- */
 const FONTS = `
@@ -1049,8 +1050,41 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   );
 }
 
-function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite }) {
+function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, signature, signWaiver }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
+
+  const [showWaiver, setShowWaiver] = useState(false);
+  const [scrolledToEnd, setScrolledToEnd] = useState(false);
+  const [signedName, setSignedName] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState("");
+
+  const handleWaiverScroll = (e) => {
+    const el = e.target;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 20) setScrolledToEnd(true);
+  };
+
+  const handleSign = async () => {
+    if (!signedName.trim() || !agreed || !user) return;
+    setSigning(true);
+    setSignError("");
+    try {
+      await signWaiver({
+        uid: user.uid,
+        eventId: ev.id,
+        fieldId: ev.fieldId,
+        signedName: signedName.trim(),
+        waiverVersion: ev.waiver.version,
+      });
+      setShowWaiver(false);
+    } catch (err) {
+      setSignError("Couldn't save your signature — try again.");
+    } finally {
+      setSigning(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col" style={flatBg}>
       <div className="flex-1 overflow-y-auto pb-24">
@@ -1109,6 +1143,80 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             lat={typeof ev.lat === "number" ? ev.lat : field?.lat}
             lng={typeof ev.lng === "number" ? ev.lng : field?.lng}
           />
+
+          {ev.waiver && (
+            signature ? (
+              <div className="p-4 flex items-center gap-3" style={{ background: "rgba(52,211,153,0.08)", border: `1px solid ${T.good}`, borderRadius: 6 }}>
+                <Check size={18} color={T.good} />
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>Waiver signed</div>
+                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Signed as {signature.signedName}</div>
+                </div>
+              </div>
+            ) : !showWaiver ? (
+              <button
+                onClick={() => setShowWaiver(true)}
+                className="p-4 flex items-center justify-between w-full transition-transform duration-100 active:scale-[0.98]"
+                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.alert}` }}
+              >
+                <div className="flex items-center gap-3">
+                  <FileSignature size={18} color={T.alert} />
+                  <div className="text-left">
+                    <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>Waiver required</div>
+                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Read and sign before this event</div>
+                  </div>
+                </div>
+                <ChevronRight size={16} color={T.ashFaint} />
+              </button>
+            ) : (
+              <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+                <Eyebrow>{field?.name || ev.fieldName} Waiver</Eyebrow>
+                <div
+                  onScroll={handleWaiverScroll}
+                  className="text-[12px] leading-relaxed p-3 mb-3"
+                  style={{ ...body, color: T.ashDim, background: T.panelAlt, borderRadius: 4, maxHeight: 220, overflowY: "auto", whiteSpace: "pre-wrap" }}
+                >
+                  {ev.waiver.text}
+                </div>
+                {!scrolledToEnd && (
+                  <p className="text-[11px] mb-3" style={{ ...body, color: T.ashFaint }}>Scroll to the bottom to continue.</p>
+                )}
+                {scrolledToEnd && (
+                  <>
+                    <label className="flex items-start gap-2 mb-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
+                      <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
+                      I have read and agree to the terms above.
+                    </label>
+                    <input
+                      value={signedName}
+                      onChange={(e) => setSignedName(e.target.value)}
+                      placeholder="Type your full legal name to sign"
+                      className="w-full px-3 py-2.5 text-[13px] bg-transparent outline-none mb-3"
+                      style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+                    />
+                    {signError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{signError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowWaiver(false)}
+                        className="flex-1 py-2.5 text-[12px] font-medium"
+                        style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSign}
+                        disabled={!agreed || !signedName.trim() || signing}
+                        className="flex-1 py-2.5 text-[12px] font-semibold"
+                        style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: !agreed || !signedName.trim() || signing ? 0.5 : 1 }}
+                      >
+                        {signing ? "Signing…" : "Sign Waiver"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          )}
 
           {ev.description && (
             <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
@@ -1862,6 +1970,7 @@ export default function App() {
   const goTab = (tab) => setStack([tab]);
 
   const activeEvent = events.find((e) => e.id === activeEventId) || null;
+  const { signature, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
   const activeField =
     fields.find((f) => f.id === activeFieldId) ||
     (activeEvent ? fields.find((f) => f.id === activeEvent.fieldId) : null);
@@ -1917,6 +2026,9 @@ export default function App() {
         onOpenField={() => openField(activeField)}
         favorited={isFavorited("event", activeEvent.id)}
         onToggleFavorite={() => toggleFavorite("event", activeEvent.id)}
+        user={user}
+        signature={signature}
+        signWaiver={signWaiver}
       />
     ) : (
       <div className="h-full flex items-center justify-center" style={flatBg}>
