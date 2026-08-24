@@ -960,25 +960,25 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         <div className="mx-6 mb-4 p-4 flex flex-col gap-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
           <div>
             <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Date Range</div>
-            <div className="flex gap-2">
-              <div className="flex-1 min-w-0">
+            <div className="flex flex-col gap-2">
+              <div>
                 <label className="text-[10px] block mb-1" style={{ ...body, color: T.ashFaint }}>Start Date</label>
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full min-w-0 px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+                  className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light" }}
                 />
               </div>
-              <div className="flex-1 min-w-0">
+              <div>
                 <label className="text-[10px] block mb-1" style={{ ...body, color: T.ashFaint }}>End Date</label>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full min-w-0 px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+                  className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light" }}
                 />
               </div>
             </div>
@@ -1138,7 +1138,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             value={selectedState || ""}
             onChange={(e) => setSelectedState(e.target.value)}
             className="text-[12px] font-medium px-2 py-1 outline-none"
-            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light" }}
           >
             {!selectedState && <option value="">Detecting…</option>}
             {Object.values(US_STATES)
