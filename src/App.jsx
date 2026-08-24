@@ -2,10 +2,11 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
+import QRCode from "qrcode";
 import { useFields } from "./hooks/useFields";
 import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
@@ -441,7 +442,7 @@ function FieldsMap({ fields, onOpenField }) {
   );
 }
 
-function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField }) {
+function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user }) {
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("Featured");
   const [viewMode, setViewMode] = useState("list");
@@ -451,6 +452,32 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   const [locationStatus, setLocationStatus] = useState("idle"); // idle | loading | error
   const today = localDateStr();
   const isLiveToday = (ev) => ev.date <= today && (ev.endDate || ev.date) >= today;
+
+  // The player's real next game: their soonest favorited event that hasn't
+  // ended yet. There's no booking/RSVP system yet — favorites are the only
+  // honest "games I'm going to" signal that actually exists right now.
+  const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
+  const nextGame = events
+    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
+  const nextGameIsToday = nextGame ? isLiveToday(nextGame) : false;
+
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const handleCheckIn = async () => {
+    if (!nextGame || !user) return;
+    // Minimal payload by design — just enough for a future field-owner
+    // scanner to look up the event and player in Firestore. No callsign,
+    // email, or other personal info gets embedded in a scannable code.
+    const payload = `atlas:checkin:${nextGame.id}:${user.uid}`;
+    const dataUrl = await QRCode.toDataURL(payload, {
+      width: 240,
+      margin: 1,
+      color: { dark: T.void, light: T.ash },
+    });
+    setQrDataUrl(dataUrl);
+    setShowCheckIn(true);
+  };
 
   const fieldDistance = (field) => {
     if (!userLocation || !field || typeof field.lat !== "number" || typeof field.lng !== "number") return null;
@@ -580,22 +607,60 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         </button>
       </div>
 
-      <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
-        <div className="flex items-center justify-between mb-3">
-          <Tag tone="live">UPCOMING GAME</Tag>
-          <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.good }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Check-in available
-          </span>
+      {nextGame ? (
+        <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+          <div className="flex items-center justify-between mb-3">
+            <Tag tone="live">UPCOMING GAME</Tag>
+            {nextGameIsToday && (
+              <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.good }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Check-in available
+              </span>
+            )}
+          </div>
+          <div className="font-semibold text-[17px]" style={{ ...display, color: T.ash }}>{nextGame.title}</div>
+          <div className="text-[12px] mb-4" style={{ ...body, color: T.ashDim }}>
+            {nextGame.fieldName} — {formatDate(nextGame.date, nextGame.endDate)}{nextGame.startTime ? ` · ${nextGame.startTime}` : ""}
+          </div>
+
+          {nextGameIsToday ? (
+            showCheckIn ? (
+              <div className="flex flex-col items-center pt-1">
+                {qrDataUrl && <img src={qrDataUrl} alt="Check-in QR code" className="mb-2" style={{ width: 160, height: 160, borderRadius: 4 }} />}
+                <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Show this to field staff to check in.</p>
+                <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
+                  Hide
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Ready when you are</span>
+                <button
+                  onClick={handleCheckIn}
+                  className="px-4 py-2 text-[11px] font-semibold"
+                  style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+                >
+                  Check In Now
+                </button>
+              </div>
+            )
+          ) : (
+            <button
+              onClick={() => onOpenEvent(nextGame)}
+              className="w-full py-2.5 text-[12px] font-semibold"
+              style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}
+            >
+              View Details
+            </button>
+          )}
         </div>
-        <div className="font-semibold text-[17px]" style={{ ...display, color: T.ash }}>Cedar Airsoft Rec Game</div>
-        <div className="text-[12px] mb-4" style={{ ...body, color: T.ashDim }}>Saturday, May 11 — Staging opens at 9:00 AM</div>
-        <div className="flex items-center justify-between">
-          <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Barcode ready on device</span>
-          <button className="px-4 py-2 text-[11px] font-semibold" style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}>
-            Check In Now
-          </button>
+      ) : (
+        <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+          <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No upcoming games saved</div>
+          <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+            Tap the heart on any event's page and it'll show up here as your next game.
+          </p>
         </div>
-      </div>
+      )}
 
       <div className="mx-6 mb-4 flex items-center gap-2 px-3 py-3" style={{ border: `1px solid ${T.line}`, background: T.panel, borderRadius: 4 }}>
         <Search size={16} color={T.ashFaint} />
@@ -1028,20 +1093,12 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
             </div>
           )}
 
-          {(field.admission || field.hours) && (
-            <div className="p-4 flex flex-col gap-2" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              {field.admission && (
-                <div className="flex justify-between text-[13px]">
-                  <span style={{ ...body, color: T.ashFaint }}>Admission</span>
-                  <span style={{ ...mono, color: T.ash }}>{field.admission}</span>
-                </div>
-              )}
-              {field.hours && (
-                <div className="flex justify-between text-[13px] gap-4">
-                  <span style={{ ...body, color: T.ashFaint }}>Hours</span>
-                  <span className="text-right" style={{ ...mono, color: T.ash }}>{field.hours}</span>
-                </div>
-              )}
+          {field.hours && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <div className="flex justify-between text-[13px] gap-4">
+                <span style={{ ...body, color: T.ashFaint }}>Hours</span>
+                <span className="text-right" style={{ ...mono, color: T.ash }}>{field.hours}</span>
+              </div>
             </div>
           )}
 
@@ -1125,7 +1182,9 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
               className="p-4 flex items-center justify-between"
               style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
             >
-              <span className="text-[13px] font-medium" style={{ ...mono, color: T.ash }}>{field.phone}</span>
+              <span className="flex items-center gap-2 text-[13px] font-medium" style={{ ...mono, color: T.ash }}>
+                <Phone size={14} color={T.ashFaint} /> {field.phone}
+              </span>
               <span className="text-[11px] font-semibold" style={{ ...display, color: T.accent }}>Call</span>
             </a>
           )}
@@ -1678,6 +1737,8 @@ export default function App() {
         eventsLoading={eventsLoading}
         fields={fields}
         profile={profile}
+        favorites={favorites}
+        user={user}
         onOpenEvent={openEvent}
         onOpenField={openField}
         onNavigate={goTab}
