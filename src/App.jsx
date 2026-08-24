@@ -486,18 +486,34 @@ function FieldsMap({ fields, onOpenField }) {
 // location when that's genuinely what applies.
 // DEMO/PLACEHOLDER DATA — not scraped or owner-provided yet. Same content
 // shown on both the event page and the field page, since amenities/rules/
-// chrono limits are genuinely field-level facts, not per-event ones. Swap
-// for real field-owner-entered data once that flow exists.
-function DemoFieldFacts() {
+// chrono limits are genuinely field-level facts, not per-event ones. Each
+// section independently uses real field-owner data when present (field.amenities/
+// rules/chrono) and only falls back to demo placeholder content — with an
+// explicit "DEMO DATA" tag — where a field hasn't provided that section yet.
+function FieldFacts({ field }) {
+  const hasRealAmenities = Array.isArray(field?.amenities) && field.amenities.length > 0;
+  const hasRealRules = Array.isArray(field?.rules) && field.rules.length > 0;
+  const hasRealChrono = !!field?.chrono;
+
+  const demoAmenities = ["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"];
+  const demoRules = [
+    "Full-seal eye protection required at all times on the field.",
+    "Barrel bags/plugs required in all staging areas.",
+    "Blind fire and physical contact are not permitted.",
+    "Minimum engagement distances enforced per game mode.",
+  ];
+
   return (
     <>
       <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
         <div className="flex items-center justify-between mb-2">
           <Eyebrow>Amenities</Eyebrow>
-          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+          {!hasRealAmenities && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"].map((a) => (
+          {(hasRealAmenities ? field.amenities : demoAmenities).map((a) => (
             <span
               key={a}
               className="text-[11px] font-semibold px-3 py-1.5 flex items-center gap-1.5"
@@ -512,30 +528,37 @@ function DemoFieldFacts() {
       <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
         <div className="flex items-center justify-between mb-2">
           <Eyebrow>Field Rules</Eyebrow>
-          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+          {!hasRealRules && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+          )}
         </div>
         <ul className="text-[12px] leading-relaxed pl-4" style={{ ...body, color: T.ashDim, listStyle: "disc" }}>
-          <li>Full-seal eye protection required at all times on the field.</li>
-          <li>Barrel bags/plugs required in all staging areas.</li>
-          <li>Blind fire and physical contact are not permitted.</li>
-          <li>Minimum engagement distances enforced per game mode.</li>
+          {(hasRealRules ? field.rules : demoRules).map((r) => <li key={r}>{r}</li>)}
         </ul>
       </div>
 
       <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
         <div className="flex items-center justify-between mb-2">
           <Eyebrow>Chrono Limits</Eyebrow>
-          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+          {!hasRealChrono && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
           <div>
             <div style={{ color: T.ashFaint }}>AEG</div>
-            <div style={{ ...mono, color: T.ash }}>400 FPS max (0.20g)</div>
+            <div style={{ ...mono, color: T.ash }}>{hasRealChrono ? field.chrono.aeg : "400 FPS max (0.20g)"}</div>
           </div>
           <div>
-            <div style={{ color: T.ashFaint }}>Sniper (bolt-action)</div>
-            <div style={{ ...mono, color: T.ash }}>500 FPS max (0.20g)</div>
+            <div style={{ color: T.ashFaint }}>Sniper</div>
+            <div style={{ ...mono, color: T.ash }}>{hasRealChrono ? field.chrono.sniper : "500 FPS max (0.20g)"}</div>
           </div>
+          {hasRealChrono && field.chrono.dmr && (
+            <div className="col-span-2">
+              <div style={{ color: T.ashFaint }}>DMR</div>
+              <div style={{ ...mono, color: T.ash }}>{field.chrono.dmr}</div>
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -1345,7 +1368,9 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+                  {ev.waiver.isDemo !== false && (
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+                  )}
                   <ChevronRight size={16} color={T.ashFaint} />
                 </div>
               </button>
@@ -1353,7 +1378,9 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
                 <div className="flex items-center justify-between mb-2">
                   <Eyebrow>{field?.name || ev.fieldName} Waiver</Eyebrow>
-                  <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+                  {ev.waiver.isDemo !== false && (
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+                  )}
                 </div>
                 <div
                   onScroll={handleWaiverScroll}
@@ -1419,7 +1446,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           {/* DEMO/PLACEHOLDER DATA — not scraped or owner-provided yet.
               Kept here for showcase purposes per explicit request; swap for
               real field-owner-entered data once that flow exists. */}
-          <DemoFieldFacts />
+          <FieldFacts field={field} />
 
           <a
             href={ev.sourceUrl}
@@ -1534,7 +1561,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
             </div>
           )}
 
-          <DemoFieldFacts />
+          <FieldFacts field={field} />
 
           {field.hours && (
             <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
