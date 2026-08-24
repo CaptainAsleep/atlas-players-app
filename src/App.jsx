@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -603,6 +603,43 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("idle"); // idle | loading | error
 
+  // Pull-to-refresh. Fields/events are already live via Firestore listeners
+  // — nothing here is genuinely stale — so this is honestly about the
+  // gesture itself (the interaction people expect from a feed) rather than
+  // fixing real staleness. Still gives real, deliberate visual feedback
+  // instead of faking an instant flash.
+  const PULL_THRESHOLD = 70;
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartY = useRef(null);
+  const scrollRef = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (scrollRef.current && scrollRef.current.scrollTop <= 0 && !refreshing) {
+      pullStartY.current = e.touches[0].clientY;
+    } else {
+      pullStartY.current = null;
+    }
+  };
+  const handleTouchMove = (e) => {
+    if (pullStartY.current === null || refreshing) return;
+    const delta = e.touches[0].clientY - pullStartY.current;
+    if (delta > 0 && scrollRef.current && scrollRef.current.scrollTop <= 0) {
+      setPullDistance(Math.min(delta * 0.5, 100)); // damped, so it doesn't feel like 1:1 dragging
+    }
+  };
+  const handleTouchEnd = async () => {
+    if (pullStartY.current === null) return;
+    if (pullDistance >= PULL_THRESHOLD) {
+      setRefreshing(true);
+      setPullDistance(PULL_THRESHOLD);
+      await new Promise((r) => setTimeout(r, 600)); // real listeners are already current; this is a deliberate, honest pause, not a fake instant flash
+      setRefreshing(false);
+    }
+    setPullDistance(0);
+    pullStartY.current = null;
+  };
+
   // State picker for the Fields view — auto-detects once via reverse
   // geocoding (reusing userLocation if Nearby already granted it, so this
   // doesn't trigger a second permission prompt), then falls back to
@@ -811,7 +848,20 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     );
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+    <div
+      ref={scrollRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className="h-full overflow-y-auto pb-24"
+      style={flatBg}
+    >
+      <div
+        className="flex items-center justify-center overflow-hidden"
+        style={{ height: pullDistance, transition: refreshing ? "none" : "height 200ms ease-out" }}
+      >
+        <RefreshCw size={18} color={T.ashDim} className={refreshing ? "ptr-spin" : ""} style={{ transform: refreshing ? "none" : `rotate(${pullDistance * 3}deg)` }} />
+      </div>
       <div className="px-6 pt-2 pb-4 flex items-center justify-between">
         <div>
           <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{timeBasedGreeting()},</div>
@@ -1219,7 +1269,12 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               {ev.type && <Tag>{ev.type}</Tag>}
               {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
             </div>
-            <div className="text-[24px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
+            <div
+              className="text-[24px] font-semibold"
+              style={{ ...display, color: "#FFFFFF", textShadow: "0 1px 4px rgba(0,0,0,0.65)", WebkitTextStroke: "0.4px rgba(0,0,0,0.35)" }}
+            >
+              {ev.title}
+            </div>
           </div>
         </div>
 
@@ -1438,7 +1493,12 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
               {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
               {!statusLabel && field.status === "active" && <Tag tone="good">ACTIVE</Tag>}
             </div>
-            <div className="text-[24px] font-semibold" style={{ ...display, color: T.ash }}>{field.name}</div>
+            <div
+              className="text-[24px] font-semibold"
+              style={{ ...display, color: "#FFFFFF", textShadow: "0 1px 4px rgba(0,0,0,0.65)", WebkitTextStroke: "0.4px rgba(0,0,0,0.35)" }}
+            >
+              {field.name}
+            </div>
           </div>
         </div>
 
