@@ -59,6 +59,14 @@ function heroStyle(imageUrl, seed) {
   };
 }
 const NEARBY_RADIUS_MILES = 50;
+// Prices come from real scraped listings as free text ("$20", "$20/person",
+// "varies") — pull out the first number we can find. Events with no
+// parseable number (e.g. "varies") are treated as unknown and always pass
+// the price filter rather than being hidden just because we can't read them.
+function parsePrice(str) {
+  const m = (str || "").match(/[\d.]+/);
+  return m ? parseFloat(m[0]) : null;
+}
 // Haversine formula — straight-line distance between two lat/lng points,
 // accurate enough for "how far is this field" without needing a routing API.
 function distanceMiles(lat1, lng1, lat2, lng2) {
@@ -464,6 +472,31 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     );
   };
 
+  // Advanced filters (behind the sliders icon)
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [maxPrice, setMaxPrice] = useState(null); // null = no cap
+  const [radiusMiles, setRadiusMiles] = useState(NEARBY_RADIUS_MILES);
+  const [sortBy, setSortBy] = useState("date"); // "date" | "price" | "distance"
+  const advancedFiltersActive = dateFrom || dateTo || maxPrice !== null || radiusMiles !== NEARBY_RADIUS_MILES || sortBy !== "date";
+  const clearAdvancedFilters = () => {
+    setDateFrom("");
+    setDateTo("");
+    setMaxPrice(null);
+    setRadiusMiles(NEARBY_RADIUS_MILES);
+    setSortBy("date");
+  };
+  const eventPassesAdvanced = (ev) => {
+    if (dateFrom && (ev.endDate || ev.date) < dateFrom) return false;
+    if (dateTo && ev.date > dateTo) return false;
+    if (maxPrice !== null) {
+      const p = parsePrice(ev.price);
+      if (p !== null && p > maxPrice) return false;
+    }
+    return true;
+  };
+
   const cats = [
     { key: "Featured", icon: Star },
     { key: "Outdoor", icon: Compass, type: "OUTDOOR", fieldProp: "outdoor" },
@@ -476,9 +509,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     const cat = cats.find((c) => c.key === activeCat);
     if (cat?.type && ev.type !== cat.type) return false;
     if (activeTodayOnly && !isLiveToday(ev)) return false;
+    if (!eventPassesAdvanced(ev)) return false;
     if (nearbyOnly) {
       const dist = fieldDistance(fields.find((f) => f.id === ev.fieldId));
-      if (dist === null || dist > NEARBY_RADIUS_MILES) return false;
+      if (dist === null || dist > radiusMiles) return false;
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -487,11 +521,25 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     }
     return true;
   });
-  if (nearbyOnly) {
+
+  if (sortBy === "distance" && userLocation) {
     filteredEvents = [...filteredEvents].sort(
       (a, b) => (fieldDistance(fields.find((f) => f.id === a.fieldId)) ?? Infinity) -
                 (fieldDistance(fields.find((f) => f.id === b.fieldId)) ?? Infinity)
     );
+  } else if (sortBy === "price") {
+    filteredEvents = [...filteredEvents].sort(
+      (a, b) => (parsePrice(a.price) ?? Infinity) - (parsePrice(b.price) ?? Infinity)
+    );
+  } else if (nearbyOnly) {
+    // No explicit sort chosen, but Nearby is on — nearest-first is still the
+    // more useful default than insertion order.
+    filteredEvents = [...filteredEvents].sort(
+      (a, b) => (fieldDistance(fields.find((f) => f.id === a.fieldId)) ?? Infinity) -
+                (fieldDistance(fields.find((f) => f.id === b.fieldId)) ?? Infinity)
+    );
+  } else {
+    filteredEvents = [...filteredEvents].sort((a, b) => a.date.localeCompare(b.date));
   }
 
   return (
@@ -542,8 +590,123 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           className="flex-1 text-[13px] bg-transparent outline-none"
           style={{ ...body, color: T.ash }}
         />
-        <SlidersHorizontal size={16} color={T.ashDim} />
+        <button onClick={() => setShowFilters(!showFilters)} className="relative">
+          <SlidersHorizontal size={16} color={advancedFiltersActive ? T.accent : T.ashDim} />
+          {advancedFiltersActive && (
+            <span style={{ position: "absolute", top: -3, right: -3, width: 6, height: 6, borderRadius: "50%", background: T.accent }} />
+          )}
+        </button>
       </div>
+
+      {showFilters && (
+        <div className="mx-6 mb-4 p-4 flex flex-col gap-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+          <div>
+            <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Date Range</div>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="flex-1 px-3 py-2 text-[13px] bg-transparent outline-none"
+                style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+              />
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="flex-1 px-3 py-2 text-[13px] bg-transparent outline-none"
+                style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Max Price</div>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { label: "Any", value: null },
+                { label: "Under $25", value: 25 },
+                { label: "Under $50", value: 50 },
+                { label: "Under $100", value: 100 },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => setMaxPrice(opt.value)}
+                  className="px-3 py-1.5 text-[12px] font-medium"
+                  style={{
+                    ...body,
+                    border: `1px solid ${maxPrice === opt.value ? T.accent : T.line}`,
+                    background: maxPrice === opt.value ? T.accent : "transparent",
+                    color: maxPrice === opt.value ? "#fff" : T.ashDim,
+                    borderRadius: 4,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Search Radius</div>
+            <div className="flex gap-2 flex-wrap">
+              {[10, 25, 50, 100].map((mi) => (
+                <button
+                  key={mi}
+                  onClick={() => setRadiusMiles(mi)}
+                  className="px-3 py-1.5 text-[12px] font-medium"
+                  style={{
+                    ...body,
+                    border: `1px solid ${radiusMiles === mi ? T.accent : T.line}`,
+                    background: radiusMiles === mi ? T.accent : "transparent",
+                    color: radiusMiles === mi ? "#fff" : T.ashDim,
+                    borderRadius: 4,
+                  }}
+                >
+                  {mi} mi
+                </button>
+              ))}
+            </div>
+            {!userLocation && (
+              <p className="text-[11px] mt-1.5" style={{ ...body, color: T.ashFaint }}>Only applies once Nearby is turned on.</p>
+            )}
+          </div>
+
+          <div>
+            <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Sort By</div>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { key: "date", label: "Soonest" },
+                { key: "price", label: "Price" },
+                { key: "distance", label: "Distance", disabled: !userLocation },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => !opt.disabled && setSortBy(opt.key)}
+                  disabled={opt.disabled}
+                  className="px-3 py-1.5 text-[12px] font-medium"
+                  style={{
+                    ...body,
+                    border: `1px solid ${sortBy === opt.key ? T.accent : T.line}`,
+                    background: sortBy === opt.key ? T.accent : "transparent",
+                    color: opt.disabled ? T.ashFaint : sortBy === opt.key ? "#fff" : T.ashDim,
+                    borderRadius: 4,
+                    opacity: opt.disabled ? 0.5 : 1,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {advancedFiltersActive && (
+            <button onClick={clearAdvancedFilters} className="text-[12px] font-medium text-center" style={{ ...body, color: T.alert }}>
+              Clear all filters
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mx-6 mb-2 flex items-center gap-2">
         <button
@@ -637,9 +800,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
             if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
             if (activeTodayOnly && !events.some((ev) => ev.fieldId === f.id && isLiveToday(ev))) return false;
+            if ((dateFrom || dateTo || maxPrice !== null) && !events.some((ev) => ev.fieldId === f.id && eventPassesAdvanced(ev))) return false;
             if (nearbyOnly) {
               const dist = fieldDistance(f);
-              if (dist === null || dist > NEARBY_RADIUS_MILES) return false;
+              if (dist === null || dist > radiusMiles) return false;
             }
 
             if (search.trim()) {
