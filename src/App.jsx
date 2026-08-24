@@ -498,7 +498,13 @@ function DemoFieldFacts() {
         </div>
         <div className="flex flex-wrap gap-2">
           {["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"].map((a) => (
-            <span key={a} className="text-[11px] font-medium px-2.5 py-1" style={{ ...body, background: T.panelAlt, color: T.ashDim, borderRadius: 4 }}>{a}</span>
+            <span
+              key={a}
+              className="text-[11px] font-semibold px-3 py-1.5 flex items-center gap-1.5"
+              style={{ ...body, background: "rgba(15,122,82,0.12)", color: T.good, borderRadius: 999 }}
+            >
+              <Check size={12} strokeWidth={3} /> {a}
+            </span>
           ))}
         </div>
       </div>
