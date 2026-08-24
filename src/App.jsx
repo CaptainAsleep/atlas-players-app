@@ -935,7 +935,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             className="px-3 py-1.5 text-[12px] font-semibold transition-transform duration-100 active:scale-95"
             style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#0A0A0B" : T.ashDim }}
           >
-            List
+            Events
           </button>
           <button
             onClick={() => setViewMode("fields")}
