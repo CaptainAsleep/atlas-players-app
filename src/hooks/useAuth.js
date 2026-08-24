@@ -10,7 +10,8 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { auth, db, storage } from "../lib/firebase";
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -65,6 +66,14 @@ export function useAuth() {
     await updateProfile(auth.currentUser, { displayName: newCallsign });
   }
 
+  // Saves the preference only — the app doesn't actually translate its UI
+  // yet, so this is honestly just laying groundwork for when real i18n
+  // gets built, not claiming a feature that doesn't exist.
+  async function updateLanguage(newLanguage) {
+    if (!auth.currentUser) return;
+    await updateDoc(doc(db, "users", auth.currentUser.uid), { language: newLanguage });
+  }
+
   // Firebase requires proving the current password (re-authenticating)
   // before allowing a password change — this isn't optional, it's how
   // Firebase Auth protects against someone with a stale open session
@@ -76,5 +85,18 @@ export function useAuth() {
     await updatePassword(auth.currentUser, newPassword);
   }
 
-  return { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword };
+  // Takes an already-resized image Blob (resizing happens in the component,
+  // right where the file picker lives), uploads it to this user's own
+  // Storage folder, and saves the resulting URL to their profile doc.
+  async function uploadAvatar(blob) {
+    if (!auth.currentUser) return;
+    const storageRef = ref(storage, `avatars/${auth.currentUser.uid}/profile.jpg`);
+    await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
+    const url = await getDownloadURL(storageRef);
+    await updateDoc(doc(db, "users", auth.currentUser.uid), { avatarUrl: url });
+    await updateProfile(auth.currentUser, { photoURL: url });
+    return url;
+  }
+
+  return { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword, uploadAvatar, updateLanguage };
 }
