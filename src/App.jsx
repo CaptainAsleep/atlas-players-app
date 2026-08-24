@@ -363,7 +363,7 @@ function makePinIcon(color) {
     popupAnchor: [0, -32],
   });
 }
-const fieldPinIcon = makePinIcon(T.hazard);
+const fieldPinIcon = makePinIcon(T.alert);
 
 // Recenters the map whenever the set of visible pins changes (e.g. after a
 // search or category filter), instead of leaving the view stuck wherever it
@@ -423,9 +423,9 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 
   const cats = [
     { key: "Featured", icon: Star },
-    { key: "Outdoor", icon: Compass, type: "OUTDOOR" },
+    { key: "Outdoor", icon: Compass, type: "OUTDOOR", fieldProp: "outdoor" },
     { key: "MilSim", icon: Crosshair, type: "MILSIM" },
-    { key: "Indoor", icon: MapPin, type: "INDOOR" },
+    { key: "Indoor", icon: MapPin, type: "INDOOR", fieldProp: "indoor" },
     { key: "Tournament", icon: Ticket, type: "TOURNAMENT" },
   ];
 
@@ -538,7 +538,24 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 
       {viewMode === "map" ? (
         <FieldsMap
-          fields={fields.filter((f) => filteredEvents.some((ev) => ev.fieldId === f.id))}
+          fields={fields.filter((f) => {
+            // Category: Outdoor/Indoor are real properties every field has,
+            // so filter on the field itself — reliable regardless of how
+            // much event data exists. MilSim/Tournament are event-only
+            // concepts with no field-level equivalent, so those check
+            // whether this field has ANY matching event on record (not
+            // limited to the currently filtered event list, which could be
+            // empty for unrelated reasons like date or search text).
+            const cat = cats.find((c) => c.key === activeCat);
+            if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
+            if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
+
+            if (search.trim()) {
+              const q = search.toLowerCase();
+              if (!`${f.name} ${f.city || ""}`.toLowerCase().includes(q)) return false;
+            }
+            return true;
+          })}
           onOpenField={onOpenField}
         />
       ) : (
