@@ -877,7 +877,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           {profile?.avatarUrl ? (
             <div
               className="w-10 h-10"
-              style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4 }}
+              style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4, border: `1.5px solid ${T.ash}` }}
             />
           ) : (
             <div
