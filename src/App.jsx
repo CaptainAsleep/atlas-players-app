@@ -896,15 +896,55 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
           </div>
 
           {field.address && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              <Eyebrow>Field Location</Eyebrow>
-              <div className="flex items-center gap-2 text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
-                <MapPin size={13} color={T.ashFaint} /> {field.address}
+            <a
+              href={
+                /iPad|iPhone|iPod/.test(navigator.userAgent)
+                  ? `https://maps.apple.com/?daddr=${
+                      typeof field.lat === "number" ? `${field.lat},${field.lng}` : encodeURIComponent(field.address)
+                    }`
+                  : `https://www.google.com/maps/dir/?api=1&destination=${
+                      typeof field.lat === "number" ? `${field.lat},${field.lng}` : encodeURIComponent(field.address)
+                    }`
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="block overflow-hidden"
+              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+            >
+              <div className="p-4 pb-3">
+                <Eyebrow>Field Location</Eyebrow>
+                <div className="flex items-center gap-2 text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
+                  <MapPin size={13} color={T.ashFaint} /> {field.address}
+                </div>
+                {field.phone && (
+                  <div className="text-[12px]" style={{ ...mono, color: T.ashFaint }}>{field.phone}</div>
+                )}
               </div>
-              {field.phone && (
-                <div className="text-[12px]" style={{ ...mono, color: T.ashFaint }}>{field.phone}</div>
+
+              {typeof field.lat === "number" && typeof field.lng === "number" ? (
+                <div className="h-36 pointer-events-none">
+                  <MapContainer
+                    center={[field.lat, field.lng]}
+                    zoom={13}
+                    style={{ width: "100%", height: "100%" }}
+                    zoomControl={false}
+                    dragging={false}
+                    scrollWheelZoom={false}
+                    doubleClickZoom={false}
+                    touchZoom={false}
+                  >
+                    <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="" />
+                    <Marker position={[field.lat, field.lng]} icon={fieldPinIcon} />
+                  </MapContainer>
+                </div>
+              ) : (
+                <div className="h-16 flex items-center justify-center border-t" style={{ borderColor: T.line }}>
+                  <span className="text-[11px] font-semibold flex items-center gap-1.5" style={{ ...display, color: T.accent }}>
+                    Get Directions <ArrowRight size={13} />
+                  </span>
+                </div>
               )}
-            </div>
+            </a>
           )}
 
           {links.length > 0 && (
