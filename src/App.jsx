@@ -124,20 +124,6 @@ const STATUS_LABEL = {
   facebook_only: null,
 };
 
-const scheduleUpcomingSuggested = [
-  { title: "Rec Day: Chaos at the Fort", venue: "Cedar Airsoft Field", date: "May 18, 2024" },
-  { title: "Milsim: Operation Nightfall", venue: "MTC Camp, MI", date: "Jun 01, 2024" },
-  { title: "CQB Night Championship", venue: "Atlas Indoor Arena", date: "Jun 15, 2024" },
-];
-const schedulePrevious = [
-  { title: "Spring Opener Rec Skirmish", venue: "Cedar Airsoft Field", date: "Apr 20, 2024" },
-];
-const schedulePreviousFilled = [
-  { title: "Speedsoft Showdown Local", venue: "Atlas Indoor Arena", date: "Mar 12, 2024" },
-  { title: "Icebreaker Winter MilSim", venue: "Cedar Airsoft Field", date: "Jan 15, 2024" },
-  { title: "Operation Red Shield", venue: "Stryker Milsim Site", date: "Nov 10, 2023" },
-];
-
 /* ---------- primitives ---------- */
 function Tag({ children, tone = "neutral" }) {
   const map = {
@@ -341,7 +327,11 @@ function LoginScreen({ signIn, signUp }) {
 function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
   const isToday = ev.date === new Date().toISOString().slice(0, 10);
   return (
-    <button onClick={onClick} className="text-left w-full mb-4">
+    <button
+      onClick={onClick}
+      className="text-left w-full mb-4 p-3"
+      style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+    >
       <div className="h-36 relative mb-2" style={{ ...heroStyle(ev.imageUrl || fallbackImageUrl, ev.id || ev.title), borderRadius: 4 }}>
         <div className="absolute top-3 left-3 flex gap-2">
           {ev.type && <Tag>{ev.type}</Tag>}
@@ -517,7 +507,12 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4 }}
           />
         ) : (
-          <div className="w-10 h-10" style={{ background: T.panelAlt, borderRadius: 4 }} />
+          <div
+            className="w-10 h-10 flex items-center justify-center text-[14px] font-semibold"
+            style={{ ...display, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+          >
+            {(profile?.callsign || "?").charAt(0).toUpperCase()}
+          </div>
         )}
       </div>
 
@@ -1076,21 +1071,22 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
   );
 }
 
-function ScheduleScreen({ onNavigate, filled, setFilled }) {
+function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
+
+  const upcoming = events
+    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const past = events
+    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <ScreenHeader title="Schedule" />
-      <div className="px-6 pt-2 pb-1 flex justify-end">
-        <button
-          onClick={() => setFilled(!filled)}
-          className="text-[10px] font-medium px-3 py-1"
-          style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}
-        >
-          Demo: show {filled ? "empty" : "filled"}
-        </button>
-      </div>
 
-      {!filled ? (
+      {upcoming.length === 0 ? (
         <div className="px-6 pt-3">
           <div className="p-6 flex flex-col items-center text-center mb-6" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
             <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
@@ -1098,7 +1094,7 @@ function ScheduleScreen({ onNavigate, filled, setFilled }) {
             </div>
             <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Nothing scheduled yet</div>
             <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>
-              Time to dust off your gear and start planning your next airsoft adventure.
+              Save an event's heart on its detail page and it'll show up here.
             </p>
             <button
               onClick={() => onNavigate("home")}
@@ -1108,65 +1104,50 @@ function ScheduleScreen({ onNavigate, filled, setFilled }) {
               Start your search
             </button>
           </div>
-
-          <Eyebrow>Upcoming Near You</Eyebrow>
+        </div>
+      ) : (
+        <div className="px-6 pt-4">
+          <Eyebrow>Upcoming</Eyebrow>
           <div className="flex flex-col gap-3 mb-6">
-            {scheduleUpcomingSuggested.map((e) => (
-              <div key={e.title} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-                <div className="w-12 h-12" style={{ background: T.panelAlt, borderRadius: 4 }} />
+            {upcoming.map((ev) => (
+              <button
+                key={ev.id}
+                onClick={() => onOpenEvent(ev)}
+                className="p-3 flex items-center gap-3 text-left w-full"
+                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+              >
+                <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
                 <div className="flex-1">
-                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{e.title}</div>
-                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{e.venue}</div>
-                  <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{e.date}</div>
+                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
+                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+                  <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
                 </div>
-                <button className="w-8 h-8 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
-                  <Plus size={15} color={T.ash} />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <Eyebrow>Previous Events</Eyebrow>
-          <div className="flex flex-col gap-3">
-            {schedulePrevious.map((e) => (
-              <div key={e.title} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-                <div className="w-12 h-12" style={{ background: T.panelAlt, borderRadius: 4 }} />
-                <div className="flex-1">
-                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{e.title}</div>
-                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{e.venue}</div>
-                  <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{e.date}</div>
-                </div>
-              </div>
+                <ChevronRight size={16} color={T.ashFaint} />
+              </button>
             ))}
           </div>
         </div>
-      ) : (
-        <div className="px-6 pt-3">
-          <Eyebrow>Upcoming Events</Eyebrow>
-          <div className="mb-6" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, overflow: "hidden" }}>
-            <div className="h-36" style={{ background: "linear-gradient(160deg,#1c1a12,#08080a)" }} />
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-1">
-                <Tag>NATIONAL EVENT</Tag>
-                <span className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>$50 / person</span>
-              </div>
-              <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Battle @ 6 Flags</div>
-              <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>Airsoft Event in New Orleans, LA</div>
-              <div className="text-[11px] font-medium" style={{ ...mono, color: T.ashFaint }}>Sep 20–22, 2024</div>
-            </div>
-          </div>
+      )}
 
-          <Eyebrow>Previous Events</Eyebrow>
+      {past.length > 0 && (
+        <div className="px-6">
+          <Eyebrow>Attended</Eyebrow>
           <div className="flex flex-col gap-3">
-            {schedulePreviousFilled.map((e) => (
-              <div key={e.title} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-                <div className="w-12 h-12" style={{ background: T.panelAlt, borderRadius: 4 }} />
+            {past.map((ev) => (
+              <button
+                key={ev.id}
+                onClick={() => onOpenEvent(ev)}
+                className="p-3 flex items-center gap-3 text-left w-full"
+                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.65 }}
+              >
+                <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
                 <div className="flex-1">
-                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{e.title}</div>
-                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{e.venue}</div>
-                  <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{e.date}</div>
+                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
+                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+                  <div className="text-[11px] font-medium" style={{ ...mono, color: T.ashFaint }}>{formatDate(ev.date, ev.endDate)}</div>
                 </div>
-              </div>
+                <Tag tone="good">ATTENDED</Tag>
+              </button>
             ))}
           </div>
         </div>
@@ -1463,7 +1444,6 @@ export default function App() {
   const [stack, setStack] = useState(["home"]);
   const [activeEventId, setActiveEventId] = useState(null);
   const [activeFieldId, setActiveFieldId] = useState(null);
-  const [scheduleFilled, setScheduleFilled] = useState(true);
   const screen = stack[stack.length - 1];
 
   const push = (s) => setStack((prev) => [...prev, s]);
@@ -1554,7 +1534,7 @@ export default function App() {
       />
     );
   } else if (screen === "schedule") {
-    content = <ScheduleScreen onNavigate={goTab} filled={scheduleFilled} setFilled={setScheduleFilled} />;
+    content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} />;
   } else if (screen === "inbox") {
     content = <InboxScreen onNavigate={goTab} />;
   } else if (screen === "profile") {
