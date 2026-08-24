@@ -1554,6 +1554,21 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
             </div>
           )}
 
+          {field.homeTeam && (
+            <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <img
+                src={field.homeTeam.patchUrl}
+                alt={`${field.homeTeam.name} team patch`}
+                className="w-16 h-16 flex-shrink-0"
+                style={{ objectFit: "contain", borderRadius: 4 }}
+              />
+              <div>
+                <Eyebrow>Home Field Of</Eyebrow>
+                <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{field.homeTeam.name}</div>
+              </div>
+            </div>
+          )}
+
           {field.about && (
             <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
               <Eyebrow>About the Field</Eyebrow>
