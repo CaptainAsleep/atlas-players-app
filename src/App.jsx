@@ -69,6 +69,16 @@ function parsePrice(str) {
 }
 // Haversine formula — straight-line distance between two lat/lng points,
 // accurate enough for "how far is this field" without needing a routing API.
+// new Date().toISOString() converts to UTC before formatting, which silently
+// rolls "today" over to tomorrow during evening hours in US timezones (UTC
+// is ahead of local time). This uses the browser's own local date fields
+// instead, so "today" always matches what's actually on the user's device.
+function localDateStr(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 function distanceMiles(lat1, lng1, lat2, lng2) {
   const R = 3958.8;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -333,7 +343,7 @@ function LoginScreen({ signIn, signUp }) {
 }
 
 function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
-  const isToday = ev.date === new Date().toISOString().slice(0, 10);
+  const isToday = ev.date === localDateStr();
   return (
     <button
       onClick={onClick}
@@ -439,7 +449,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   const [nearbyOnly, setNearbyOnly] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("idle"); // idle | loading | error
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const isLiveToday = (ev) => ev.date <= today && (ev.endDate || ev.date) >= today;
 
   const fieldDistance = (field) => {
@@ -1130,7 +1140,7 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
 }
 
 function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, events, onOpenField, onOpenEvent }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
 
   const savedFieldIds = favorites.filter((f) => f.type === "field").map((f) => f.refId);
   const savedFields = fields.filter((f) => savedFieldIds.includes(f.id));
@@ -1236,7 +1246,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
 }
 
 function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
 
   const upcoming = events
