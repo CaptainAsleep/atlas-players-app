@@ -4,6 +4,8 @@ import {
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
   ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera
 } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
 import { useFields } from "./hooks/useFields";
 import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
@@ -346,9 +348,78 @@ function EventCard({ ev, fallbackImageUrl, onClick }) {
   );
 }
 
-function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile }) {
+/* ---------- map ---------- */
+// Custom pin matching the app's palette instead of Leaflet's default blue
+// teardrop marker, which would clash badly with the dark theme.
+function makePinIcon(color) {
+  return L.divIcon({
+    className: "",
+    html: `<svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.3 21.7 0 14 0z" fill="${color}"/>
+      <circle cx="14" cy="14" r="5.5" fill="#0A0A0B"/>
+    </svg>`,
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor: [0, -32],
+  });
+}
+const fieldPinIcon = makePinIcon(T.hazard);
+
+// Recenters the map whenever the set of visible pins changes (e.g. after a
+// search or category filter), instead of leaving the view stuck wherever it
+// started.
+function FitToPins({ points }) {
+  const map = useMap();
+  React.useEffect(() => {
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView([points[0].lat, points[0].lng], 11);
+    } else {
+      map.fitBounds(points.map((p) => [p.lat, p.lng]), { padding: [40, 40] });
+    }
+  }, [points, map]);
+  return null;
+}
+
+function FieldsMap({ fields, onOpenField }) {
+  const pins = fields.filter((f) => typeof f.lat === "number" && typeof f.lng === "number");
+  const center = pins.length ? [pins[0].lat, pins[0].lng] : [43.3, -84.5]; // Michigan fallback
+
+  if (pins.length === 0) {
+    return (
+      <div className="mx-6 mb-4 h-72 flex items-center justify-center" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+        <p className="text-[12px] text-center px-6" style={{ ...body, color: T.ashFaint }}>
+          None of the fields matching your current filter have map coordinates yet.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-6 mb-4 h-72 overflow-hidden" style={{ borderRadius: 6, border: `1px solid ${T.line}` }}>
+      <MapContainer center={center} zoom={9} style={{ width: "100%", height: "100%", background: T.void }} zoomControl={false}>
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors'
+        />
+        <FitToPins points={pins} />
+        {pins.map((f) => (
+          <Marker key={f.id} position={[f.lat, f.lng]} icon={fieldPinIcon} eventHandlers={{ click: () => onOpenField(f) }}>
+            <Popup>
+              <div style={{ ...body, fontSize: 12, fontWeight: 600 }}>{f.name}</div>
+              <div style={{ ...body, fontSize: 11, color: "#666" }}>{f.city}</div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
+  );
+}
+
+function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField }) {
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("Featured");
+  const [viewMode, setViewMode] = useState("list");
 
   const cats = [
     { key: "Featured", icon: Star },
@@ -424,8 +495,20 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         </div>
         <div className="flex-1" />
         <div className="flex" style={{ border: `1px solid ${T.line}`, borderRadius: 4, overflow: "hidden" }}>
-          <span className="px-3 py-1.5 text-[12px] font-semibold" style={{ ...body, background: T.ash, color: "#0A0A0B" }}>List</span>
-          <span className="px-3 py-1.5 text-[12px] font-medium" style={{ ...body, color: T.ashDim }}>Map</span>
+          <button
+            onClick={() => setViewMode("list")}
+            className="px-3 py-1.5 text-[12px] font-semibold"
+            style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#0A0A0B" : T.ashDim }}
+          >
+            List
+          </button>
+          <button
+            onClick={() => setViewMode("map")}
+            className="px-3 py-1.5 text-[12px] font-medium"
+            style={{ ...body, background: viewMode === "map" ? T.ash : "transparent", color: viewMode === "map" ? "#0A0A0B" : T.ashDim }}
+          >
+            Map
+          </button>
         </div>
       </div>
 
@@ -448,10 +531,17 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       </div>
 
       <div className="px-6 flex items-center justify-between mb-3">
-        <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>Events Feed</span>
-        <span className="text-[12px] font-medium" style={{ ...body, color: T.accent }}>Filter Map</span>
+        <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>
+          {viewMode === "map" ? "Fields on Map" : "Events Feed"}
+        </span>
       </div>
 
+      {viewMode === "map" ? (
+        <FieldsMap
+          fields={fields.filter((f) => filteredEvents.some((ev) => ev.fieldId === f.id))}
+          onOpenField={onOpenField}
+        />
+      ) : (
       <div className="px-6">
         {eventsLoading ? (
           <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading events…</div>
@@ -474,6 +564,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           ))
         )}
       </div>
+      )}
       <BottomNav active="home" onNavigate={onNavigate} />
     </div>
   );
@@ -1261,6 +1352,7 @@ export default function App() {
         fields={fields}
         profile={profile}
         onOpenEvent={openEvent}
+        onOpenField={openField}
         onNavigate={goTab}
       />
     );
