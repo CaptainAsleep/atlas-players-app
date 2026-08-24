@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera
 } from "lucide-react";
 import { useFields } from "./hooks/useFields";
 import { useEvents } from "./hooks/useEvents";
@@ -56,6 +56,12 @@ function heroStyle(imageUrl, seed) {
     backgroundPosition: "center",
   };
 }
+function timeBasedGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 function formatDate(dateStr, endDateStr) {
   if (!dateStr) return "";
   const opts = { weekday: "short", month: "short", day: "numeric" };
@@ -64,6 +70,36 @@ function formatDate(dateStr, endDateStr) {
   if (!endDateStr) return startFmt;
   const end = new Date(endDateStr + "T00:00:00");
   return `${startFmt} – ${end.toLocaleDateString("en-US", opts)}`;
+}
+// Downscales/compresses a picked photo client-side before it ever leaves the
+// device — phone camera photos can be 10MB+, and an avatar only ever needs
+// to be a few hundred pixels. Keeps uploads fast and Storage costs near zero.
+function resizeImageFile(file, maxSize = 400, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("That doesn't look like a valid image."));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        } else if (height >= width && height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Couldn't process that image."))), "image/jpeg", quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 const STATUS_LABEL = {
   active: null,
@@ -310,7 +346,7 @@ function EventCard({ ev, fallbackImageUrl, onClick }) {
   );
 }
 
-function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields }) {
+function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile }) {
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("Featured");
 
@@ -337,10 +373,17 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields }) 
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <div className="px-6 pt-2 pb-4 flex items-center justify-between">
         <div>
-          <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>Good morning,</div>
-          <div className="text-[20px] font-semibold" style={{ ...display, color: T.ash }}>Wingman</div>
+          <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{timeBasedGreeting()},</div>
+          <div className="text-[20px] font-semibold" style={{ ...display, color: T.ash }}>{profile?.callsign || "Player"}</div>
         </div>
-        <div className="w-10 h-10" style={{ background: T.panelAlt, borderRadius: 4 }} />
+        {profile?.avatarUrl ? (
+          <div
+            className="w-10 h-10"
+            style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4 }}
+          />
+        ) : (
+          <div className="w-10 h-10" style={{ background: T.panelAlt, borderRadius: 4 }} />
+        )}
       </div>
 
       <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
@@ -915,8 +958,33 @@ function ProfileRow({ label, value }) {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, changePassword }) {
+function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, changePassword, uploadAvatar }) {
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
+  const fileInputRef = useRef(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+
+  const handleAvatarPick = () => fileInputRef.current?.click();
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let picking the same file again still fire onChange
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Please choose an image file.");
+      return;
+    }
+    setAvatarError("");
+    setAvatarUploading(true);
+    try {
+      const resized = await resizeImageFile(file);
+      await uploadAvatar(resized);
+    } catch (err) {
+      setAvatarError(err.message || "Upload failed — try again.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const [editingCallsign, setEditingCallsign] = useState(false);
   const [callsignInput, setCallsignInput] = useState("");
@@ -988,13 +1056,33 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <ScreenHeader title="Profile" />
       <div className="px-6 pt-4">
-        <div className="p-4 flex items-center gap-3 mb-5" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-          <div
-            className="w-14 h-14 flex items-center justify-center text-[18px] font-semibold"
-            style={{ ...display, background: T.panelAlt, borderRadius: 4, color: T.ash }}
-          >
-            {initial}
-          </div>
+        <div className="p-4 flex items-center gap-3 mb-2" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+          <button onClick={handleAvatarPick} className="relative w-14 h-14 flex-shrink-0" disabled={avatarUploading}>
+            {profile?.avatarUrl ? (
+              <div
+                className="w-14 h-14"
+                style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4 }}
+              />
+            ) : (
+              <div
+                className="w-14 h-14 flex items-center justify-center text-[18px] font-semibold"
+                style={{ ...display, background: T.panelAlt, borderRadius: 4, color: T.ash }}
+              >
+                {initial}
+              </div>
+            )}
+            <div
+              className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center"
+              style={{ background: T.ash, borderRadius: 3, border: `2px solid ${T.panel}` }}
+            >
+              {avatarUploading ? (
+                <span className="text-[8px]" style={{ ...mono, color: "#0A0A0B" }}>…</span>
+              ) : (
+                <Camera size={10} color="#0A0A0B" strokeWidth={2.5} />
+              )}
+            </div>
+          </button>
           <div>
             <span className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>
               {profile?.callsign || "Loading…"}
@@ -1002,6 +1090,8 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
             <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{user?.email}</div>
           </div>
         </div>
+        {avatarError && <p className="text-[11px] mb-3" style={{ ...body, color: T.alert }}>{avatarError}</p>}
+        {!avatarError && <div className="mb-3" />}
 
         <Eyebrow>Account Settings</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
@@ -1121,7 +1211,7 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
 export default function App() {
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword, uploadAvatar } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
 
   const [stack, setStack] = useState(["home"]);
@@ -1169,6 +1259,7 @@ export default function App() {
         events={events}
         eventsLoading={eventsLoading}
         fields={fields}
+        profile={profile}
         onOpenEvent={openEvent}
         onNavigate={goTab}
       />
@@ -1228,6 +1319,7 @@ export default function App() {
         onLogout={handleLogout}
         updateCallsign={updateCallsign}
         changePassword={changePassword}
+        uploadAvatar={uploadAvatar}
       />
     );
   }
