@@ -22,16 +22,21 @@ const mono = { fontFamily: "'IBM Plex Mono', monospace" };
 const body = { fontFamily: "'Inter', sans-serif" };
 
 const T = {
-  void: "#0A0A0B",
-  panel: "#141517",
-  panelAlt: "#1B1C1F",
-  line: "#2A2C30",
-  ash: "#F2F1EE",
-  ashDim: "#8A8C92",
-  ashFaint: "#57595E",
-  accent: "#5B8DFF",
-  good: "#34D399",
-  alert: "#F0554A",
+  // Light, high-contrast palette — chosen for outdoor sunlight readability
+  // over aesthetic preference. Text-bearing tokens (ash/ashDim/ashFaint,
+  // accent, good, alert) are deliberately on the darker/more-saturated end
+  // of their range for real contrast against the light backgrounds, not
+  // just "looks fine indoors."
+  void: "#F2F2ED", // page background
+  panel: "#FFFFFF", // card surfaces — clear separation from the page
+  panelAlt: "#E7E7E1", // nested surfaces: chip fills, placeholder thumbnails
+  line: "#D2D2CB", // borders/dividers
+  ash: "#14181C", // primary text AND primary solid-button fill (dark ink)
+  ashDim: "#4E5257", // secondary text
+  ashFaint: "#686C72", // tertiary text/labels — still meant to stay legible, not decorative-faint
+  accent: "#1554B8", // links/interactive — deep blue for real contrast on white
+  good: "#0F7A52", // success/positive
+  alert: "#BC3327", // warnings/live badges
 };
 
 const flatBg = { backgroundColor: T.void };
@@ -39,11 +44,11 @@ const flatBg = { backgroundColor: T.void };
 /* ---------- helpers ---------- */
 // Deterministic placeholder gradient per field/event until real photos exist.
 const GRADIENTS = [
-  "linear-gradient(160deg,#1c1e18,#0a0a09)",
-  "linear-gradient(160deg,#1a1a1c,#08080a)",
-  "linear-gradient(160deg,#191c17,#08090a)",
-  "linear-gradient(160deg,#1b1a1c,#09080a)",
-  "linear-gradient(160deg,#17191c,#07080a)",
+  "linear-gradient(160deg,#E4E4DD,#CDCDC4)",
+  "linear-gradient(160deg,#E0E0DE,#C8C8C4)",
+  "linear-gradient(160deg,#E2E4DE,#CACDC4)",
+  "linear-gradient(160deg,#E1E0DE,#C9C8C4)",
+  "linear-gradient(160deg,#DFE1E2,#C6C9CA)",
 ];
 function gradFor(seed = "") {
   let h = 0;
@@ -178,8 +183,8 @@ const STATUS_LABEL = {
 /* ---------- primitives ---------- */
 function Tag({ children, tone = "neutral" }) {
   const map = {
-    neutral: { border: "transparent", color: T.ash, bg: "rgba(10,10,11,0.72)" },
-    accent: { border: "transparent", color: "#0A0A0B", bg: T.ash },
+    neutral: { border: "transparent", color: "#FFFFFF", bg: "rgba(10,10,11,0.72)" },
+    accent: { border: "transparent", color: "#FFFFFF", bg: T.ash },
     good: { border: "transparent", color: "#06231A", bg: T.good },
     live: { border: "transparent", color: "#fff", bg: T.alert },
   };
@@ -338,7 +343,7 @@ function LoginScreen({ signIn, signUp }) {
           type="submit"
           disabled={busy}
           className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mt-2 transition-transform duration-100 active:scale-[0.98]"
-          style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: busy ? 0.6 : 1 }}
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: busy ? 0.6 : 1 }}
         >
           {busy ? "Please wait…" : mode === "signup" ? "Create Account" : "Sign In"} <ArrowRight size={16} />
         </button>
@@ -457,7 +462,7 @@ function FieldsMap({ fields, onOpenField }) {
     <div className="mx-6 mb-4 h-72 overflow-hidden" style={{ borderRadius: 6, border: `1px solid ${T.line}` }}>
       <MapContainer center={center} zoom={9} style={{ width: "100%", height: "100%", background: T.void }} zoomControl={false}>
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors'
         />
         <FitToPins points={pins} />
@@ -574,7 +579,7 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
             doubleClickZoom={false}
             touchZoom={false}
           >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="" />
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="" />
             <Marker position={[lat, lng]} icon={fieldPinIcon} />
           </MapContainer>
         </div>
@@ -859,7 +864,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                 <button
                   onClick={handleCheckIn}
                   className="px-4 py-2 text-[11px] font-semibold transition-transform duration-100 active:scale-95"
-                  style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+                  style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
                 >
                   Check In Now
                 </button>
@@ -1000,7 +1005,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             <button
               onClick={() => setShowFilters(false)}
               className="flex-1 py-2.5 text-[13px] font-semibold"
-              style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
             >
               Run Search
             </button>
@@ -1027,21 +1032,21 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           <button
             onClick={() => setViewMode("list")}
             className="px-3 py-1.5 text-[12px] font-semibold transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#0A0A0B" : T.ashDim }}
+            style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#FFFFFF" : T.ashDim }}
           >
             Events
           </button>
           <button
             onClick={() => setViewMode("fields")}
             className="px-3 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "fields" ? T.ash : "transparent", color: viewMode === "fields" ? "#0A0A0B" : T.ashDim }}
+            style={{ ...body, background: viewMode === "fields" ? T.ash : "transparent", color: viewMode === "fields" ? "#FFFFFF" : T.ashDim }}
           >
             Fields
           </button>
           <button
             onClick={() => setViewMode("map")}
             className="px-3 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "map" ? T.ash : "transparent", color: viewMode === "map" ? "#0A0A0B" : T.ashDim }}
+            style={{ ...body, background: viewMode === "map" ? T.ash : "transparent", color: viewMode === "map" ? "#FFFFFF" : T.ashDim }}
           >
             Map
           </button>
@@ -1066,7 +1071,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                 className="w-14 h-14 flex items-center justify-center"
                 style={{ background: active ? T.ash : T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}
               >
-                <Icon size={19} color={active ? "#0A0A0B" : T.ashDim} strokeWidth={1.7} />
+                <Icon size={19} color={active ? "#FFFFFF" : T.ashDim} strokeWidth={1.7} />
               </div>
               <span className="text-[11px] font-medium" style={{ ...body, color: active ? T.ash : T.ashDim }}>{cat.key}</span>
             </button>
@@ -1325,7 +1330,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                         onClick={handleSign}
                         disabled={!agreed || !signedName.trim() || signing}
                         className="flex-1 py-2.5 text-[12px] font-semibold"
-                        style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: !agreed || !signedName.trim() || signing ? 0.5 : 1 }}
+                        style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !agreed || !signedName.trim() || signing ? 0.5 : 1 }}
                       >
                         {signing ? "Signing…" : "Sign Waiver"}
                       </button>
@@ -1385,7 +1390,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             target="_blank"
             rel="noreferrer"
             className="px-6 py-3 font-semibold text-[13px] inline-block transition-transform duration-100 active:scale-95"
-            style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
           >
             Book / RSVP
           </a>
@@ -1703,7 +1708,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
             <button
               onClick={() => onNavigate("home")}
               className="w-full py-3 font-semibold text-[13px]"
-              style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
             >
               Start your search
             </button>
@@ -1789,7 +1794,217 @@ function ProfileRow({ label, value, static: isStatic }) {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, changePassword, uploadAvatar, updateLanguage }) {
+function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAvatar, deleteAccount }) {
+  const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
+  const fileInputRef = useRef(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+
+  const [callsign, setCallsign] = useState(profile?.callsign || "");
+  const [firstName, setFirstName] = useState(profile?.firstName || "");
+  const [lastName, setLastName] = useState(profile?.lastName || "");
+  const [phone, setPhone] = useState(profile?.phone || "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [showDelete, setShowDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleAvatarPick = () => fileInputRef.current?.click();
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Please choose an image file.");
+      return;
+    }
+    setAvatarError("");
+    setAvatarUploading(true);
+    try {
+      const resized = await resizeImageFile(file);
+      await uploadAvatar(resized);
+    } catch (err) {
+      setAvatarError(err.message || "Upload failed — try again.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!callsign.trim()) {
+      setSaveError("Callsign can't be empty.");
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    setSaveSuccess(false);
+    try {
+      await updateProfileFields({
+        callsign: callsign.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim(),
+      });
+      setSaveSuccess(true);
+    } catch (err) {
+      setSaveError("Couldn't save — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const friendlyDeleteError = (code) => {
+    if (code === "auth/invalid-credential" || code === "auth/wrong-password") return "Password is incorrect.";
+    if (code === "auth/too-many-requests") return "Too many attempts — wait a bit and try again.";
+    return "Something went wrong — try again.";
+  };
+
+  const handleDelete = async () => {
+    if (!deletePassword) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteAccount(deletePassword);
+      // onAuthStateChanged picks up the sign-out automatically once the
+      // account is actually gone — no manual navigation needed here.
+    } catch (err) {
+      setDeleteError(friendlyDeleteError(err.code));
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>My Account</h1>
+      </div>
+
+      <div className="px-6 pt-6 flex flex-col items-center">
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+        <button onClick={handleAvatarPick} className="relative w-20 h-20 mb-2" disabled={avatarUploading}>
+          {profile?.avatarUrl ? (
+            <div className="w-20 h-20" style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 40 }} />
+          ) : (
+            <div className="w-20 h-20 flex items-center justify-center text-[26px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 40, color: T.ash }}>
+              {initial}
+            </div>
+          )}
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 flex items-center justify-center" style={{ background: T.ash, borderRadius: 14, border: `2px solid ${T.void}` }}>
+            {avatarUploading ? (
+              <span className="text-[9px]" style={{ ...mono, color: "#FFFFFF" }}>…</span>
+            ) : (
+              <Camera size={13} color="#FFFFFF" strokeWidth={2.5} />
+            )}
+          </div>
+        </button>
+        <button onClick={handleAvatarPick} className="text-[13px] font-medium mb-1" style={{ ...body, color: T.accent }}>
+          Change Profile Photo
+        </button>
+        {avatarError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{avatarError}</p>}
+      </div>
+
+      <div className="px-6 pt-4 flex flex-col gap-3">
+        {[
+          { label: "Callsign / Username", value: callsign, setter: setCallsign },
+          { label: "First Name", value: firstName, setter: setFirstName },
+          { label: "Last Name", value: lastName, setter: setLastName },
+        ].map((f) => (
+          <div key={f.label}>
+            <label className="text-[10px] font-semibold uppercase block mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>{f.label}</label>
+            <input
+              value={f.value}
+              onChange={(e) => f.setter(e.target.value)}
+              className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none"
+              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            />
+          </div>
+        ))}
+
+        <div>
+          <label className="text-[10px] font-semibold uppercase block mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Email</label>
+          <div className="w-full px-3 py-2.5 text-[14px]" style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ashDim }}>
+            {user?.email}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-semibold uppercase block mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Phone Number</label>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            type="tel"
+            placeholder="+1 (555) 000-0000"
+            className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none"
+            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+          />
+        </div>
+
+        {saveError && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{saveError}</p>}
+        {saveSuccess && <p className="text-[12px]" style={{ ...body, color: T.good }}>Saved.</p>}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full py-3 font-semibold text-[14px] mt-1"
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: saving ? 0.6 : 1 }}
+        >
+          {saving ? "Saving…" : "Save Changes"}
+        </button>
+
+        <div className="mt-4">
+          {!showDelete ? (
+            <button onClick={() => setShowDelete(true)} className="w-full text-center text-[13px] font-medium py-2" style={{ ...body, color: T.alert }}>
+              Delete Account
+            </button>
+          ) : (
+            <div className="p-4" style={{ background: "rgba(188,51,39,0.08)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
+              <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Delete your account?</div>
+              <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+                This permanently deletes your profile, favorites, and photo. This can't be undone. Enter your password to confirm.
+              </p>
+              <input
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                type="password"
+                autoComplete="current-password"
+                placeholder="Current password"
+                className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none mb-3"
+                style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+              />
+              {deleteError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{deleteError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowDelete(false); setDeletePassword(""); setDeleteError(""); }}
+                  className="flex-1 py-2.5 text-[12px] font-medium"
+                  style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={!deletePassword || deleting}
+                  className="flex-1 py-2.5 text-[12px] font-semibold"
+                  style={{ ...display, background: T.alert, color: "#FFFFFF", borderRadius: 4, opacity: !deletePassword || deleting ? 0.5 : 1 }}
+                >
+                  {deleting ? "Deleting…" : "Permanently Delete"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onLogout, changePassword, uploadAvatar, updateLanguage }) {
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -1817,11 +2032,6 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
     }
   };
 
-  const [editingCallsign, setEditingCallsign] = useState(false);
-  const [callsignInput, setCallsignInput] = useState("");
-  const [callsignSaving, setCallsignSaving] = useState(false);
-  const [callsignError, setCallsignError] = useState("");
-
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const LANGUAGES = ["English", "Spanish", "French"]; // covers major US + Canadian languages relevant here
@@ -1831,30 +2041,6 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState(false);
-
-  const openCallsignEdit = () => {
-    setCallsignInput(profile?.callsign || "");
-    setCallsignError("");
-    setEditingCallsign(true);
-  };
-
-  const saveCallsign = async () => {
-    const trimmed = callsignInput.trim();
-    if (!trimmed) {
-      setCallsignError("Callsign can't be empty.");
-      return;
-    }
-    setCallsignSaving(true);
-    setCallsignError("");
-    try {
-      await updateCallsign(trimmed);
-      setEditingCallsign(false);
-    } catch (err) {
-      setCallsignError("Couldn't save — try again.");
-    } finally {
-      setCallsignSaving(false);
-    }
-  };
 
   const friendlyPasswordError = (code) => {
     if (code === "auth/invalid-credential" || code === "auth/wrong-password") return "Current password is incorrect.";
@@ -1910,9 +2096,9 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
               style={{ background: T.ash, borderRadius: 3, border: `2px solid ${T.panel}` }}
             >
               {avatarUploading ? (
-                <span className="text-[8px]" style={{ ...mono, color: "#0A0A0B" }}>…</span>
+                <span className="text-[8px]" style={{ ...mono, color: "#FFFFFF" }}>…</span>
               ) : (
-                <Camera size={10} color="#0A0A0B" strokeWidth={2.5} />
+                <Camera size={10} color="#FFFFFF" strokeWidth={2.5} />
               )}
             </div>
           </button>
@@ -1930,43 +2116,13 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
         <Eyebrow>Account Settings</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
           <ProfileRow label="Email" value={user?.email} static />
-          {!editingCallsign ? (
-            <button onClick={openCallsignEdit} className="w-full flex items-center justify-between py-3.5">
-              <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Callsign</span>
-              <div className="flex items-center gap-2">
-                <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{profile?.callsign}</span>
-                <ChevronRight size={15} color={T.ashFaint} />
-              </div>
-            </button>
-          ) : (
-            <div className="py-3.5">
-              <div className="flex gap-2">
-                <input
-                  value={callsignInput}
-                  onChange={(e) => setCallsignInput(e.target.value)}
-                  autoFocus
-                  className="flex-1 px-3 py-2 text-[14px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-                />
-                <button
-                  onClick={saveCallsign}
-                  disabled={callsignSaving}
-                  className="px-4 py-2 text-[12px] font-semibold"
-                  style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: callsignSaving ? 0.6 : 1 }}
-                >
-                  {callsignSaving ? "…" : "Save"}
-                </button>
-                <button
-                  onClick={() => setEditingCallsign(false)}
-                  className="px-3 py-2 text-[12px] font-medium"
-                  style={{ ...body, color: T.ashFaint }}
-                >
-                  Cancel
-                </button>
-              </div>
-              {callsignError && <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{callsignError}</p>}
+          <button onClick={onOpenAccount} className="w-full flex items-center justify-between py-3.5">
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>My Account</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{profile?.callsign}</span>
+              <ChevronRight size={15} color={T.ashFaint} />
             </div>
-          )}
+          </button>
         </div>
 
         <button
@@ -2013,7 +2169,7 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
               type="submit"
               disabled={passwordSaving}
               className="w-full py-3 font-semibold text-[13px]"
-              style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4, opacity: passwordSaving ? 0.6 : 1 }}
+              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: passwordSaving ? 0.6 : 1 }}
             >
               {passwordSaving ? "Updating…" : "Update Password"}
             </button>
@@ -2076,7 +2232,7 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
 export default function App() {
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword, uploadAvatar, updateLanguage } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
 
   const [stack, setStack] = useState(["home"]);
@@ -2113,6 +2269,7 @@ export default function App() {
     setActiveFieldId(typeof fieldOrId === "string" ? fieldOrId : fieldOrId?.id || activeEvent?.fieldId);
     push("field");
   };
+  const openAccount = () => push("account");
   const handleLogout = async () => {
     await signOut();
     setStack(["home"]); // reset navigation so the next sign-in starts clean
@@ -2197,11 +2354,22 @@ export default function App() {
         profile={profile}
         user={user}
         onNavigate={goTab}
+        onOpenAccount={openAccount}
         onLogout={handleLogout}
-        updateCallsign={updateCallsign}
         changePassword={changePassword}
         uploadAvatar={uploadAvatar}
         updateLanguage={updateLanguage}
+      />
+    );
+  } else if (screen === "account") {
+    content = (
+      <MyAccountScreen
+        profile={profile}
+        user={user}
+        onBack={pop}
+        updateProfileFields={updateProfileFields}
+        uploadAvatar={uploadAvatar}
+        deleteAccount={deleteAccount}
       />
     );
   }
