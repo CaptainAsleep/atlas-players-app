@@ -716,6 +716,12 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   // an event that happens to link to it.
   const filteredFields = fields
     .filter((f) => {
+      // A relocated field has no location worth showing — its old address
+      // is defunct, and surfacing it here would send someone toward a
+      // place that no longer runs games. It's still reachable directly
+      // (e.g. from a favorite or old link) where the relocation notice
+      // and redirect to its new home actually shows.
+      if (f.status === "relocated") return false;
       const cat = cats.find((c) => c.key === activeCat);
       if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
       if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
