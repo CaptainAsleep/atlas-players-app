@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -196,7 +196,7 @@ function BottomNav({ active, onNavigate }) {
     { key: "profile", label: "Profile", icon: User },
   ];
   return (
-    <div className="absolute bottom-0 left-0 right-0 border-t" style={{ background: T.panel, borderColor: T.line }}>
+    <div className="absolute bottom-0 left-0 right-0 border-t" style={{ background: T.panel, borderColor: T.line, zIndex: 1000 }}>
       <div className="flex justify-between px-5 pt-2.5 pb-1.5">
         {tabs.map((t) => {
           const Icon = t.icon;
@@ -684,20 +684,26 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           <div>
             <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Date Range</div>
             <div className="flex gap-2">
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="flex-1 px-3 py-2 text-[13px] bg-transparent outline-none"
-                style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
-              />
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="flex-1 px-3 py-2 text-[13px] bg-transparent outline-none"
-                style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
-              />
+              <div className="flex-1">
+                <label className="text-[10px] block mb-1" style={{ ...body, color: T.ashFaint }}>Start Date</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] block mb-1" style={{ ...body, color: T.ashFaint }}>End Date</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "dark" }}
+                />
+              </div>
             </div>
           </div>
 
@@ -786,6 +792,23 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
               Clear all filters
             </button>
           )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => setShowFilters(false)}
+              className="flex-1 py-2.5 text-[13px] font-medium"
+              style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}
+            >
+              Close
+            </button>
+            <button
+              onClick={() => setShowFilters(false)}
+              className="flex-1 py-2.5 text-[13px] font-semibold"
+              style={{ ...display, background: T.ash, color: "#0A0A0B", borderRadius: 4 }}
+            >
+              Run Search
+            </button>
+          </div>
         </div>
       )}
 
@@ -992,6 +1015,51 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             </div>
           )}
 
+          {/* DEMO/PLACEHOLDER DATA — not scraped or owner-provided yet.
+              Kept here for showcase purposes per explicit request; swap for
+              real field-owner-entered data once that flow exists. */}
+          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="flex items-center justify-between mb-2">
+              <Eyebrow>Amenities</Eyebrow>
+              <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"].map((a) => (
+                <span key={a} className="text-[11px] font-medium px-2.5 py-1" style={{ ...body, background: T.panelAlt, color: T.ashDim, borderRadius: 4 }}>{a}</span>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="flex items-center justify-between mb-2">
+              <Eyebrow>Field Rules</Eyebrow>
+              <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+            </div>
+            <ul className="text-[12px] leading-relaxed pl-4" style={{ ...body, color: T.ashDim, listStyle: "disc" }}>
+              <li>Full-seal eye protection required at all times on the field.</li>
+              <li>Barrel bags/plugs required in all staging areas.</li>
+              <li>Blind fire and physical contact are not permitted.</li>
+              <li>Minimum engagement distances enforced per game mode.</li>
+            </ul>
+          </div>
+
+          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="flex items-center justify-between mb-2">
+              <Eyebrow>Chrono Limits</Eyebrow>
+              <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
+              <div>
+                <div style={{ color: T.ashFaint }}>AEG</div>
+                <div style={{ ...mono, color: T.ash }}>400 FPS max (0.20g)</div>
+              </div>
+              <div>
+                <div style={{ color: T.ashFaint }}>Sniper (bolt-action)</div>
+                <div style={{ ...mono, color: T.ash }}>500 FPS max (0.20g)</div>
+              </div>
+            </div>
+          </div>
+
           <a
             href={ev.sourceUrl}
             target="_blank"
@@ -1005,7 +1073,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 border-t px-5 py-3 flex items-center justify-between" style={{ background: T.panel, borderColor: T.line }}>
+      <div className="absolute bottom-0 left-0 right-0 border-t px-5 py-3 flex items-center justify-between" style={{ background: T.panel, borderColor: T.line, zIndex: 1000 }}>
         <div>
           <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
           <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>
@@ -1115,7 +1183,7 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
                     className="flex items-center gap-3 py-2.5 text-left"
                     style={{ borderTop: i > 0 ? `1px solid ${T.line}` : "none" }}
                   >
-                    <div className="w-11 h-11" style={{ background: T.panelAlt, borderRadius: 4 }} />
+                    <div className="w-11 h-11" style={{ ...heroStyle(s.imageUrl || field.imageUrl, s.id || s.title), borderRadius: 4 }} />
                     <div className="flex-1">
                       <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{s.title}</div>
                       <div className="text-[11px]" style={{ ...mono, color: T.ashFaint }}>{formatDate(s.date, s.endDate)}</div>
@@ -1288,7 +1356,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
             <Eyebrow>Past Events</Eyebrow>
             {pastEvents.length === 0 ? (
               <p className="text-[13px]" style={{ ...body, color: T.ashFaint }}>
-                Events you've saved will move here after they're over — a record of what you've attended.
+                Events you've favorited will move here once they're over — right now this just tracks what you were interested in, not confirmed attendance. That'll change once booking is built.
               </p>
             ) : (
               <div className="flex flex-col gap-3">
@@ -1305,7 +1373,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
                       <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
                       <div className="text-[11px] font-medium" style={{ ...mono, color: T.ashFaint }}>{formatDate(ev.date, ev.endDate)}</div>
                     </div>
-                    <Tag tone="good">ATTENDED</Tag>
+                    <Tag tone="good">PAST</Tag>
                   </button>
                 ))}
               </div>
@@ -1378,7 +1446,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
 
       {past.length > 0 && (
         <div className="px-6">
-          <Eyebrow>Attended</Eyebrow>
+          <Eyebrow>Past</Eyebrow>
           <div className="flex flex-col gap-3">
             {past.map((ev) => (
               <button
@@ -1393,7 +1461,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
                   <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
                   <div className="text-[11px] font-medium" style={{ ...mono, color: T.ashFaint }}>{formatDate(ev.date, ev.endDate)}</div>
                 </div>
-                <Tag tone="good">ATTENDED</Tag>
+                <Tag tone="good">PAST</Tag>
               </button>
             ))}
           </div>
@@ -1432,7 +1500,7 @@ function ProfileRow({ label, value, static: isStatic }) {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, changePassword, uploadAvatar }) {
+function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, changePassword, uploadAvatar, updateLanguage }) {
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -1466,6 +1534,8 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
   const [callsignError, setCallsignError] = useState("");
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const LANGUAGES = ["English", "Spanish", "French"]; // covers major US + Canadian languages relevant here
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -1558,8 +1628,9 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
             </div>
           </button>
           <div>
-            <span className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>
+            <span className="text-[16px] font-semibold inline-flex items-center gap-1.5" style={{ ...display, color: T.ash }}>
               {profile?.callsign || "Loading…"}
+              {profile?.verified && <BadgeCheck size={15} color="#fff" fill={T.accent} />}
             </span>
             <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{user?.email}</div>
           </div>
@@ -1661,12 +1732,43 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
         )}
 
         <Eyebrow>Support & Preferences</Eyebrow>
-        <div className="px-4 mb-6 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
-          <ProfileRow label="Language" value="English" />
-          <ProfileRow label="Currency" value="USD ($)" static />
+        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
+          <button onClick={() => setShowLanguagePicker(!showLanguagePicker)} className="w-full flex items-center justify-between py-3.5">
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Language</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{profile?.language || "English"}</span>
+              <ChevronRight size={15} color={T.ashFaint} style={{ transform: showLanguagePicker ? "rotate(90deg)" : "none" }} />
+            </div>
+          </button>
           <ProfileRow label="FAQs" />
           <ProfileRow label="Report a concern" />
         </div>
+
+        {showLanguagePicker && (
+          <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="flex gap-2 mb-2">
+              {LANGUAGES.map((lang) => (
+                <button
+                  key={lang}
+                  onClick={() => updateLanguage(lang)}
+                  className="px-3 py-1.5 text-[12px] font-medium"
+                  style={{
+                    ...body,
+                    border: `1px solid ${(profile?.language || "English") === lang ? T.accent : T.line}`,
+                    background: (profile?.language || "English") === lang ? T.accent : "transparent",
+                    color: (profile?.language || "English") === lang ? "#fff" : T.ashDim,
+                    borderRadius: 4,
+                  }}
+                >
+                  {lang}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
+              This saves your preference for later — the app doesn't translate its text yet, that's coming.
+            </p>
+          </div>
+        )}
 
         <button
           onClick={onLogout}
@@ -1685,7 +1787,7 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
 export default function App() {
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword, uploadAvatar } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword, uploadAvatar, updateLanguage } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
 
   const [stack, setStack] = useState(["home"]);
@@ -1800,6 +1902,7 @@ export default function App() {
         updateCallsign={updateCallsign}
         changePassword={changePassword}
         uploadAvatar={uploadAvatar}
+        updateLanguage={updateLanguage}
       />
     );
   }
