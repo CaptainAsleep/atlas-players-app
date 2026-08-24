@@ -563,19 +563,21 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{timeBasedGreeting()},</div>
           <div className="text-[20px] font-semibold" style={{ ...display, color: T.ash }}>{profile?.callsign || "Player"}</div>
         </div>
-        {profile?.avatarUrl ? (
-          <div
-            className="w-10 h-10"
-            style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4 }}
-          />
-        ) : (
-          <div
-            className="w-10 h-10 flex items-center justify-center text-[14px] font-semibold"
-            style={{ ...display, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-          >
-            {(profile?.callsign || "?").charAt(0).toUpperCase()}
-          </div>
-        )}
+        <button onClick={() => onNavigate("profile")}>
+          {profile?.avatarUrl ? (
+            <div
+              className="w-10 h-10"
+              style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4 }}
+            />
+          ) : (
+            <div
+              className="w-10 h-10 flex items-center justify-center text-[14px] font-semibold"
+              style={{ ...display, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            >
+              {(profile?.callsign || "?").charAt(0).toUpperCase()}
+            </div>
+          )}
+        </button>
       </div>
 
       <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
@@ -1089,9 +1091,6 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
                 <div className="flex items-center gap-2 text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
                   <MapPin size={13} color={T.ashFaint} /> {field.address}
                 </div>
-                {field.phone && (
-                  <div className="text-[12px]" style={{ ...mono, color: T.ashFaint }}>{field.phone}</div>
-                )}
               </div>
 
               {typeof field.lat === "number" && typeof field.lng === "number" ? (
@@ -1117,6 +1116,17 @@ function FieldDetailScreen({ field, fieldEvents, relocatedField, onBack, onNavig
                   </span>
                 </div>
               )}
+            </a>
+          )}
+
+          {field.phone && (
+            <a
+              href={`tel:${field.phone.replace(/[^\d+]/g, "")}`}
+              className="p-4 flex items-center justify-between"
+              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+            >
+              <span className="text-[13px] font-medium" style={{ ...mono, color: T.ash }}>{field.phone}</span>
+              <span className="text-[11px] font-semibold" style={{ ...display, color: T.accent }}>Call</span>
             </a>
           )}
 
@@ -1351,15 +1361,15 @@ function InboxScreen({ onNavigate }) {
   );
 }
 
-function ProfileRow({ label, value }) {
+function ProfileRow({ label, value, static: isStatic }) {
   return (
-    <button className="w-full flex items-center justify-between py-3.5">
+    <div className="w-full flex items-center justify-between py-3.5">
       <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{label}</span>
       <div className="flex items-center gap-2">
         {value && <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{value}</span>}
-        <ChevronRight size={15} color={T.ashFaint} />
+        {!isStatic && <ChevronRight size={15} color={T.ashFaint} />}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -1500,7 +1510,7 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
 
         <Eyebrow>Account Settings</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
-          <ProfileRow label="Email" value={user?.email} />
+          <ProfileRow label="Email" value={user?.email} static />
           {!editingCallsign ? (
             <button onClick={openCallsignEdit} className="w-full flex items-center justify-between py-3.5">
               <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Callsign</span>
@@ -1594,7 +1604,7 @@ function ProfileScreen({ profile, user, onNavigate, onLogout, updateCallsign, ch
         <Eyebrow>Support & Preferences</Eyebrow>
         <div className="px-4 mb-6 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
           <ProfileRow label="Language" value="English" />
-          <ProfileRow label="Currency" value="USD ($)" />
+          <ProfileRow label="Currency" value="USD ($)" static />
           <ProfileRow label="FAQs" />
           <ProfileRow label="Report a concern" />
         </div>
