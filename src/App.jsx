@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -1959,6 +1959,11 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatc
   const [addError, setAddError] = useState("");
 
   const featuredImageUrl = profile?.featuredPatch?.imageUrl;
+  const [viewerIndex, setViewerIndex] = useState(null);
+  const openViewer = (index) => setViewerIndex(index);
+  const closeViewer = () => setViewerIndex(null);
+  const showPrev = () => setViewerIndex((i) => (i - 1 + patches.length) % patches.length);
+  const showNext = () => setViewerIndex((i) => (i + 1) % patches.length);
 
   const handlePick = () => fileInputRef.current?.click();
   const handleFileSelected = (e) => {
@@ -2028,7 +2033,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatc
           <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</div>
         ) : (
           <div className="grid grid-cols-2 gap-3 mb-4">
-            {patches.map((patch) => {
+            {patches.map((patch, i) => {
               const isFeatured = featuredImageUrl === patch.imageUrl;
               return (
                 <button
@@ -2048,6 +2053,13 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatc
                     style={{ background: T.panelAlt, borderRadius: 999 }}
                   >
                     <span style={{ color: T.ashFaint, fontSize: 12, lineHeight: 1 }}>×</span>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openViewer(i); }}
+                    className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center"
+                    style={{ background: T.panelAlt, borderRadius: 999 }}
+                  >
+                    <Maximize2 size={12} color={T.ashDim} />
                   </button>
                   <img src={patch.imageUrl} alt={patch.name} className="w-16 h-16 mb-2 mt-2" style={{ objectFit: "contain" }} />
                   <div className="text-[12px] font-medium" style={{ ...body, color: T.ash }}>{patch.name}</div>
@@ -2097,6 +2109,57 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatc
           </div>
         )}
       </div>
+
+      {viewerIndex !== null && patches[viewerIndex] && (
+        <div
+          onClick={closeViewer}
+          className="fixed inset-0 flex flex-col items-center justify-center px-6"
+          style={{ background: "rgba(0,0,0,0.88)", zIndex: 2000 }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); closeViewer(); }}
+            className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.15)", borderRadius: 999 }}
+          >
+            <X size={20} color="#FFFFFF" />
+          </button>
+
+          {patches.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); showPrev(); }}
+              className="absolute left-3 w-11 h-11 flex items-center justify-center transition-transform duration-100 active:scale-90"
+              style={{ background: "rgba(255,255,255,0.15)", borderRadius: 999, top: "50%", transform: "translateY(-50%)" }}
+            >
+              <ChevronLeft size={22} color="#FFFFFF" />
+            </button>
+          )}
+
+          <img
+            src={patches[viewerIndex].imageUrl}
+            alt={patches[viewerIndex].name}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "78%", maxHeight: "55vh", objectFit: "contain" }}
+          />
+          <div className="text-[17px] font-semibold mt-4" style={{ ...display, color: "#FFFFFF" }}>
+            {patches[viewerIndex].name}
+          </div>
+          {patches.length > 1 && (
+            <div className="text-[12px] mt-1" style={{ ...mono, color: "rgba(255,255,255,0.6)" }}>
+              {viewerIndex + 1} / {patches.length}
+            </div>
+          )}
+
+          {patches.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); showNext(); }}
+              className="absolute right-3 w-11 h-11 flex items-center justify-center transition-transform duration-100 active:scale-90"
+              style={{ background: "rgba(255,255,255,0.15)", borderRadius: 999, top: "50%", transform: "translateY(-50%)" }}
+            >
+              <ChevronRight size={22} color="#FFFFFF" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
