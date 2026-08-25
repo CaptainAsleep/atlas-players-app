@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
-  Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2,
+  Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2, Users, Shield,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
   ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X
 } from "lucide-react";
@@ -12,6 +12,7 @@ import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
+import { useAllTeams, useTeam, useTeamActions } from "./hooks/useTeams";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 
 /* ---------- design tokens ---------- */
@@ -230,7 +231,7 @@ function BottomNav({ active, onNavigate }) {
     { key: "home", label: "Explore", icon: Compass },
     { key: "favorites", label: "Favorites", icon: Heart },
     { key: "schedule", label: "Schedule", icon: Calendar },
-    { key: "inbox", label: "Inbox", icon: Inbox },
+    { key: "inbox", label: "Social", icon: Users },
     { key: "profile", label: "Profile", icon: User },
   ];
   return (
@@ -1922,18 +1923,390 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
   );
 }
 
-function InboxScreen({ onNavigate }) {
+function SocialScreen({ onNavigate, onOpenTeam, profile, user, teams, teamsLoading, createTeam }) {
+  const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [teamName, setTeamName] = useState("");
+  const [teamDesc, setTeamDesc] = useState("");
+  const fileInputRef = useRef(null);
+  const [pickedFile, setPickedFile] = useState(null);
+  const [pickedPreview, setPickedPreview] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+
+  const myTeam = profile?.teamId ? teams.find((t) => t.id === profile.teamId) : null;
+  const filteredTeams = teams.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()));
+
+  const handlePick = () => fileInputRef.current?.click();
+  const handleFileSelected = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPickedFile(file);
+    setPickedPreview(URL.createObjectURL(file));
+  };
+
+  const handleCreate = async () => {
+    if (!teamName.trim()) return;
+    setCreating(true);
+    setCreateError("");
+    try {
+      const patchBlob = pickedFile ? await resizeImageFile(pickedFile, 400, 0.9) : null;
+      const teamId = await createTeam(user.uid, profile, { name: teamName.trim(), description: teamDesc.trim(), patchBlob });
+      setShowCreate(false);
+      setTeamName("");
+      setTeamDesc("");
+      setPickedFile(null);
+      setPickedPreview(null);
+      onOpenTeam(teamId);
+    } catch (err) {
+      setCreateError(err.message || "Couldn't create that team — try again.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
-      <ScreenHeader title="Inbox" />
-      <div className="px-6 pt-16 flex flex-col items-center text-center">
-        <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
-          <Radio size={22} color={T.ashDim} strokeWidth={1.7} />
+      <ScreenHeader title="Social" />
+      <div className="px-6 pt-4">
+        {myTeam && (
+          <>
+            <Eyebrow>My Team</Eyebrow>
+            <button
+              onClick={() => onOpenTeam(myTeam.id)}
+              className="w-full mb-5 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
+              style={{ background: T.panel, borderRadius: 6, border: `1.5px solid ${T.accent}` }}
+            >
+              <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                {myTeam.patchUrl ? (
+                  <img src={myTeam.patchUrl} alt={myTeam.name} className="w-full h-full" style={{ objectFit: "contain" }} />
+                ) : (
+                  <Shield size={22} color={T.ashDim} />
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>{myTeam.name}</div>
+                <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>View roster & team info</div>
+              </div>
+              <ChevronRight size={16} color={T.ashFaint} />
+            </button>
+          </>
+        )}
+
+        <div className="mb-4 flex items-center justify-between">
+          <Eyebrow>{myTeam ? "Other Teams" : "Find a Team"}</Eyebrow>
+          <button onClick={() => setShowCreate(!showCreate)} className="text-[12px] font-semibold" style={{ ...body, color: T.accent }}>
+            {showCreate ? "Cancel" : "+ Create a Team"}
+          </button>
         </div>
-        <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No comms yet</div>
-        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Messages from hosts and venues will show up here.</p>
+
+        {showCreate && (
+          <div className="mb-4 p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+            <div className="flex items-center gap-3 mb-3">
+              <button onClick={handlePick} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                {pickedPreview ? (
+                  <img src={pickedPreview} alt="Preview" className="w-full h-full" style={{ objectFit: "contain" }} />
+                ) : (
+                  <Camera size={18} color={T.ashDim} />
+                )}
+              </button>
+              <input
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="Team name"
+                className="flex-1 px-3 py-2.5 text-[14px] bg-transparent outline-none"
+                style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+              />
+            </div>
+            <textarea
+              value={teamDesc}
+              onChange={(e) => setTeamDesc(e.target.value)}
+              placeholder="Short description (optional)"
+              rows={2}
+              className="w-full px-3 py-2.5 text-[13px] bg-transparent outline-none mb-3"
+              style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, resize: "none" }}
+            />
+            {createError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{createError}</p>}
+            <button
+              onClick={handleCreate}
+              disabled={!teamName.trim() || creating}
+              className="w-full py-2.5 text-[13px] font-semibold"
+              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !teamName.trim() || creating ? 0.5 : 1 }}
+            >
+              {creating ? "Creating…" : "Create Team"}
+            </button>
+          </div>
+        )}
+
+        <div className="mb-4 flex items-center gap-2 px-3 py-2.5" style={{ border: `1px solid ${T.line}`, background: T.panel, borderRadius: 4 }}>
+          <Users size={15} color={T.ashFaint} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search teams"
+            className="flex-1 text-[13px] bg-transparent outline-none"
+            style={{ ...body, color: T.ash }}
+          />
+        </div>
+
+        {teamsLoading ? (
+          <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading teams…</div>
+        ) : filteredTeams.length === 0 ? (
+          <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
+            {teams.length === 0 ? "No teams yet — be the first to create one." : `No teams match "${search}".`}
+          </div>
+        ) : (
+          filteredTeams.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onOpenTeam(t.id)}
+              className="w-full mb-3 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
+              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+            >
+              <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                {t.patchUrl ? (
+                  <img src={t.patchUrl} alt={t.name} className="w-full h-full" style={{ objectFit: "contain" }} />
+                ) : (
+                  <Shield size={18} color={T.ashDim} />
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{t.name}</div>
+                {t.description && <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{t.description}</div>}
+              </div>
+              <ChevronRight size={16} color={T.ashFaint} />
+            </button>
+          ))
+        )}
       </div>
       <BottomNav active="inbox" onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavigate,
+  joinTeam, leaveTeam, updateTeamInfo, updateTeamPatch, setMemberRole, removeMember }) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const fileInputRef = useRef(null);
+  const [patchUploading, setPatchUploading] = useState(false);
+
+  const myMembership = members.find((m) => m.uid === user?.uid);
+  const isOfficer = myMembership?.role === "officer";
+  const isMember = !!myMembership;
+  const alreadyOnAnotherTeam = !isMember && profile?.teamId && profile.teamId !== team?.id;
+
+  const startEdit = () => {
+    setEditName(team?.name || "");
+    setEditDesc(team?.description || "");
+    setEditing(true);
+  };
+
+  const handleSaveInfo = async () => {
+    if (!editName.trim()) return;
+    setSaving(true);
+    setActionError("");
+    try {
+      await updateTeamInfo(team.id, { name: editName.trim(), description: editDesc.trim() });
+      setEditing(false);
+    } catch (err) {
+      setActionError("Couldn't save changes — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePatchPick = () => fileInputRef.current?.click();
+  const handlePatchSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPatchUploading(true);
+    setActionError("");
+    try {
+      const resized = await resizeImageFile(file, 400, 0.9);
+      await updateTeamPatch(team.id, resized);
+    } catch (err) {
+      setActionError("Couldn't upload patch — try again.");
+    } finally {
+      setPatchUploading(false);
+    }
+  };
+
+  const handleJoin = async () => {
+    setActionError("");
+    try {
+      await joinTeam(user.uid, profile, team.id, team.name);
+    } catch (err) {
+      setActionError("Couldn't join — try again.");
+    }
+  };
+
+  const handleLeave = async () => {
+    setActionError("");
+    try {
+      await leaveTeam(user.uid, team.id);
+      onBack();
+    } catch (err) {
+      setActionError("Couldn't leave — try again.");
+    }
+  };
+
+  if (teamLoading) {
+    return (
+      <div className="h-full flex items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
+      </div>
+    );
+  }
+  if (!team) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Team not found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto pb-6" style={flatBg}>
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>{team.name}</h1>
+      </div>
+
+      <div className="px-6 pt-5 flex flex-col items-center text-center">
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePatchSelected} className="hidden" />
+        <button
+          onClick={isOfficer ? handlePatchPick : undefined}
+          disabled={!isOfficer || patchUploading}
+          className="relative w-24 h-24 mb-3 flex items-center justify-center"
+          style={{ background: T.panelAlt, borderRadius: 8 }}
+        >
+          {team.patchUrl ? (
+            <img src={team.patchUrl} alt={team.name} className="w-full h-full" style={{ objectFit: "contain" }} />
+          ) : (
+            <Shield size={32} color={T.ashDim} />
+          )}
+          {isOfficer && (
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 flex items-center justify-center" style={{ background: T.ash, borderRadius: 14, border: `2px solid ${T.void}` }}>
+              {patchUploading ? <span className="text-[9px]" style={{ ...mono, color: "#FFFFFF" }}>…</span> : <Camera size={13} color="#FFFFFF" strokeWidth={2.5} />}
+            </div>
+          )}
+        </button>
+
+        {!editing ? (
+          <>
+            {team.description && <p className="text-[13px] max-w-xs mb-3" style={{ ...body, color: T.ashDim }}>{team.description}</p>}
+            {isOfficer && (
+              <button onClick={startEdit} className="text-[12px] font-medium mb-2" style={{ ...body, color: T.accent }}>
+                Edit team info
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="w-full px-0 mb-3">
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none mb-2"
+              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            />
+            <textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2.5 text-[13px] bg-transparent outline-none mb-2"
+              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, resize: "none" }}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setEditing(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveInfo}
+                disabled={saving}
+                className="flex-1 py-2 text-[12px] font-semibold"
+                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="px-6 pt-2">
+        {actionError && <p className="text-[12px] mb-3 text-center" style={{ ...body, color: T.alert }}>{actionError}</p>}
+
+        {!isMember && !alreadyOnAnotherTeam && (
+          <button
+            onClick={handleJoin}
+            className="w-full py-3 font-semibold text-[14px] mb-5"
+            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
+          >
+            Join Team
+          </button>
+        )}
+        {alreadyOnAnotherTeam && (
+          <p className="text-[12px] text-center mb-5" style={{ ...body, color: T.ashFaint }}>
+            You're already on {profile.teamName} — leave that team first to join this one.
+          </p>
+        )}
+
+        <Eyebrow>Roster ({members.length})</Eyebrow>
+        <div className="flex flex-col gap-2 mb-5">
+          {members.map((m) => (
+            <div key={m.uid} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              {m.avatarUrl ? (
+                <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+              ) : (
+                <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                  {m.callsign.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{m.callsign}</div>
+              </div>
+              {m.role === "officer" && <Tag tone="accent">OFFICER</Tag>}
+              {isOfficer && m.uid !== user?.uid && (
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setMemberRole(team.id, m.uid, m.role === "officer" ? "member" : "officer")}
+                    className="px-2 py-1 text-[10px] font-semibold"
+                    style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}
+                  >
+                    {m.role === "officer" ? "Demote" : "Promote"}
+                  </button>
+                  <button
+                    onClick={() => removeMember(team.id, m.uid)}
+                    className="px-2 py-1 text-[10px] font-semibold"
+                    style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: 4 }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {isMember && (
+          <button
+            onClick={handleLeave}
+            className="w-full py-3 font-medium text-[14px] mb-4"
+            style={{ ...body, border: `1px solid ${T.line}`, color: T.alert, borderRadius: 4 }}
+          >
+            Leave Team
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -2618,10 +2991,13 @@ export default function App() {
   const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
   const { patches, patchesLoading, addPatch, removePatch, setFeaturedPatch } = usePatches(user?.uid);
+  const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
+  const { createTeam, joinTeam, leaveTeam, updateTeamInfo, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
 
   const [stack, setStack] = useState(["home"]);
   const [activeEventId, setActiveEventId] = useState(null);
   const [activeFieldId, setActiveFieldId] = useState(null);
+  const [activeTeamId, setActiveTeamId] = useState(null);
   const screen = stack[stack.length - 1];
 
   const push = (s) => setStack((prev) => [...prev, s]);
@@ -2655,6 +3031,22 @@ export default function App() {
   };
   const openAccount = () => push("account");
   const openPatches = () => push("patches");
+  const openTeam = (teamId) => {
+    setActiveTeamId(teamId);
+    push("team");
+  };
+  const { team: activeTeam, members: activeTeamMembers, teamLoading: activeTeamLoading } = useTeam(activeTeamId);
+
+  // If an officer removed this player since their last visit, their own
+  // profile still points at that team — correct it once, quietly, whenever
+  // they land on Social. See reconcileMembership's own comment for why this
+  // is the one place that can fix it.
+  useEffect(() => {
+    if (screen === "inbox" && profile?.teamId) {
+      reconcileMembership(user?.uid, profile.teamId);
+    }
+  }, [screen, profile?.teamId, user?.uid]);
+
   const handleLogout = async () => {
     await signOut();
     setStack(["home"]); // reset navigation so the next sign-in starts clean
@@ -2733,7 +3125,35 @@ export default function App() {
   } else if (screen === "schedule") {
     content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} />;
   } else if (screen === "inbox") {
-    content = <InboxScreen onNavigate={goTab} />;
+    content = (
+      <SocialScreen
+        onNavigate={goTab}
+        onOpenTeam={openTeam}
+        profile={profile}
+        user={user}
+        teams={allTeams}
+        teamsLoading={allTeamsLoading}
+        createTeam={createTeam}
+      />
+    );
+  } else if (screen === "team") {
+    content = (
+      <TeamScreen
+        team={activeTeam}
+        members={activeTeamMembers}
+        teamLoading={activeTeamLoading}
+        profile={profile}
+        user={user}
+        onBack={pop}
+        onNavigate={goTab}
+        joinTeam={joinTeam}
+        leaveTeam={leaveTeam}
+        updateTeamInfo={updateTeamInfo}
+        updateTeamPatch={updateTeamPatch}
+        setMemberRole={setMemberRole}
+        removeMember={removeMember}
+      />
+    );
   } else if (screen === "profile") {
     content = (
       <ProfileScreen
