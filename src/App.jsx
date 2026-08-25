@@ -400,6 +400,10 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
           <div className="text-[11px] font-medium flex items-center gap-1" style={{ ...mono, color: T.ashFaint }}>
             <MapPin size={11} /> {distanceMi < 1 ? "<1 mi" : `${Math.round(distanceMi)} mi`}
           </div>
+        ) : ev.interestCount > 0 ? (
+          <div className="text-[11px] font-medium flex items-center gap-1" style={{ ...mono, color: T.ashFaint }}>
+            <Heart size={11} /> {ev.interestCount} interested
+          </div>
         ) : <div />}
         {ev.price && (
           <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{displayPrice(ev.price)}</div>
@@ -1356,6 +1360,17 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                 {field?.city && <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{field.city}</div>}
               </div>
             </button>
+            {ev.interestCount > 0 && (
+              <>
+                <div className="h-px" style={{ background: T.line }} />
+                <div className="flex gap-3 items-center">
+                  <Heart size={17} color={T.ashDim} />
+                  <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>
+                    {ev.interestCount} {ev.interestCount === 1 ? "player" : "players"} interested
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <LocationCard
