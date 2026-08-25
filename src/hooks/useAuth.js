@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   EmailAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
@@ -9,8 +10,8 @@ import {
   updatePassword,
   updateProfile,
 } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "../lib/firebase";
 
 export function useAuth() {
@@ -66,6 +67,14 @@ export function useAuth() {
     await updateProfile(auth.currentUser, { displayName: newCallsign });
   }
 
+  // Batched update for the My Account page — callsign, first/last name, and
+  // phone in one write. Callsign changes still sync Auth's displayName.
+  async function updateProfileFields({ callsign, firstName, lastName, phone }) {
+    if (!auth.currentUser) return;
+    await updateDoc(doc(db, "users", auth.currentUser.uid), { callsign, firstName, lastName, phone });
+    if (callsign) await updateProfile(auth.currentUser, { displayName: callsign });
+  }
+
   // Saves the preference only — the app doesn't actually translate its UI
   // yet, so this is honestly just laying groundwork for when real i18n
   // gets built, not claiming a feature that doesn't exist.
@@ -98,5 +107,44 @@ export function useAuth() {
     return url;
   }
 
-  return { user, profile, authLoading, signUp, signIn, signOut, updateCallsign, changePassword, uploadAvatar, updateLanguage };
+  // Permanently deletes the account. Requires re-authentication for the
+  // same reason password changes do — this is irreversible, so Firebase
+  // (correctly) won't allow it on a stale session. Cleans up what it safely
+  // can: favorites and the avatar file. Deliberately does NOT touch
+  // waiverSignatures — those are permanent legal records the Firestore
+  // rules already block deleting, and that's correct: a field owner's
+  // proof someone signed shouldn't vanish because the player's account did.
+  async function deleteAccount(currentPassword) {
+    if (!auth.currentUser?.email) return;
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+
+    const uid = auth.currentUser.uid;
+    const favSnap = await getDocs(collection(db, "users", uid, "favorites"));
+    await Promise.all(favSnap.docs.map((d) => deleteDoc(d.ref)));
+
+    try {
+      await deleteObject(ref(storage, `avatars/${uid}/profile.jpg`));
+    } catch {
+      // No avatar on file — nothing to clean up.
+    }
+
+    await deleteDoc(doc(db, "users", uid));
+    await deleteUser(auth.currentUser);
+  }
+
+  return {
+    user,
+    profile,
+    authLoading,
+    signUp,
+    signIn,
+    signOut,
+    updateCallsign,
+    updateProfileFields,
+    changePassword,
+    uploadAvatar,
+    updateLanguage,
+    deleteAccount,
+  };
 }
