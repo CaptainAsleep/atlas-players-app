@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, increment, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 // Favorites live at users/{uid}/favorites/{type}-{refId} so a field and an
@@ -34,10 +34,23 @@ export function useFavorites(uid) {
     if (!uid) return;
     const favId = `${type}-${refId}`;
     const ref = doc(db, "users", uid, "favorites", favId);
-    if (isFavorited(type, refId)) {
+    const wasFavorited = isFavorited(type, refId);
+    if (wasFavorited) {
       await deleteDoc(ref);
     } else {
       await setDoc(ref, { type, refId, savedAt: serverTimestamp() });
+    }
+    // Client-side counter, not a Cloud Function — honest real number, but
+    // can very rarely drift by one if a write fails mid-flight (e.g. a
+    // dropped connection between the two calls). Acceptable for an
+    // interest signal; would want a server-maintained counter if this ever
+    // needs to be exact (e.g. tied to real capacity/payment logic).
+    if (type === "event") {
+      try {
+        await updateDoc(doc(db, "events", refId), { interestCount: increment(wasFavorited ? -1 : 1) });
+      } catch (err) {
+        console.error("interestCount update failed:", err);
+      }
     }
   }
 
