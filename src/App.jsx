@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2, Users, Shield,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -236,7 +236,7 @@ function BottomNav({ active, onNavigate }) {
   ];
   return (
     <div className="absolute bottom-0 left-0 right-0 border-t" style={{ background: T.panel, borderColor: T.line, zIndex: 1000 }}>
-      <div className="flex justify-between px-5 pt-2.5 pb-1.5">
+      <div className="flex justify-between px-5 pt-2.5" style={{ paddingBottom: "max(14px, env(safe-area-inset-bottom))" }}>
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = active === t.key;
@@ -255,7 +255,7 @@ function BottomNav({ active, onNavigate }) {
 }
 
 /* ---------- screens ---------- */
-function LoginScreen({ signIn, signUp }) {
+function LoginScreen({ signIn, signUp, referralCode }) {
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -278,7 +278,8 @@ function LoginScreen({ signIn, signUp }) {
     setBusy(true);
     try {
       if (mode === "signup") {
-        await signUp(email.trim(), password, callsign.trim());
+        await signUp(email.trim(), password, callsign.trim(), referralCode);
+        localStorage.removeItem("atlas_referral"); // spent, don't keep applying it to future signups on this device
       } else {
         await signIn(email.trim(), password);
       }
@@ -447,9 +448,13 @@ function FitToPins({ points }) {
   return null;
 }
 
-function FieldsMap({ fields, onOpenField }) {
+function FieldsMap({ fields, onOpenField, userLocation }) {
   const pins = fields.filter((f) => typeof f.lat === "number" && typeof f.lng === "number");
-  const center = pins.length ? [pins[0].lat, pins[0].lng] : [43.3, -84.5]; // Michigan fallback
+  const center = pins.length
+    ? [pins[0].lat, pins[0].lng]
+    : userLocation
+    ? [userLocation.lat, userLocation.lng] // no pins for this filter, but at least center on where the player actually is
+    : [43.3, -84.5]; // last resort only — no pins and no known location
 
   if (pins.length === 0) {
     return (
@@ -756,7 +761,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     const dataUrl = await QRCode.toDataURL(payload, {
       width: 240,
       margin: 1,
-      color: { dark: T.void, light: T.ash },
+      color: { dark: T.ash, light: "#FFFFFF" }, // standard dark-on-white — most reliably scannable, and correct for the light theme (this was inverted, a leftover from before the palette flip)
     });
     setQrDataUrl(dataUrl);
     setShowCheckIn(true);
@@ -819,10 +824,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 
   const cats = [
     { key: "Featured", icon: Star },
-    { key: "Outdoor", icon: Compass, type: "OUTDOOR", fieldProp: "outdoor" },
-    { key: "MilSim", icon: Crosshair, type: "MILSIM" },
-    { key: "Indoor", icon: MapPin, type: "INDOOR", fieldProp: "indoor" },
-    { key: "Tournament", icon: Ticket, type: "TOURNAMENT" },
+    { key: "Outdoor", icon: TreePine, type: "OUTDOOR", fieldProp: "outdoor" },
+    { key: "MilSim", icon: ChevronsUp, type: "MILSIM" },
+    { key: "Indoor", icon: Home, type: "INDOOR", fieldProp: "indoor" },
+    { key: "Tournament", icon: Trophy, type: "TOURNAMENT" },
   ];
 
   let filteredEvents = events.filter((ev) => {
@@ -1206,7 +1211,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       </div>
 
       {viewMode === "map" ? (
-        <FieldsMap fields={filteredFields} onOpenField={onOpenField} />
+        <FieldsMap fields={filteredFields} onOpenField={onOpenField} userLocation={userLocation} />
       ) : viewMode === "fields" ? (
         <div className="px-6">
           {filteredFields.length === 0 ? (
@@ -2754,6 +2759,26 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
 
+  const referralUrl = user ? `${window.location.origin}${import.meta.env.BASE_URL}?ref=${user.uid}` : "";
+  const [referralQr, setReferralQr] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!referralUrl) return;
+    QRCode.toDataURL(referralUrl, { width: 280, margin: 1, color: { dark: T.ash, light: "#FFFFFF" } }).then(setReferralQr);
+  }, [referralUrl]);
+
+  const handleCopyReferral = async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be blocked in some contexts — the link is
+      // still visible/shareable via the QR code either way.
+    }
+  };
+
   const handleAvatarPick = () => fileInputRef.current?.click();
 
   const handleFileSelected = async (e) => {
@@ -2864,6 +2889,21 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
         </div>
         {avatarError && <p className="text-[11px] mb-3" style={{ ...body, color: T.alert }}>{avatarError}</p>}
         {!avatarError && <div className="mb-3" />}
+
+        <Eyebrow>Invite Friends</Eyebrow>
+        <div className="p-4 mb-5 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          {referralQr && <img src={referralQr} alt="Referral QR code" className="mb-3" style={{ width: 140, height: 140 }} />}
+          <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+            Share this code or let someone scan it to invite them to Atlas.
+          </p>
+          <button
+            onClick={handleCopyReferral}
+            className="w-full py-2.5 text-[13px] font-semibold"
+            style={{ ...display, background: copied ? T.good : T.ash, color: "#FFFFFF", borderRadius: 4 }}
+          >
+            {copied ? "Copied!" : "Copy Invite Link"}
+          </button>
+        </div>
 
         <Eyebrow>Account Settings</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
@@ -2994,6 +3034,19 @@ export default function App() {
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
   const { createTeam, joinTeam, leaveTeam, updateTeamInfo, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
 
+  // Referral capture — a real deployed app, not a sandboxed artifact, so
+  // localStorage is appropriate here: it lets the ?ref= code survive a
+  // page reload or a detour through the OAuth-less sign-up form before the
+  // account actually gets created.
+  const [referralCode] = useState(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("ref");
+    if (fromUrl) {
+      localStorage.setItem("atlas_referral", fromUrl);
+      return fromUrl;
+    }
+    return localStorage.getItem("atlas_referral") || null;
+  });
+
   const [stack, setStack] = useState(["home"]);
   const [activeEventId, setActiveEventId] = useState(null);
   const [activeFieldId, setActiveFieldId] = useState(null);
@@ -3060,7 +3113,7 @@ export default function App() {
       </div>
     );
   } else if (!user) {
-    content = <LoginScreen signIn={signIn} signUp={signUp} />;
+    content = <LoginScreen signIn={signIn} signUp={signUp} referralCode={referralCode} />;
   } else if (screen === "home") {
     content = (
       <HomeScreen
