@@ -32,7 +32,7 @@ const T = {
   panel: "#FFFFFF", // card surfaces — clear separation from the page
   panelAlt: "#E7E7E1", // nested surfaces: chip fills, placeholder thumbnails
   line: "#D2D2CB", // borders/dividers
-  ash: "#14181C", // primary text AND primary solid-button fill (dark ink)
+  ash: "#002C48", // primary text AND primary solid-button fill (deep navy ink)
   ashDim: "#4E5257", // secondary text
   ashFaint: "#686C72", // tertiary text/labels — still meant to stay legible, not decorative-faint
   accent: "#1554B8", // links/interactive — deep blue for real contrast on white
@@ -248,9 +248,6 @@ function BottomNav({ active, onNavigate }) {
             </button>
           );
         })}
-      </div>
-      <div className="flex justify-center pb-1.5 pt-1">
-        <div style={{ width: 120, height: 4, borderRadius: 2, background: T.line }} />
       </div>
     </div>
   );
@@ -562,6 +559,29 @@ function FieldFacts({ field }) {
           )}
         </div>
       </div>
+
+      {Array.isArray(field?.rentals) && field.rentals.length > 0 && (
+        <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <Eyebrow>Rental Gear</Eyebrow>
+          <div className="flex flex-col gap-3 mt-2">
+            {field.rentals.map((r) => (
+              <div key={r.name} className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.name}</div>
+                  <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{r.includes}</div>
+                  {r.availability && (
+                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{r.availability}</div>
+                  )}
+                </div>
+                <div className="text-[13px] font-semibold flex-shrink-0" style={{ ...mono, color: T.accent }}>{r.price}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] mt-3" style={{ ...body, color: T.ashFaint }}>
+            Shown for reference — selecting and paying for rentals happens at checkout, once booking is available.
+          </p>
+        </div>
+      )}
     </>
   );
 }
@@ -901,7 +921,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           {profile?.avatarUrl ? (
             <div
               className="w-10 h-10"
-              style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4, border: `1.5px solid ${T.ash}` }}
+              style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4, border: `1px solid ${T.line}` }}
             />
           ) : (
             <div
