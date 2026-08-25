@@ -987,7 +987,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       </div>
 
       {showFilters && (
-        <div className="mx-6 mb-4 p-4 flex flex-col gap-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+        <div className="mx-6 mb-4 p-4 flex flex-col gap-4 overflow-hidden" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
           <div>
             <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Date Range</div>
             <div className="flex flex-col gap-2">
@@ -998,7 +998,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                   className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light" }}
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block" }}
                 />
               </div>
               <div>
@@ -1008,7 +1008,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light" }}
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block" }}
                 />
               </div>
             </div>
