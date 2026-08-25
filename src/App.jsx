@@ -236,7 +236,7 @@ function BottomNav({ active, onNavigate }) {
   ];
   return (
     <div className="absolute bottom-0 left-0 right-0 border-t" style={{ background: T.panel, borderColor: T.line, zIndex: 1000 }}>
-      <div className="flex justify-between px-5 pt-2.5" style={{ paddingBottom: "max(14px, env(safe-area-inset-bottom))" }}>
+      <div className="flex justify-between px-5 pt-2.5 pb-5">
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = active === t.key;
