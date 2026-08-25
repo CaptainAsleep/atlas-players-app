@@ -1270,16 +1270,21 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   );
 }
 
-function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, signature, signWaiver }) {
+function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   const isPast = (ev.endDate || ev.date) < localDateStr();
 
   const [showWaiver, setShowWaiver] = useState(false);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
-  const [signedName, setSignedName] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState("");
+
+  // Pulled straight from the account, not typed — this is what makes it
+  // meaningful as a security measure: a player can only ever sign as
+  // themselves, never anyone else, because there's nowhere to type a
+  // different name.
+  const legalName = profile?.firstName && profile?.lastName ? `${profile.firstName} ${profile.lastName}` : profile?.callsign || "";
 
   const handleWaiverScroll = (e) => {
     const el = e.target;
@@ -1287,7 +1292,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   };
 
   const handleSign = async () => {
-    if (!signedName.trim() || !agreed || !user) return;
+    if (!legalName.trim() || !agreed || !user) return;
     setSigning(true);
     setSignError("");
     try {
@@ -1295,7 +1300,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         uid: user.uid,
         eventId: ev.id,
         fieldId: ev.fieldId,
-        signedName: signedName.trim(),
+        signedName: legalName.trim(),
         waiverVersion: ev.waiver.version,
       });
       setShowWaiver(false);
@@ -1434,13 +1439,18 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                       <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
                       I have read and agree to the terms above.
                     </label>
-                    <input
-                      value={signedName}
-                      onChange={(e) => setSignedName(e.target.value)}
-                      placeholder="Type your full legal name to sign"
-                      className="w-full px-3 py-2.5 text-[13px] bg-transparent outline-none mb-3"
-                      style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-                    />
+                    <div className="mb-3">
+                      <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Signing As</div>
+                      <div
+                        className="px-3 py-2.5 text-[14px] font-medium"
+                        style={{ ...display, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: legalName ? T.ash : T.alert }}
+                      >
+                        {legalName || "Add your name in My Account to sign"}
+                      </div>
+                      <p className="text-[10px] mt-1" style={{ ...body, color: T.ashFaint }}>
+                        Matches your account — this can't be changed here.
+                      </p>
+                    </div>
                     {signError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{signError}</p>}
                     <div className="flex gap-2">
                       <button
@@ -1452,9 +1462,9 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                       </button>
                       <button
                         onClick={handleSign}
-                        disabled={!agreed || !signedName.trim() || signing}
+                        disabled={!agreed || !legalName.trim() || signing}
                         className="flex-1 py-2.5 text-[12px] font-semibold"
-                        style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !agreed || !signedName.trim() || signing ? 0.5 : 1 }}
+                        style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
                       >
                         {signing ? "Signing…" : "Sign Waiver"}
                       </button>
@@ -2620,6 +2630,7 @@ export default function App() {
         favorited={isFavorited("event", activeEvent.id)}
         onToggleFavorite={() => toggleFavorite("event", activeEvent.id)}
         user={user}
+        profile={profile}
         signature={signature}
         signWaiver={signWaiver}
       />
