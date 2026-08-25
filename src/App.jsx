@@ -2148,7 +2148,8 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
       });
       setSaveSuccess(true);
     } catch (err) {
-      setSaveError("Couldn't save — try again.");
+      console.error("My Account save failed:", err);
+      setSaveError(`Couldn't save: ${err.code || err.message || "unknown error"}`);
     } finally {
       setSaving(false);
     }
