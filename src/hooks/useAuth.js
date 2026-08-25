@@ -38,13 +38,18 @@ export function useAuth() {
     return unsub;
   }, [user]);
 
-  async function signUp(email, password, callsign) {
+  async function signUp(email, password, callsign, referredBy) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     if (callsign) await updateProfile(cred.user, { displayName: callsign });
     await setDoc(doc(db, "users", cred.user.uid), {
       email,
       callsign: callsign || email.split("@")[0],
       createdAt: serverTimestamp(),
+      // Whoever's referral link/QR they came through, if any — captured
+      // once at signup, not editable after. No reward mechanism wired to
+      // this yet, just an honest record of the relationship for whenever
+      // one gets built.
+      ...(referredBy ? { referredBy } : {}),
     });
     return cred.user;
   }
