@@ -1,13 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import { resolve } from "path";
 
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
       registerType: "autoUpdate", // service worker checks for a new version and swaps in silently, no manual "reload to update" prompt needed at this stage
-      includeAssets: ["apple-touch-icon.png"],
+      includeAssets: ["apple-touch-icon.png", "favicon-32.png", "favicon-16.png", "logo.jpg"],
       manifest: {
         name: "Atlas",
         short_name: "Atlas",
@@ -50,4 +51,16 @@ export default defineConfig({
     }),
   ],
   base: "/atlas-players-app/",
+  build: {
+    // Two separate single-page apps sharing one Firebase project and one
+    // deployment — the player app (index.html) and the field-owner portal
+    // (owner.html). PWA installability is scoped to the player app only for
+    // now; the owner portal is a normal webpage in this first pass.
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, "index.html"),
+        owner: resolve(__dirname, "owner.html"),
+      },
+    },
+  },
 });
