@@ -293,8 +293,8 @@ function LoginScreen({ signIn, signUp, referralCode }) {
   return (
     <div className="h-full flex flex-col px-6 overflow-y-auto" style={flatBg}>
       <div className="flex flex-col items-center mt-12 mb-8">
-        <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4 }}>
-          <Crosshair color={T.ash} size={24} strokeWidth={1.6} />
+        <div className="w-14 h-14 flex items-center justify-center mb-3 overflow-hidden" style={{ borderRadius: 8 }}>
+          <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Atlas" className="w-full h-full" style={{ objectFit: "cover" }} />
         </div>
         <span className="text-lg font-semibold" style={{ ...display, color: T.ash, letterSpacing: "0.14em" }}>ATLAS</span>
       </div>
