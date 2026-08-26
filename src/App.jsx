@@ -1500,16 +1500,18 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               real field-owner-entered data once that flow exists. */}
           <FieldFacts field={field} />
 
-          <a
-            href={ev.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="p-4 flex items-center justify-between"
-            style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
-          >
-            <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>View original listing</span>
-            <ArrowRight size={16} color={T.ashDim} />
-          </a>
+          {ev.sourceUrl && (
+            <a
+              href={ev.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="p-4 flex items-center justify-between"
+              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+            >
+              <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>View original listing</span>
+              <ArrowRight size={16} color={T.ashDim} />
+            </a>
+          )}
         </div>
       </div>
 
@@ -1736,19 +1738,9 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
   );
 }
 
-function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, events, onOpenField, onOpenEvent }) {
-  const today = localDateStr();
-
+function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOpenField }) {
   const savedFieldIds = favorites.filter((f) => f.type === "field").map((f) => f.refId);
   const savedFields = fields.filter((f) => savedFieldIds.includes(f.id));
-
-  const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
-  const savedEvents = events
-    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const pastEvents = events
-    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
-    .sort((a, b) => b.date.localeCompare(a.date)); // most recently attended first
 
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
@@ -1759,12 +1751,15 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
         ) : (
           <>
             <Eyebrow>Saved Fields</Eyebrow>
+            <p className="text-[11px] mb-3 -mt-1" style={{ ...body, color: T.ashFaint }}>
+              Quick access to fields you like. Saved events live in Schedule now, under Interested.
+            </p>
             {savedFields.length === 0 ? (
-              <p className="text-[13px] mb-6" style={{ ...body, color: T.ashFaint }}>
+              <p className="text-[13px]" style={{ ...body, color: T.ashFaint }}>
                 No fields saved yet — tap the heart on any field's page to save it here.
               </p>
             ) : (
-              <div className="flex flex-col gap-3 mb-6">
+              <div className="flex flex-col gap-3">
                 {savedFields.map((f) => (
                   <button
                     key={f.id}
@@ -1782,58 +1777,6 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
                 ))}
               </div>
             )}
-
-            <Eyebrow>Saved Events</Eyebrow>
-            {savedEvents.length === 0 ? (
-              <p className="text-[13px] mb-6" style={{ ...body, color: T.ashFaint }}>
-                No upcoming saved events — tap the heart on any event's page to save it here. Past events drop off automatically.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3 mb-6">
-                {savedEvents.map((ev) => (
-                  <button
-                    key={ev.id}
-                    onClick={() => onOpenEvent(ev)}
-                    className="p-3 flex items-center gap-3 text-left"
-                    style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
-                  >
-                    <div className="w-14 h-14" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
-                    <div className="flex-1">
-                      <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
-                      <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
-                      <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
-                    </div>
-                    <ChevronRight size={16} color={T.ashFaint} />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <Eyebrow>Past Events</Eyebrow>
-            {pastEvents.length === 0 ? (
-              <p className="text-[13px]" style={{ ...body, color: T.ashFaint }}>
-                Events you've favorited will move here once they're over — right now this just tracks what you were interested in, not confirmed attendance. That'll change once booking is built.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {pastEvents.map((ev) => (
-                  <button
-                    key={ev.id}
-                    onClick={() => onOpenEvent(ev)}
-                    className="p-3 flex items-center gap-3 text-left"
-                    style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.65 }}
-                  >
-                    <div className="w-14 h-14" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
-                    <div className="flex-1">
-                      <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
-                      <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
-                      <div className="text-[11px] font-medium" style={{ ...mono, color: T.ashFaint }}>{formatDate(ev.date, ev.endDate)}</div>
-                    </div>
-                    <Tag tone="good">PAST</Tag>
-                  </button>
-                ))}
-              </div>
-            )}
           </>
         )}
       </div>
@@ -1843,90 +1786,113 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, even
 }
 
 function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
+  const [tab, setTab] = useState("interested"); // booked | interested | past
   const today = localDateStr();
   const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
 
-  const upcoming = events
+  const interested = events
     .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
   const past = events
     .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
     .sort((a, b) => b.date.localeCompare(a.date));
+  // No real booking/payment system exists yet — this stays honestly empty
+  // until that's built, rather than showing favorited events here too.
+  const booked = [];
+
+  const TABS = [
+    { key: "booked", label: "Booked" },
+    { key: "interested", label: "Interested" },
+    { key: "past", label: "Past" },
+  ];
+
+  const renderList = (list, dim) => (
+    <div className="flex flex-col gap-3">
+      {list.map((ev) => (
+        <button
+          key={ev.id}
+          onClick={() => onOpenEvent(ev)}
+          className="p-3 flex items-center gap-3 text-left w-full"
+          style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: dim ? 0.65 : 1 }}
+        >
+          <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
+          <div className="flex-1">
+            <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
+            <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+            <div className="text-[11px] font-medium" style={{ ...mono, color: dim ? T.ashFaint : T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
+          </div>
+          {dim ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <ScreenHeader title="Schedule" />
 
-      {upcoming.length === 0 ? (
-        <div className="px-6 pt-3">
-          <div className="p-6 flex flex-col items-center text-center mb-6" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
-              <Calendar size={22} color={T.ashDim} strokeWidth={1.7} />
-            </div>
-            <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Nothing scheduled yet</div>
-            <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>
-              Save an event's heart on its detail page and it'll show up here.
-            </p>
-            <button
-              onClick={() => onNavigate("home")}
-              className="w-full py-3 font-semibold text-[13px]"
-              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
-            >
-              Start your search
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="px-6 pt-4">
-          <Eyebrow>Upcoming</Eyebrow>
-          <div className="flex flex-col gap-3 mb-6">
-            {upcoming.map((ev) => (
-              <button
-                key={ev.id}
-                onClick={() => onOpenEvent(ev)}
-                className="p-3 flex items-center gap-3 text-left w-full"
-                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
-              >
-                <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
-                <div className="flex-1">
-                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
-                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
-                  <div className="text-[11px] font-medium" style={{ ...mono, color: T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
-                </div>
-                <ChevronRight size={16} color={T.ashFaint} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="px-6 pt-3 pb-1 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className="px-3 py-2 text-[13px] font-semibold"
+            style={{ ...body, color: tab === t.key ? T.ash : T.ashFaint, borderBottom: tab === t.key ? `2px solid ${T.ash}` : "2px solid transparent" }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {past.length > 0 && (
-        <div className="px-6">
-          <Eyebrow>Past</Eyebrow>
-          <div className="flex flex-col gap-3">
-            {past.map((ev) => (
+      <div className="px-6 pt-4">
+        {tab === "booked" && (
+          booked.length === 0 ? (
+            <div className="p-6 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                <Calendar size={22} color={T.ashDim} strokeWidth={1.7} />
+              </div>
+              <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No booked games</div>
+              <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>
+                Booking isn't available in the app yet — once it is, games you've actually paid for will show up here, separate from what you're just interested in.
+              </p>
+            </div>
+          ) : renderList(booked, false)
+        )}
+
+        {tab === "interested" && (
+          interested.length === 0 ? (
+            <div className="p-6 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                <Calendar size={22} color={T.ashDim} strokeWidth={1.7} />
+              </div>
+              <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Nothing here yet</div>
+              <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>
+                Save an event's heart on its detail page and it'll show up here.
+              </p>
               <button
-                key={ev.id}
-                onClick={() => onOpenEvent(ev)}
-                className="p-3 flex items-center gap-3 text-left w-full"
-                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.65 }}
+                onClick={() => onNavigate("home")}
+                className="w-full py-3 font-semibold text-[13px]"
+                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
               >
-                <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
-                <div className="flex-1">
-                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
-                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
-                  <div className="text-[11px] font-medium" style={{ ...mono, color: T.ashFaint }}>{formatDate(ev.date, ev.endDate)}</div>
-                </div>
-                <Tag tone="good">PAST</Tag>
+                Start your search
               </button>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+          ) : renderList(interested, false)
+        )}
+
+        {tab === "past" && (
+          past.length === 0 ? (
+            <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
+              Events you've favorited will move here once they're over — this tracks what you were interested in, not confirmed attendance. That distinction changes once booking exists.
+            </p>
+          ) : renderList(past, true)
+        )}
+      </div>
       <BottomNav active="schedule" onNavigate={onNavigate} />
     </div>
   );
 }
+
 
 function SocialScreen({ onNavigate, onOpenTeam, profile, user, teams, teamsLoading, createTeam }) {
   const [search, setSearch] = useState("");
@@ -3170,9 +3136,7 @@ export default function App() {
         favorites={favorites}
         favoritesLoading={favoritesLoading}
         fields={fields}
-        events={events}
         onOpenField={openField}
-        onOpenEvent={openEvent}
       />
     );
   } else if (screen === "schedule") {
