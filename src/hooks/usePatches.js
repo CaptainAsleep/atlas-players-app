@@ -59,9 +59,9 @@ export function usePatches(uid) {
   // id) so anywhere that displays the callsign can show the featured patch
   // with a single read, no extra query needed.
   async function setFeaturedPatch(uid, patch) {
-    await updateDoc(doc(db, "users", uid), {
-      featuredPatch: patch ? { name: patch.name, imageUrl: patch.imageUrl } : null,
-    });
+    const featuredPatch = patch ? { name: patch.name, imageUrl: patch.imageUrl } : null;
+    await updateDoc(doc(db, "users", uid), { featuredPatch });
+    await updateDoc(doc(db, "publicProfiles", uid), { featuredPatch });
   }
 
   return { patches, patchesLoading: loading, addPatch, removePatch, setFeaturedPatch };

@@ -93,6 +93,7 @@ export function useTeamActions() {
       role: "officer",
       joinedAt: serverTimestamp(),
     });
+    batch.update(doc(db, "publicProfiles", uid), { teamId: teamRef.id, teamName: name });
     await batch.commit();
 
     await updateDoc(doc(db, "users", uid), { teamId: teamRef.id, teamName: name });
@@ -117,6 +118,7 @@ export function useTeamActions() {
       joinedAt: serverTimestamp(),
     });
     batch.update(doc(db, "users", uid), { teamId, teamName });
+    batch.update(doc(db, "publicProfiles", uid), { teamId, teamName });
     await batch.commit();
   }
 
@@ -124,6 +126,7 @@ export function useTeamActions() {
     const batch = writeBatch(db);
     batch.delete(doc(db, "teams", teamId, "members", uid));
     batch.update(doc(db, "users", uid), { teamId: null, teamName: null });
+    batch.update(doc(db, "publicProfiles", uid), { teamId: null, teamName: null });
     await batch.commit();
   }
 
@@ -133,8 +136,15 @@ export function useTeamActions() {
     // shouldn't leave the roster or player profiles showing the old name.
     const membersSnap = await getDocs(collection(db, "teams", teamId, "members"));
     await Promise.all(
-      membersSnap.docs.map((m) => updateDoc(doc(db, "users", m.id), { teamName: name }).catch(() => {}))
+      membersSnap.docs.flatMap((m) => [
+        updateDoc(doc(db, "users", m.id), { teamName: name }).catch(() => {}),
+        updateDoc(doc(db, "publicProfiles", m.id), { teamName: name }).catch(() => {}),
+      ])
     );
+  }
+
+  async function setHomeField(teamId, fieldId, fieldName) {
+    await updateDoc(doc(db, "teams", teamId), { homeFieldId: fieldId, homeFieldName: fieldName });
   }
 
   async function updateTeamPatch(teamId, patchBlob) {
@@ -169,8 +179,9 @@ export function useTeamActions() {
     const memberSnap = await getDoc(doc(db, "teams", teamId, "members", uid));
     if (!memberSnap.exists()) {
       await updateDoc(doc(db, "users", uid), { teamId: null, teamName: null });
+      await updateDoc(doc(db, "publicProfiles", uid), { teamId: null, teamName: null }).catch(() => {});
     }
   }
 
-  return { createTeam, joinTeam, leaveTeam, updateTeamInfo, updateTeamPatch, setMemberRole, removeMember, reconcileMembership };
+  return { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership };
 }

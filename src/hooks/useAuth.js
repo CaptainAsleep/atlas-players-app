@@ -40,16 +40,29 @@ export function useAuth() {
 
   async function signUp(email, password, callsign, referredBy) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const finalCallsign = callsign || email.split("@")[0];
     if (callsign) await updateProfile(cred.user, { displayName: callsign });
+    const createdAt = serverTimestamp();
     await setDoc(doc(db, "users", cred.user.uid), {
       email,
-      callsign: callsign || email.split("@")[0],
-      createdAt: serverTimestamp(),
+      callsign: finalCallsign,
+      createdAt,
       // Whoever's referral link/QR they came through, if any — captured
       // once at signup, not editable after. No reward mechanism wired to
       // this yet, just an honest record of the relationship for whenever
       // one gets built.
       ...(referredBy ? { referredBy } : {}),
+    });
+    // The narrow public mirror — never email/phone/real name, just what
+    // another player is allowed to see.
+    await setDoc(doc(db, "publicProfiles", cred.user.uid), {
+      callsign: finalCallsign,
+      avatarUrl: null,
+      featuredPatch: null,
+      teamId: null,
+      teamName: null,
+      createdAt,
+      verified: false,
     });
     return cred.user;
   }
@@ -69,15 +82,34 @@ export function useAuth() {
   async function updateCallsign(newCallsign) {
     if (!auth.currentUser) return;
     await updateDoc(doc(db, "users", auth.currentUser.uid), { callsign: newCallsign });
+    await updateDoc(doc(db, "publicProfiles", auth.currentUser.uid), { callsign: newCallsign });
     await updateProfile(auth.currentUser, { displayName: newCallsign });
   }
 
   // Batched update for the My Account page — callsign, first/last name, and
-  // phone in one write. Callsign changes still sync Auth's displayName.
+  // phone in one write. Callsign changes still sync Auth's displayName and
+  // the public profile mirror; first/last name and phone never do — those
+  // are exactly the fields the public mirror is deliberately built to
+  // exclude.
   async function updateProfileFields({ callsign, firstName, lastName, phone }) {
     if (!auth.currentUser) return;
     await updateDoc(doc(db, "users", auth.currentUser.uid), { callsign, firstName, lastName, phone });
-    if (callsign) await updateProfile(auth.currentUser, { displayName: callsign });
+    if (callsign) {
+      await updateDoc(doc(db, "publicProfiles", auth.currentUser.uid), { callsign });
+      await updateProfile(auth.currentUser, { displayName: callsign });
+    }
+  }
+
+  // Records that this account has agreed to the current version of the
+  // Terms/Privacy Policy/EULA. Bumping CURRENT_TERMS_VERSION (in
+  // legalText.js) makes every existing account fail this check again,
+  // forcing re-acceptance the same way a first-time signup does.
+  async function acceptTerms(version) {
+    if (!auth.currentUser) return;
+    await updateDoc(doc(db, "users", auth.currentUser.uid), {
+      acceptedTermsVersion: version,
+      acceptedTermsAt: serverTimestamp(),
+    });
   }
 
   // Saves the preference only — the app doesn't actually translate its UI
@@ -108,6 +140,7 @@ export function useAuth() {
     await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
     const url = await getDownloadURL(storageRef);
     await updateDoc(doc(db, "users", auth.currentUser.uid), { avatarUrl: url });
+    await updateDoc(doc(db, "publicProfiles", auth.currentUser.uid), { avatarUrl: url });
     await updateProfile(auth.currentUser, { photoURL: url });
     return url;
   }
@@ -135,6 +168,7 @@ export function useAuth() {
     }
 
     await deleteDoc(doc(db, "users", uid));
+    await deleteDoc(doc(db, "publicProfiles", uid)).catch(() => {});
     await deleteUser(auth.currentUser);
   }
 
@@ -151,5 +185,6 @@ export function useAuth() {
     uploadAvatar,
     updateLanguage,
     deleteAccount,
+    acceptTerms,
   };
 }

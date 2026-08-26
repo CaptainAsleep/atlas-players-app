@@ -13,6 +13,9 @@ import { useAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useAllTeams, useTeam, useTeamActions } from "./hooks/useTeams";
+import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
+import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
+import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 
 /* ---------- design tokens ---------- */
@@ -470,8 +473,8 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
     <div className="mx-6 mb-4 h-72 overflow-hidden" style={{ borderRadius: 6, border: `1px solid ${T.line}` }}>
       <MapContainer center={center} zoom={9} style={{ width: "100%", height: "100%", background: T.void }} zoomControl={false}>
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors'
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; OpenStreetMap contributors'
         />
         <FitToPins points={pins} />
         {pins.map((f) => (
@@ -639,7 +642,7 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
             doubleClickZoom={false}
             touchZoom={false}
           >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="" />
+            <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
             <Marker position={[lat, lng]} icon={fieldPinIcon} />
           </MapContainer>
         </div>
@@ -1894,7 +1897,320 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
 }
 
 
-function SocialScreen({ onNavigate, onOpenTeam, profile, user, teams, teamsLoading, createTeam }) {
+function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, teams, teamsLoading, createTeam,
+  allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend }) {
+  const [tab, setTab] = useState("friends"); // friends | teams
+
+  return (
+    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+      <ScreenHeader title="Social" />
+      <div className="px-6 pt-3 pb-1 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
+        {[["friends", "Friends"], ["teams", "Teams"]].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className="px-3 py-2 text-[13px] font-semibold"
+            style={{ ...body, color: tab === key ? T.ash : T.ashFaint, borderBottom: tab === key ? `2px solid ${T.ash}` : "2px solid transparent" }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "friends" ? (
+        <FriendsTabContent
+          onOpenPlayer={onOpenPlayer}
+          user={user}
+          allProfiles={allProfiles}
+          friends={friends}
+          friendsLoading={friendsLoading}
+          incomingRequests={incomingRequests}
+          outgoingRequestUids={outgoingRequestUids}
+          sendRequest={sendRequest}
+          acceptRequest={acceptRequest}
+          declineRequest={declineRequest}
+          cancelOrUnfriend={cancelOrUnfriend}
+          profile={profile}
+        />
+      ) : (
+        <TeamsTabContent onOpenTeam={onOpenTeam} profile={profile} user={user} teams={teams} teamsLoading={teamsLoading} createTeam={createTeam} />
+      )}
+
+      <BottomNav active="inbox" onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids,
+  sendRequest, acceptRequest, declineRequest, cancelOrUnfriend, profile }) {
+  const [search, setSearch] = useState("");
+  const friendUids = new Set(friends.map((f) => f.uid));
+
+  const searchResults = search.trim()
+    ? allProfiles.filter((p) => p.uid !== user?.uid && p.callsign.toLowerCase().includes(search.toLowerCase()))
+    : [];
+
+  const relationshipBadge = (otherUid) => {
+    if (friendUids.has(otherUid)) return "friends";
+    if (outgoingRequestUids.has(otherUid)) return "pending";
+    return "none";
+  };
+
+  const handleAdd = async (other) => {
+    await sendRequest(user.uid, profile, other.uid, other);
+  };
+
+  return (
+    <div className="px-6 pt-4">
+      <div className="mb-4 flex items-center gap-2 px-3 py-2.5" style={{ border: `1px solid ${T.line}`, background: T.panel, borderRadius: 4 }}>
+        <Search size={15} color={T.ashFaint} />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search players by callsign"
+          className="flex-1 text-[13px] bg-transparent outline-none"
+          style={{ ...body, color: T.ash }}
+        />
+      </div>
+
+      {search.trim() ? (
+        <div className="mb-6">
+          {searchResults.length === 0 ? (
+            <p className="text-[13px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No players match "{search}".</p>
+          ) : (
+            searchResults.map((p) => {
+              const rel = relationshipBadge(p.uid);
+              return (
+                <div key={p.uid} className="mb-2 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+                  <button onClick={() => onOpenPlayer(p.uid)} className="flex-1 flex items-center gap-3 text-left">
+                    {p.avatarUrl ? (
+                      <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${p.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
+                    ) : (
+                      <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                        {p.callsign.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{p.callsign}</span>
+                  </button>
+                  {rel === "friends" ? (
+                    <span className="text-[11px] font-medium" style={{ ...body, color: T.good }}>Friends</span>
+                  ) : rel === "pending" ? (
+                    <span className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>Request Sent</span>
+                  ) : (
+                    <button onClick={() => handleAdd(p)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: 4 }}>
+                      Add Friend
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        <>
+          {incomingRequests.length > 0 && (
+            <>
+              <Eyebrow>Friend Requests</Eyebrow>
+              <div className="mb-5 flex flex-col gap-2">
+                {incomingRequests.map((r) => (
+                  <div key={r.id} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.accent}` }}>
+                    <button onClick={() => onOpenPlayer(r.fromUid)} className="flex-1 flex items-center gap-3 text-left">
+                      {r.fromAvatarUrl ? (
+                        <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${r.fromAvatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
+                      ) : (
+                        <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                          {r.fromCallsign.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.fromCallsign}</span>
+                    </button>
+                    <button onClick={() => declineRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+                      Decline
+                    </button>
+                    <button onClick={() => acceptRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.good, color: "#fff", borderRadius: 4 }}>
+                      Accept
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <Eyebrow>My Friends</Eyebrow>
+          {friendsLoading ? (
+            <p className="text-[13px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
+          ) : friends.length === 0 ? (
+            <p className="text-[13px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>
+              No friends yet — search for a callsign above to find someone.
+            </p>
+          ) : (
+            friends.map((f) => (
+              <button
+                key={f.uid}
+                onClick={() => onOpenPlayer(f.uid)}
+                className="w-full mb-2 p-3 flex items-center gap-3 text-left"
+                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+              >
+                {f.avatarUrl ? (
+                  <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${f.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
+                ) : (
+                  <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                    {f.callsign.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="text-[13px] font-semibold flex-1" style={{ ...display, color: T.ash }}>{f.callsign}</span>
+                <ChevronRight size={15} color={T.ashFaint} />
+              </button>
+            ))
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, currentUserFriendUids, outgoingRequestUids,
+  sendRequest, cancelOrUnfriend, events }) {
+  const { profile, profileLoading } = usePublicProfile(uid);
+  const { favorites: theirFavorites } = useFavorites(uid);
+  const { patches: theirPatches } = usePatches(uid);
+  const [tab, setTab] = useState("interested");
+  const [confirmUnfriend, setConfirmUnfriend] = useState(false);
+
+  const today = localDateStr();
+  const savedEventIds = theirFavorites.filter((f) => f.type === "event").map((f) => f.refId);
+  const interested = events.filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today);
+  const past = events.filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today);
+
+  const isFriend = currentUserFriendUids.has(uid);
+  const isPending = outgoingRequestUids.has(uid);
+  const isSelf = uid === currentUser?.uid;
+
+  if (profileLoading) {
+    return (
+      <div className="h-full flex items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
+      </div>
+    );
+  }
+  if (!profile) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Player not found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto pb-6" style={flatBg}>
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>{profile.callsign}</h1>
+      </div>
+
+      <div className="px-6 pt-5 flex flex-col items-center text-center">
+        {profile.avatarUrl ? (
+          <div className="w-20 h-20 mb-3" style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+        ) : (
+          <div className="w-20 h-20 mb-3 flex items-center justify-center text-[24px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+            {profile.callsign.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{profile.callsign}</span>
+          {profile.verified && <BadgeCheck size={16} color={T.accent} />}
+        </div>
+        {profile.teamName && <div className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>{profile.teamName}</div>}
+
+        {!isSelf && (
+          <>
+            {isFriend ? (
+              confirmUnfriend ? (
+                <div className="flex gap-2 mb-4" style={{ maxWidth: 280 }}>
+                  <button onClick={() => setConfirmUnfriend(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>Cancel</button>
+                  <button onClick={() => { cancelOrUnfriend(currentUser.uid, uid); setConfirmUnfriend(false); }} className="flex-1 py-2 text-[12px] font-semibold" style={{ ...display, background: T.alert, color: "#fff", borderRadius: 4 }}>Unfriend</button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmUnfriend(true)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>Friends ✓</button>
+              )
+            ) : isPending ? (
+              <span className="px-4 py-2 mb-4 text-[13px] font-medium" style={{ ...body, color: T.ashFaint }}>Request Sent</span>
+            ) : (
+              <button onClick={() => sendRequest(currentUser.uid, currentProfile, uid, profile)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: 4 }}>
+                + Add Friend
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="px-6">
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>
+              {profile.createdAt?.toDate ? profile.createdAt.toDate().getFullYear() : "—"}
+            </div>
+            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Member Since</div>
+          </div>
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{theirPatches.length}</div>
+            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Patches</div>
+          </div>
+        </div>
+
+        {theirPatches.length > 0 && (
+          <>
+            <Eyebrow>Patches</Eyebrow>
+            <div className="grid grid-cols-4 gap-2 mb-5">
+              {theirPatches.map((p) => (
+                <div key={p.id} className="aspect-square flex items-center justify-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+                  <img src={p.imageUrl} alt={p.name} className="w-full h-full" style={{ objectFit: "contain", padding: 6 }} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-1 mb-3" style={{ borderBottom: `1px solid ${T.line}` }}>
+          {[["booked", "Booked"], ["interested", "Interested"], ["past", "Past"]].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className="px-3 py-2 text-[12px] font-semibold"
+              style={{ ...body, color: tab === key ? T.ash : T.ashFaint, borderBottom: tab === key ? `2px solid ${T.ash}` : "2px solid transparent" }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "booked" && <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Booking isn't available in the app yet.</p>}
+        {tab === "interested" && (
+          interested.length === 0 ? <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Nothing upcoming.</p> :
+          interested.map((ev) => (
+            <div key={ev.id} className="mb-2 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+            </div>
+          ))
+        )}
+        {tab === "past" && (
+          past.length === 0 ? <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No past events.</p> :
+          past.map((ev) => (
+            <div key={ev.id} className="mb-2 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.7 }}>
+              <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, createTeam }) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [teamName, setTeamName] = useState("");
@@ -1938,9 +2254,7 @@ function SocialScreen({ onNavigate, onOpenTeam, profile, user, teams, teamsLoadi
   };
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
-      <ScreenHeader title="Social" />
-      <div className="px-6 pt-4">
+    <div className="px-6 pt-4">
         {myTeam && (
           <>
             <Eyebrow>My Team</Eyebrow>
@@ -2051,14 +2365,12 @@ function SocialScreen({ onNavigate, onOpenTeam, profile, user, teams, teamsLoadi
             </button>
           ))
         )}
-      </div>
-      <BottomNav active="inbox" onNavigate={onNavigate} />
     </div>
   );
 }
 
-function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavigate,
-  joinTeam, leaveTeam, updateTeamInfo, updateTeamPatch, setMemberRole, removeMember }) {
+function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavigate, fields,
+  joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -2066,6 +2378,8 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
   const [actionError, setActionError] = useState("");
   const fileInputRef = useRef(null);
   const [patchUploading, setPatchUploading] = useState(false);
+  const [showFieldPicker, setShowFieldPicker] = useState(false);
+  const [fieldSearch, setFieldSearch] = useState("");
 
   const myMembership = members.find((m) => m.uid === user?.uid);
   const isOfficer = myMembership?.role === "officer";
@@ -2231,6 +2545,54 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
           </p>
         )}
 
+        <Eyebrow>Home Field</Eyebrow>
+        {team.homeFieldName ? (
+          <div className="mb-4 p-3 flex items-center justify-between" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="flex items-center gap-2">
+              <MapPin size={14} color={T.ashFaint} />
+              <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{team.homeFieldName}</span>
+            </div>
+            {isOfficer && (
+              <button onClick={() => setShowFieldPicker(true)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Change</button>
+            )}
+          </div>
+        ) : isOfficer ? (
+          <button
+            onClick={() => setShowFieldPicker(true)}
+            className="w-full mb-4 p-3 text-left text-[13px] font-medium"
+            style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: 6 }}
+          >
+            + Set a home field
+          </button>
+        ) : (
+          <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>No home field set yet.</p>
+        )}
+
+        {showFieldPicker && (
+          <div className="mb-4 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <input
+              value={fieldSearch}
+              onChange={(e) => setFieldSearch(e.target.value)}
+              placeholder="Search fields…"
+              className="w-full mb-2 px-3 py-2 text-[13px] bg-transparent outline-none"
+              style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            />
+            <div style={{ maxHeight: 200, overflowY: "auto" }}>
+              {fields.filter((f) => f.name.toLowerCase().includes(fieldSearch.toLowerCase())).map((f) => (
+                <button
+                  key={f.id}
+                  onClick={async () => { await setHomeField(team.id, f.id, f.name); setShowFieldPicker(false); setFieldSearch(""); }}
+                  className="w-full py-2 text-left text-[13px]"
+                  style={{ ...body, color: T.ash }}
+                >
+                  {f.name} <span style={{ color: T.ashFaint }}>· {f.city}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowFieldPicker(false)} className="text-[11px] font-medium mt-1" style={{ ...body, color: T.ashFaint }}>Cancel</button>
+          </div>
+        )}
+
         <Eyebrow>Roster ({members.length})</Eyebrow>
         <div className="flex flex-col gap-2 mb-5">
           {members.map((m) => (
@@ -2282,16 +2644,24 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
   );
 }
 
-function ProfileRow({ label, value, static: isStatic }) {
-  return (
-    <div className="w-full flex items-center justify-between py-3.5">
+function ProfileRow({ label, value, static: isStatic, href }) {
+  const content = (
+    <>
       <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{label}</span>
       <div className="flex items-center gap-2">
         {value && <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{value}</span>}
         {!isStatic && <ChevronRight size={15} color={T.ashFaint} />}
       </div>
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className="w-full flex items-center justify-between py-3.5">
+        {content}
+      </a>
+    );
+  }
+  return <div className="w-full flex items-center justify-between py-3.5">{content}</div>;
 }
 
 function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatch, removePatch, setFeaturedPatch }) {
@@ -2719,13 +3089,20 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onLogout, changePassword, uploadAvatar, updateLanguage }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches }) {
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
 
   const referralUrl = user ? `${window.location.origin}${import.meta.env.BASE_URL}?ref=${user.uid}` : "";
+
+  // "Past Events," not "attended" — this counts favorited events that have
+  // already happened, which isn't the same as confirmed attendance. That
+  // distinction gets to change once real check-in/RSVP data exists.
+  const today = localDateStr();
+  const savedEventIds = (favorites || []).filter((f) => f.type === "event").map((f) => f.refId);
+  const pastEventsCount = (events || []).filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today).length;
   const [referralQr, setReferralQr] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -2856,6 +3233,24 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
         {avatarError && <p className="text-[11px] mb-3" style={{ ...body, color: T.alert }}>{avatarError}</p>}
         {!avatarError && <div className="mb-3" />}
 
+        <Eyebrow>Your Stats</Eyebrow>
+        <div className="grid grid-cols-3 gap-2 mb-5">
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>
+              {profile?.createdAt?.toDate ? profile.createdAt.toDate().getFullYear() : "—"}
+            </div>
+            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Member Since</div>
+          </div>
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{pastEventsCount}</div>
+            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Past Events</div>
+          </div>
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{patches?.length || 0}</div>
+            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Patches</div>
+          </div>
+        </div>
+
         <Eyebrow>Invite Friends</Eyebrow>
         <div className="p-4 mb-5 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
           {referralQr && <img src={referralQr} alt="Referral QR code" className="mb-3" style={{ width: 140, height: 140 }} />}
@@ -2948,7 +3343,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
             </div>
           </button>
           <ProfileRow label="FAQs" />
-          <ProfileRow label="Report a concern" />
+          <ProfileRow label="Report a concern" value="Join our Discord" href="https://discord.gg/hR8EntGsq" />
         </div>
 
         {showLanguagePicker && (
@@ -2991,14 +3386,169 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
 }
 
 /* ---------- app shell ---------- */
+// iOS Safari has no programmatic install prompt — Add to Home Screen is a
+// manual, user-driven action reachable only through the Share sheet.
+// Android/Chrome does support triggering it programmatically via
+// beforeinstallprompt, so that path is used when available; otherwise the
+// instructions fall back to the same manual style.
+function InstallGateScreen({ platform, deferredPrompt }) {
+  const [installing, setInstalling] = useState(false);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    setInstalling(true);
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    setInstalling(false);
+  };
+
+  return (
+    <div className="h-screen flex flex-col items-center justify-center px-8 text-center" style={flatBg}>
+      <style>{FONTS}</style>
+      <div className="w-16 h-16 flex items-center justify-center mb-4 overflow-hidden" style={{ borderRadius: 12 }}>
+        <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Atlas" className="w-full h-full" style={{ objectFit: "cover" }} />
+      </div>
+      <h1 className="text-[20px] font-semibold mb-2" style={{ ...display, color: T.ash }}>Add Atlas to your Home Screen</h1>
+      <p className="text-[14px] mb-6" style={{ ...body, color: T.ashDim, maxWidth: 320 }}>
+        Atlas works best installed as an app — full screen, faster, and built for outdoor use. Install it to continue.
+      </p>
+
+      {platform === "ios" ? (
+        <div className="w-full text-left" style={{ maxWidth: 320 }}>
+          <div className="flex items-center gap-3 mb-3 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <span className="text-[16px] font-semibold" style={{ ...display, color: T.accent }}>1</span>
+            <span className="text-[13px]" style={{ ...body, color: T.ash }}>Tap the Share button <Share2 size={14} style={{ display: "inline", verticalAlign: "middle" }} /> in Safari's toolbar</span>
+          </div>
+          <div className="flex items-center gap-3 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <span className="text-[16px] font-semibold" style={{ ...display, color: T.accent }}>2</span>
+            <span className="text-[13px]" style={{ ...body, color: T.ash }}>Scroll down and tap "Add to Home Screen"</span>
+          </div>
+        </div>
+      ) : deferredPrompt ? (
+        <button
+          onClick={handleInstallClick}
+          disabled={installing}
+          className="w-full py-3.5 font-semibold text-[14px]"
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, maxWidth: 320, opacity: installing ? 0.6 : 1 }}
+        >
+          {installing ? "Opening…" : "Install Atlas"}
+        </button>
+      ) : (
+        <div className="w-full text-left" style={{ maxWidth: 320 }}>
+          <div className="flex items-center gap-3 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <span className="text-[16px] font-semibold" style={{ ...display, color: T.accent }}>1</span>
+            <span className="text-[13px]" style={{ ...body, color: T.ash }}>Open your browser's menu and tap "Add to Home Screen" or "Install App"</span>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[11px] mt-6" style={{ ...body, color: T.ashFaint }}>Already installed? Open Atlas from your Home Screen instead of this browser tab.</p>
+    </div>
+  );
+}
+
+function LegalAgreementScreen({ onAccept }) {
+  const [tab, setTab] = useState("terms");
+  const [checked, setChecked] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const TABS = [
+    { key: "terms", label: "Terms of Use", text: TERMS_OF_USE },
+    { key: "privacy", label: "Privacy Policy", text: PRIVACY_POLICY },
+    { key: "eula", label: "EULA", text: EULA },
+  ];
+  const activeText = TABS.find((t) => t.key === tab).text;
+
+  const handleAccept = async () => {
+    setSaving(true);
+    await onAccept();
+    setSaving(false);
+  };
+
+  return (
+    <div className="h-screen flex flex-col" style={flatBg}>
+      <style>{FONTS}</style>
+      <div className="px-6 pt-8 pb-3">
+        <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Before you continue</h1>
+        <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>Please read and agree to the following.</p>
+      </div>
+      <div className="px-6 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className="px-2 py-2 text-[12px] font-semibold"
+            style={{ ...body, color: tab === t.key ? T.ash : T.ashFaint, borderBottom: tab === t.key ? `2px solid ${T.ash}` : "2px solid transparent" }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+        <p className="text-[12px] whitespace-pre-wrap" style={{ ...body, color: T.ashDim, lineHeight: 1.6 }}>{activeText}</p>
+      </div>
+      <div className="px-6 pt-3 pb-6" style={{ borderTop: `1px solid ${T.line}`, background: T.void }}>
+        <button onClick={() => setChecked(!checked)} className="w-full flex items-center gap-2 mb-3 text-left">
+          <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center" style={{ border: `1.5px solid ${checked ? T.ash : T.line}`, background: checked ? T.ash : "transparent", borderRadius: 4 }}>
+            {checked && <Check size={13} color="#fff" strokeWidth={3} />}
+          </div>
+          <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>I've read and agree to the Terms of Use, Privacy Policy, and EULA.</span>
+        </button>
+        <button
+          onClick={handleAccept}
+          disabled={!checked || saving}
+          className="w-full py-3.5 font-semibold text-[14px]"
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !checked || saving ? 0.5 : 1 }}
+        >
+          {saving ? "Continuing…" : "Agree & Continue"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  // Only gates on phones — desktop/tablet browsers don't have the same
+  // "installed app vs. browser tab" distinction that matters here, and a
+  // hard gate there would just block legitimate desktop access for no
+  // reason. iOS/Android detection is a simple, standard user-agent check;
+  // display-mode:standalone (and iOS's older navigator.standalone) is the
+  // real signal for "already installed."
+  const [installGate, setInstallGate] = useState(null); // null = checking, false = not needed, "ios" | "android" = needs install
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    const ua = navigator.userAgent;
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+
+    if (isStandalone || (!isIOS && !isAndroid)) {
+      setInstallGate(false);
+      return;
+    }
+    setInstallGate(isIOS ? "ios" : "android");
+
+    const handler = (e) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
   const { patches, patchesLoading, addPatch, removePatch, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
-  const { createTeam, joinTeam, leaveTeam, updateTeamInfo, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
+  const { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
+  const { profiles: allPublicProfiles } = useAllPublicProfiles();
+  const { friends, friendsLoading } = useFriends(user?.uid);
+  const { requests: incomingRequests } = useIncomingRequests(user?.uid);
+  const outgoingRequestUids = useOutgoingRequestUids(user?.uid);
+  const { sendRequest, acceptRequest, declineRequest, cancelOrUnfriend } = useFriendActions();
 
   // Referral capture — a real deployed app, not a sandboxed artifact, so
   // localStorage is appropriate here: it lets the ?ref= code survive a
@@ -3017,7 +3567,13 @@ export default function App() {
   const [activeEventId, setActiveEventId] = useState(null);
   const [activeFieldId, setActiveFieldId] = useState(null);
   const [activeTeamId, setActiveTeamId] = useState(null);
+  const [activePlayerId, setActivePlayerId] = useState(null);
   const screen = stack[stack.length - 1];
+
+  const openPlayer = (uid) => {
+    setActivePlayerId(uid);
+    push("player");
+  };
 
   const push = (s) => setStack((prev) => [...prev, s]);
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
@@ -3072,7 +3628,11 @@ export default function App() {
   };
 
   let content;
-  if (authLoading) {
+  if (installGate === null) {
+    content = null; // brief instant while the install check resolves — nothing flashes before it
+  } else if (installGate) {
+    content = <InstallGateScreen platform={installGate} deferredPrompt={deferredInstallPrompt} />;
+  } else if (authLoading) {
     content = (
       <div className="h-full flex items-center justify-center" style={flatBg}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
@@ -3080,6 +3640,14 @@ export default function App() {
     );
   } else if (!user) {
     content = <LoginScreen signIn={signIn} signUp={signUp} referralCode={referralCode} />;
+  } else if (!profile) {
+    content = (
+      <div className="h-full flex items-center justify-center" style={flatBg}>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
+      </div>
+    );
+  } else if (profile.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
+    content = <LegalAgreementScreen onAccept={() => acceptTerms(CURRENT_TERMS_VERSION)} />;
   } else if (screen === "home") {
     content = (
       <HomeScreen
@@ -3146,11 +3714,35 @@ export default function App() {
       <SocialScreen
         onNavigate={goTab}
         onOpenTeam={openTeam}
+        onOpenPlayer={openPlayer}
         profile={profile}
         user={user}
         teams={allTeams}
         teamsLoading={allTeamsLoading}
         createTeam={createTeam}
+        allProfiles={allPublicProfiles}
+        friends={friends}
+        friendsLoading={friendsLoading}
+        incomingRequests={incomingRequests}
+        outgoingRequestUids={outgoingRequestUids}
+        sendRequest={sendRequest}
+        acceptRequest={acceptRequest}
+        declineRequest={declineRequest}
+        cancelOrUnfriend={cancelOrUnfriend}
+      />
+    );
+  } else if (screen === "player" && activePlayerId) {
+    content = (
+      <PlayerProfileScreen
+        uid={activePlayerId}
+        onBack={pop}
+        currentUser={user}
+        currentProfile={profile}
+        currentUserFriendUids={new Set(friends.map((f) => f.uid))}
+        outgoingRequestUids={outgoingRequestUids}
+        sendRequest={sendRequest}
+        cancelOrUnfriend={cancelOrUnfriend}
+        events={events}
       />
     );
   } else if (screen === "team") {
@@ -3163,9 +3755,11 @@ export default function App() {
         user={user}
         onBack={pop}
         onNavigate={goTab}
+        fields={fields}
         joinTeam={joinTeam}
         leaveTeam={leaveTeam}
         updateTeamInfo={updateTeamInfo}
+        setHomeField={setHomeField}
         updateTeamPatch={updateTeamPatch}
         setMemberRole={setMemberRole}
         removeMember={removeMember}
@@ -3183,6 +3777,9 @@ export default function App() {
         changePassword={changePassword}
         uploadAvatar={uploadAvatar}
         updateLanguage={updateLanguage}
+        favorites={favorites}
+        events={events}
+        patches={patches}
       />
     );
   } else if (screen === "account") {
