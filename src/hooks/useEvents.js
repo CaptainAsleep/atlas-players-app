@@ -15,7 +15,7 @@ export function useEvents(fieldId) {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => !e.draft));
         setLoading(false);
       },
       (err) => {
