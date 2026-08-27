@@ -181,6 +181,16 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
         qualifies = states.size >= trigger.count;
         break;
       }
+      case "early_checkin": {
+        qualifies = checkedIn.some((x) => {
+          if (!x.event.briefingTime || !x.booking.checkedInAt?.toDate) return false;
+          const briefingAt = new Date(`${x.event.date}T${x.event.briefingTime}:00`);
+          const checkedInAt = x.booking.checkedInAt.toDate();
+          const minutesEarly = (briefingAt - checkedInAt) / (1000 * 60);
+          return minutesEarly >= trigger.minutesBefore;
+        });
+        break;
+      }
       case "team_threshold_any_event": {
         if (profile?.teamId) {
           for (const x of checkedIn) {
