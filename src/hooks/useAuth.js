@@ -10,7 +10,7 @@ import {
   updatePassword,
   updateProfile,
 } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "../lib/firebase";
 
@@ -73,9 +73,7 @@ export function useAuth() {
       callsign: finalCallsign,
       createdAt,
       // Whoever's referral link/QR they came through, if any — captured
-      // once at signup, not editable after. No reward mechanism wired to
-      // this yet, just an honest record of the relationship for whenever
-      // one gets built.
+      // once at signup, not editable after.
       ...(referredBy ? { referredBy } : {}),
     });
     // The narrow public mirror — never email/phone/real name, just what
@@ -88,7 +86,17 @@ export function useAuth() {
       teamName: null,
       createdAt,
       verified: false,
+      referralCount: 0,
     });
+    // Real referral tracking now: bump the referrer's own public count by
+    // one. This has to target THEIR profile, not the new signer's — the
+    // one narrow exception in the rules that allows writing to someone
+    // else's publicProfiles doc, and only for this exact field.
+    if (referredBy) {
+      await updateDoc(doc(db, "publicProfiles", referredBy), { referralCount: increment(1) }).catch((err) =>
+        console.error("referral count increment failed:", err)
+      );
+    }
     return cred.user;
   }
 
