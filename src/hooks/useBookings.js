@@ -92,6 +92,7 @@ export function useBookingActions() {
     const batch = writeBatch(db);
     batch.set(doc(db, "events", event.id, "bookings", uid), {
       uid,
+      fieldId: event.fieldId,
       callsign: profile?.callsign || "Player",
       avatarUrl: profile?.avatarUrl || null,
       bookedAt: serverTimestamp(),
