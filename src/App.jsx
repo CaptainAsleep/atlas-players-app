@@ -2814,7 +2814,7 @@ function ProfileRow({ label, value, static: isStatic, href }) {
   return <div className="w-full flex items-center justify-between py-3.5">{content}</div>;
 }
 
-function PatchesScreen({ profile, user, onBack, patches, patchesLoading, removePatch, setFeaturedPatch }) {
+function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeaturedPatch }) {
   const featuredImageUrl = profile?.featuredPatch?.imageUrl;
   const [viewerIndex, setViewerIndex] = useState(null);
   const openViewer = (index) => setViewerIndex(index);
@@ -2825,12 +2825,6 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, removeP
   const handleSelectFeatured = (patch) => {
     const isCurrent = featuredImageUrl === patch.imageUrl;
     setFeaturedPatch(user.uid, isCurrent ? null : patch);
-  };
-
-  const handleRemove = (e, patch) => {
-    e.stopPropagation();
-    removePatch(user.uid, patch.id);
-    if (featuredImageUrl === patch.imageUrl) setFeaturedPatch(user.uid, null);
   };
 
   return (
@@ -2865,13 +2859,6 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, removeP
                       <Check size={12} color="#FFFFFF" strokeWidth={3} />
                     </div>
                   )}
-                  <button
-                    onClick={(e) => handleRemove(e, patch)}
-                    className="absolute top-2 left-2 w-5 h-5 flex items-center justify-center"
-                    style={{ background: T.panelAlt, borderRadius: 999 }}
-                  >
-                    <span style={{ color: T.ashFaint, fontSize: 12, lineHeight: 1 }}>×</span>
-                  </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); openViewer(i); }}
                     className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center"
@@ -3691,7 +3678,7 @@ export default function App() {
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
-  const { patches, patchesLoading, grantPatch, markPatchSeen, removePatch, setFeaturedPatch } = usePatches(user?.uid);
+  const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
   const { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
   const { profiles: allPublicProfiles } = useAllPublicProfiles();
@@ -4019,7 +4006,6 @@ export default function App() {
         onBack={pop}
         patches={patches}
         patchesLoading={patchesLoading}
-        removePatch={removePatch}
         setFeaturedPatch={setFeaturedPatch}
       />
     );
