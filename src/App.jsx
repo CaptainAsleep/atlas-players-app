@@ -2369,7 +2369,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
   );
 }
 
-function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavigate, fields,
+function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -2597,16 +2597,18 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
         <div className="flex flex-col gap-2 mb-5">
           {members.map((m) => (
             <div key={m.uid} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              {m.avatarUrl ? (
-                <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
-              ) : (
-                <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
-                  {m.callsign.charAt(0).toUpperCase()}
+              <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 flex items-center gap-3 text-left">
+                {m.avatarUrl ? (
+                  <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+                ) : (
+                  <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                    {m.callsign.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{m.callsign}</div>
                 </div>
-              )}
-              <div className="flex-1">
-                <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{m.callsign}</div>
-              </div>
+              </button>
               {m.role === "officer" && <Tag tone="accent">OFFICER</Tag>}
               {isOfficer && m.uid !== user?.uid && (
                 <div className="flex gap-1.5">
@@ -3756,6 +3758,7 @@ export default function App() {
         onBack={pop}
         onNavigate={goTab}
         fields={fields}
+        onOpenPlayer={openPlayer}
         joinTeam={joinTeam}
         leaveTeam={leaveTeam}
         updateTeamInfo={updateTeamInfo}
