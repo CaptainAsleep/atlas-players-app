@@ -94,6 +94,21 @@ function stateNameFromCity(city) {
   const trimmed = city.trim();
   return Object.values(US_STATES).includes(trimmed) ? trimmed : null; // handles a bare state name like Sektor7's "Michigan"
 }
+// Combines a field's street address with its city/state for display,
+// without duplicating — older scraped addresses already have city/state
+// baked into the string (e.g. "1154 W Seidlers Rd, Auburn, MI 48611"),
+// while newly owner-entered addresses may just be the street part now that
+// city/state are separate fields in the owner app. Checking whether the
+// city already appears in the address avoids showing it twice either way.
+function fullAddress(field) {
+  if (!field?.address) return field?.city || "";
+  if (!field?.city) return field.address;
+  const cityPart = field.city.split(",")[0]?.trim().toLowerCase();
+  if (cityPart && field.address.toLowerCase().includes(cityPart)) {
+    return field.address;
+  }
+  return `${field.address}, ${field.city}`;
+}
 const NEARBY_RADIUS_MILES = 50;
 // Prices come from real scraped listings as free text ("$20", "$20/person",
 // "varies") — pull out the first number we can find. Events with no
@@ -1390,7 +1405,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           <LocationCard
             label="Event Location"
             name={ev.venueName || field?.name}
-            address={ev.address || field?.address}
+            address={ev.address || fullAddress(field)}
             lat={typeof ev.lat === "number" ? ev.lat : field?.lat}
             lng={typeof ev.lng === "number" ? ev.lng : field?.lng}
           />
@@ -1716,7 +1731,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
             </div>
           )}
 
-          <LocationCard label="Field Location" address={field.address} lat={field.lat} lng={field.lng} />
+          <LocationCard label="Field Location" address={fullAddress(field)} lat={field.lat} lng={field.lng} />
 
           {field.phone && (
             <a
