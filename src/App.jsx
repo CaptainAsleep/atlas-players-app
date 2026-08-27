@@ -1498,6 +1498,19 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             </div>
           )}
 
+          {ev.checkInPatch?.imageUrl && (
+            <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                <img src={ev.checkInPatch.imageUrl} alt={ev.checkInPatch.name} className="w-full h-full" style={{ objectFit: "contain", padding: 4 }} />
+              </div>
+              <div className="flex-1">
+                <Eyebrow>Check-In Reward</Eyebrow>
+                <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{ev.checkInPatch.name}</div>
+                <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>You'll earn this by checking in here — check-in isn't available in the app yet.</p>
+              </div>
+            </div>
+          )}
+
           {/* DEMO/PLACEHOLDER DATA — not scraped or owner-provided yet.
               Kept here for showcase purposes per explicit request; swap for
               real field-owner-entered data once that flow exists. */}
