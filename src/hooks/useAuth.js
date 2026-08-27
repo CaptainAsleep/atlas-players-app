@@ -10,7 +10,7 @@ import {
   updatePassword,
   updateProfile,
 } from "firebase/auth";
-import { collection, deleteDoc, doc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "../lib/firebase";
 
@@ -37,6 +37,31 @@ export function useAuth() {
     });
     return unsub;
   }, [user]);
+
+  // Self-healing backfill: accounts created before the public-profile
+  // mirror existed have a real users/{uid} doc but no publicProfiles/{uid}
+  // counterpart, so they're invisible to search and can't be viewed or
+  // friended. Rather than requiring a one-time migration script, this
+  // quietly creates the missing mirror the next time that account's own
+  // profile loads — each user can only write their own doc anyway, so this
+  // naturally heals the whole existing user base over time as people use
+  // the app, no manual step needed.
+  useEffect(() => {
+    if (!user || !profile) return;
+    getDoc(doc(db, "publicProfiles", user.uid)).then((snap) => {
+      if (!snap.exists()) {
+        setDoc(doc(db, "publicProfiles", user.uid), {
+          callsign: profile.callsign || "Player",
+          avatarUrl: profile.avatarUrl || null,
+          featuredPatch: profile.featuredPatch || null,
+          teamId: profile.teamId || null,
+          teamName: profile.teamName || null,
+          createdAt: profile.createdAt || serverTimestamp(),
+          verified: profile.verified || false,
+        }).catch((err) => console.error("public profile backfill failed:", err));
+      }
+    });
+  }, [user, profile?.callsign]);
 
   async function signUp(email, password, callsign, referredBy) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
