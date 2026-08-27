@@ -1299,6 +1299,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const isPast = (ev.endDate || ev.date) < localDateStr();
 
   const [showWaiver, setShowWaiver] = useState(false);
+  const [showPatchViewer, setShowPatchViewer] = useState(false);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -1515,9 +1516,9 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
           {ev.checkInPatch?.imageUrl && (
             <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+              <button onClick={() => setShowPatchViewer(true)} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 <img src={ev.checkInPatch.imageUrl} alt={ev.checkInPatch.name} className="w-full h-full" style={{ objectFit: "contain", padding: 4 }} />
-              </div>
+              </button>
               <div className="flex-1">
                 <Eyebrow>Check-In Reward</Eyebrow>
                 <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{ev.checkInPatch.name}</div>
@@ -1569,6 +1570,31 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           </a>
         )}
       </div>
+
+      {showPatchViewer && ev.checkInPatch?.imageUrl && (
+        <div
+          onClick={() => setShowPatchViewer(false)}
+          className="fixed inset-0 flex flex-col items-center justify-center px-6"
+          style={{ background: "rgba(0,0,0,0.88)", zIndex: 2000 }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowPatchViewer(false); }}
+            className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.15)", borderRadius: 999 }}
+          >
+            <X size={20} color="#FFFFFF" />
+          </button>
+          <img
+            src={ev.checkInPatch.imageUrl}
+            alt={ev.checkInPatch.name}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "78%", maxHeight: "55vh", objectFit: "contain" }}
+          />
+          <div className="text-[17px] font-semibold mt-4" style={{ ...display, color: "#FFFFFF" }}>
+            {ev.checkInPatch.name}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
