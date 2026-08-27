@@ -49,5 +49,5 @@ export default defineConfig({
       },
     }),
   ],
-  base: "/atlas-players-app/",
+  base: "/",
 });
