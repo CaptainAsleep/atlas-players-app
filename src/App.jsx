@@ -2814,59 +2814,13 @@ function ProfileRow({ label, value, static: isStatic, href }) {
   return <div className="w-full flex items-center justify-between py-3.5">{content}</div>;
 }
 
-function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatch, removePatch, setFeaturedPatch }) {
-  const fileInputRef = useRef(null);
-  const [pickedFile, setPickedFile] = useState(null);
-  const [pickedPreview, setPickedPreview] = useState(null);
-  const [newName, setNewName] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState("");
-
+function PatchesScreen({ profile, user, onBack, patches, patchesLoading, removePatch, setFeaturedPatch }) {
   const featuredImageUrl = profile?.featuredPatch?.imageUrl;
   const [viewerIndex, setViewerIndex] = useState(null);
   const openViewer = (index) => setViewerIndex(index);
   const closeViewer = () => setViewerIndex(null);
   const showPrev = () => setViewerIndex((i) => (i - 1 + patches.length) % patches.length);
   const showNext = () => setViewerIndex((i) => (i + 1) % patches.length);
-
-  const handlePick = () => fileInputRef.current?.click();
-  const handleFileSelected = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setAddError("Please choose an image file.");
-      return;
-    }
-    setAddError("");
-    setPickedFile(file);
-    setPickedPreview(URL.createObjectURL(file));
-  };
-
-  const cancelAdd = () => {
-    setPickedFile(null);
-    setPickedPreview(null);
-    setNewName("");
-    setAddError("");
-  };
-
-  const handleAdd = async () => {
-    if (!pickedFile || !newName.trim()) return;
-    setAdding(true);
-    setAddError("");
-    try {
-      const resized = await resizeImageFile(pickedFile, 300, 0.9);
-      const patch = await addPatch(user.uid, newName.trim(), resized);
-      // A freshly-added patch with nothing else featured yet becomes the
-      // default — otherwise your first patch would just sit unselected.
-      if (!featuredImageUrl) await setFeaturedPatch(user.uid, patch);
-      cancelAdd();
-    } catch (err) {
-      setAddError(err.message || "Couldn't add that patch — try again.");
-    } finally {
-      setAdding(false);
-    }
-  };
 
   const handleSelectFeatured = (patch) => {
     const isCurrent = featuredImageUrl === patch.imageUrl;
@@ -2890,7 +2844,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatc
 
       <div className="px-6 pt-4">
         <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>
-          Add patches you actually own — tap one to feature it next to your callsign.
+          Earned by checking in to events. Tap one to feature it next to your callsign.
         </p>
 
         {patchesLoading ? (
@@ -2933,44 +2887,10 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, addPatc
           </div>
         )}
 
-        {!pickedFile ? (
-          <button
-            onClick={handlePick}
-            className="w-full py-4 flex flex-col items-center gap-1 transition-transform duration-100 active:scale-[0.98]"
-            style={{ background: T.panelAlt, borderRadius: 6, border: `1px dashed ${T.line}` }}
-          >
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-            <Plus size={18} color={T.ashDim} />
-            <span className="text-[12px] font-medium" style={{ ...body, color: T.ashDim }}>Add Patch</span>
-          </button>
-        ) : (
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-            <div className="flex items-center gap-3 mb-3">
-              <img src={pickedPreview} alt="Preview" className="w-14 h-14" style={{ objectFit: "contain", background: T.panelAlt, borderRadius: 4 }} />
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Patch name"
-                autoFocus
-                className="flex-1 px-3 py-2.5 text-[14px] bg-transparent outline-none"
-                style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-              />
-            </div>
-            {addError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{addError}</p>}
-            <div className="flex gap-2">
-              <button onClick={cancelAdd} className="flex-1 py-2.5 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                disabled={!newName.trim() || adding}
-                className="flex-1 py-2.5 text-[12px] font-semibold"
-                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !newName.trim() || adding ? 0.5 : 1 }}
-              >
-                {adding ? "Adding…" : "Add"}
-              </button>
-            </div>
-          </div>
+        {patches.length === 0 && !patchesLoading && (
+          <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
+            No patches yet — check in to an event that has one attached and it'll show up here.
+          </p>
         )}
       </div>
 
@@ -3771,7 +3691,7 @@ export default function App() {
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
-  const { patches, patchesLoading, addPatch, grantPatch, markPatchSeen, removePatch, setFeaturedPatch } = usePatches(user?.uid);
+  const { patches, patchesLoading, grantPatch, markPatchSeen, removePatch, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
   const { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
   const { profiles: allPublicProfiles } = useAllPublicProfiles();
@@ -4099,7 +4019,6 @@ export default function App() {
         onBack={pop}
         patches={patches}
         patchesLoading={patchesLoading}
-        addPatch={addPatch}
         removePatch={removePatch}
         setFeaturedPatch={setFeaturedPatch}
       />
