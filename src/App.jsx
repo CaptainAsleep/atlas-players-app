@@ -17,6 +17,7 @@ import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfile
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
+import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce } from "./hooks/useBookings";
 
 /* ---------- design tokens ---------- */
 const FONTS = `
@@ -1294,7 +1295,8 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   );
 }
 
-function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver }) {
+function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
+  myBooking, myBookingLoading, whosGoing, whosGoingLoading, bookEvent, cancelBooking }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   const isPast = (ev.endDate || ev.date) < localDateStr();
 
@@ -1304,6 +1306,40 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const [agreed, setAgreed] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState("");
+  const [bookingBusy, setBookingBusy] = useState(false);
+  const [bookingError, setBookingError] = useState("");
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  const isFull = ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking;
+  const waiverBlocking = ev.waiver && !signature;
+
+  const handleBook = async () => {
+    if (waiverBlocking) {
+      setShowWaiver(true);
+      return;
+    }
+    setBookingBusy(true);
+    setBookingError("");
+    try {
+      await bookEvent(user.uid, profile, ev);
+    } catch (err) {
+      setBookingError("Couldn't book this event — try again.");
+    } finally {
+      setBookingBusy(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    setBookingBusy(true);
+    try {
+      await cancelBooking(user.uid, ev.id);
+      setConfirmCancel(false);
+    } catch (err) {
+      setBookingError("Couldn't cancel — try again.");
+    } finally {
+      setBookingBusy(false);
+    }
+  };
 
   // Pulled straight from the account, not typed — this is what makes it
   // meaningful as a security measure: a player can only ever sign as
@@ -1410,6 +1446,28 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             lat={typeof ev.lat === "number" ? ev.lat : field?.lat}
             lng={typeof ev.lng === "number" ? ev.lng : field?.lng}
           />
+
+          {!whosGoingLoading && whosGoing.length > 0 && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <Eyebrow>Who's Going ({whosGoing.length})</Eyebrow>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {whosGoing.slice(0, 12).map((b) => (
+                  b.avatarUrl ? (
+                    <div key={b.uid} title={b.callsign} className="w-9 h-9" style={{ backgroundImage: `url("${b.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+                  ) : (
+                    <div key={b.uid} title={b.callsign} className="w-9 h-9 flex items-center justify-center text-[12px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                      {b.callsign.charAt(0).toUpperCase()}
+                    </div>
+                  )
+                ))}
+                {whosGoing.length > 12 && (
+                  <div className="w-9 h-9 flex items-center justify-center text-[11px] font-semibold" style={{ ...body, background: T.panelAlt, borderRadius: 999, color: T.ashFaint }}>
+                    +{whosGoing.length - 12}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {ev.waiver && (
             signature ? (
@@ -1553,23 +1611,49 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>
             {ev.price || field?.admission || "See listing"}
           </div>
+          {typeof ev.maxCapacity === "number" && (
+            <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} booked</div>
+          )}
         </div>
         {isPast ? (
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
             Event Ended
           </span>
+        ) : myBooking ? (
+          confirmCancel ? (
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmCancel(false)} disabled={bookingBusy} className="px-3 py-3 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+                Never mind
+              </button>
+              <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}>
+                {bookingBusy ? "…" : "Cancel Booking"}
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmCancel(true)} className="px-6 py-3 font-semibold text-[13px] flex items-center gap-2" style={{ ...display, background: T.good, color: "#FFFFFF", borderRadius: 4 }}>
+              <Check size={15} /> Booked
+            </button>
+          )
+        ) : isFull ? (
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+            Event Full
+          </span>
         ) : (
-          <a
-            href={ev.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="px-6 py-3 font-semibold text-[13px] inline-block transition-transform duration-100 active:scale-95"
-            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
+          <button
+            onClick={handleBook}
+            disabled={bookingBusy}
+            className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
+            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}
           >
-            Book / RSVP
-          </a>
+            {bookingBusy ? "…" : waiverBlocking ? "Sign Waiver to Book" : "Book This Event"}
+          </button>
         )}
       </div>
+      {bookingError && (
+        <div className="absolute bottom-20 left-0 right-0 px-5">
+          <p className="text-[12px] text-center py-2" style={{ ...body, color: T.alert, background: T.panel, borderRadius: 4, border: `1px solid ${T.alert}` }}>{bookingError}</p>
+        </div>
+      )}
 
       {showPatchViewer && ev.checkInPatch?.imageUrl && (
         <div
@@ -1842,7 +1926,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOp
   );
 }
 
-function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
+function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings, myBookingsLoading }) {
   const [tab, setTab] = useState("interested"); // booked | interested | past
   const today = localDateStr();
   const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
@@ -1853,9 +1937,14 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
   const past = events
     .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
     .sort((a, b) => b.date.localeCompare(a.date));
-  // No real booking/payment system exists yet — this stays honestly empty
-  // until that's built, rather than showing favorited events here too.
-  const booked = [];
+  // Real bookings now — shown regardless of date (a past booking is a real
+  // record worth keeping visible, not just an expired interest signal),
+  // cross-referenced against the live events list so capacity/details stay
+  // current. Filters out any booking whose event no longer exists.
+  const booked = myBookings
+    .map((b) => events.find((e) => e.id === b.eventId))
+    .filter(Boolean)
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   const TABS = [
     { key: "booked", label: "Booked" },
@@ -1865,22 +1954,25 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
 
   const renderList = (list, dim) => (
     <div className="flex flex-col gap-3">
-      {list.map((ev) => (
-        <button
-          key={ev.id}
-          onClick={() => onOpenEvent(ev)}
-          className="p-3 flex items-center gap-3 text-left w-full"
-          style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: dim ? 0.65 : 1 }}
-        >
-          <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
-          <div className="flex-1">
-            <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
-            <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
-            <div className="text-[11px] font-medium" style={{ ...mono, color: dim ? T.ashFaint : T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
-          </div>
-          {dim ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
-        </button>
-      ))}
+      {list.map((ev) => {
+        const isPastEv = dim === "auto" ? (ev.endDate || ev.date) < today : dim;
+        return (
+          <button
+            key={ev.id}
+            onClick={() => onOpenEvent(ev)}
+            className="p-3 flex items-center gap-3 text-left w-full"
+            style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: isPastEv ? 0.65 : 1 }}
+          >
+            <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
+            <div className="flex-1">
+              <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+              <div className="text-[11px] font-medium" style={{ ...mono, color: isPastEv ? T.ashFaint : T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
+            </div>
+            {isPastEv ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -1903,17 +1995,19 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent }) {
 
       <div className="px-6 pt-4">
         {tab === "booked" && (
-          booked.length === 0 ? (
+          myBookingsLoading ? (
+            <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
+          ) : booked.length === 0 ? (
             <div className="p-6 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
               <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 <Calendar size={22} color={T.ashDim} strokeWidth={1.7} />
               </div>
               <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No booked games</div>
               <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>
-                Booking isn't available in the app yet — once it is, games you've actually paid for will show up here, separate from what you're just interested in.
+                Book an event from its detail page and it'll show up here — separate from what you're just interested in.
               </p>
             </div>
-          ) : renderList(booked, false)
+          ) : renderList(booked, "auto")
         )}
 
         {tab === "interested" && (
@@ -3563,6 +3657,86 @@ function LegalAgreementScreen({ onAccept }) {
   );
 }
 
+const PATCH_UNLOCK_KEYFRAMES = `
+@keyframes patchPop {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes patchGlow {
+  0%, 100% { filter: drop-shadow(0 0 24px rgba(255,255,255,0.35)); }
+  50% { filter: drop-shadow(0 0 48px rgba(255,255,255,0.65)); }
+}
+@keyframes patchOverlayIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+`;
+
+// Grandiose, scalable — handles one unlocked patch or a whole stack of
+// them the same way, revealing one at a time so a big multi-patch login
+// never feels like a wall of clutter. Advances through the stack and
+// marks each patch seen as it's dismissed; naturally disappears once
+// there's nothing left unseen.
+function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
+  const [index, setIndex] = useState(0);
+  const [advancing, setAdvancing] = useState(false);
+
+  if (unseenPatches.length === 0) return null;
+  const safeIndex = Math.min(index, unseenPatches.length - 1);
+  const current = unseenPatches[safeIndex];
+  const isLast = safeIndex === unseenPatches.length - 1;
+
+  const handleNext = async () => {
+    setAdvancing(true);
+    try {
+      await markPatchSeen(user.uid, current.id);
+      setIndex((i) => i + 1);
+    } catch (err) {
+      console.error("markPatchSeen failed:", err);
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 flex flex-col items-center justify-center px-8"
+      style={{ background: "rgba(0,44,72,0.97)", zIndex: 3000, animation: "patchOverlayIn 0.3s ease-out" }}
+    >
+      <style>{PATCH_UNLOCK_KEYFRAMES}</style>
+
+      {unseenPatches.length > 1 && (
+        <div className="text-[12px] font-semibold mb-4" style={{ ...mono, color: "rgba(255,255,255,0.55)", letterSpacing: "0.1em" }}>
+          {safeIndex + 1} OF {unseenPatches.length}
+        </div>
+      )}
+
+      <div className="relative mb-7" style={{ animation: "patchGlow 2.4s ease-in-out infinite" }}>
+        <div style={{ position: "absolute", inset: -40, background: "radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 70%)", borderRadius: "50%" }} />
+        <img
+          key={current.id}
+          src={current.imageUrl}
+          alt={current.name}
+          style={{ width: 180, height: 180, objectFit: "contain", position: "relative", animation: "patchPop 0.55s cubic-bezier(0.34,1.56,0.64,1)" }}
+        />
+      </div>
+
+      <div className="text-[13px] font-bold mb-2" style={{ ...mono, color: "#F2C94C", letterSpacing: "0.14em" }}>✦ PATCH UNLOCKED ✦</div>
+      <div className="text-[24px] font-bold text-center mb-9 px-2" style={{ ...display, color: "#FFFFFF", lineHeight: 1.3 }}>{current.name}</div>
+
+      <button
+        onClick={handleNext}
+        disabled={advancing}
+        className="px-9 py-3.5 font-semibold text-[14px] transition-transform duration-100 active:scale-95"
+        style={{ ...display, background: "#FFFFFF", color: T.ash, borderRadius: 999, opacity: advancing ? 0.7 : 1 }}
+      >
+        {advancing ? "…" : isLast ? "Awesome!" : "Next →"}
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   // Only gates on phones — desktop/tablet browsers don't have the same
   // "installed app vs. browser tab" distinction that matters here, and a
@@ -3597,7 +3771,7 @@ export default function App() {
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
-  const { patches, patchesLoading, addPatch, removePatch, setFeaturedPatch } = usePatches(user?.uid);
+  const { patches, patchesLoading, addPatch, grantPatch, markPatchSeen, removePatch, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
   const { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
   const { profiles: allPublicProfiles } = useAllPublicProfiles();
@@ -3637,6 +3811,67 @@ export default function App() {
 
   const activeEvent = events.find((e) => e.id === activeEventId) || null;
   const { signature, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
+  const { booking: myBooking, bookingLoading: myBookingLoading } = useMyBooking(user?.uid, activeEvent?.id);
+  const { bookings: whosGoing, bookingsLoading: whosGoingLoading } = useEventBookings(activeEvent?.id);
+  const { bookings: myBookings, bookingsLoading: myBookingsLoading } = useMyBookings(user?.uid);
+  const { bookEvent, cancelBooking } = useBookingActions();
+
+  // Closes the check-in patch loop: whenever a checked-in booking's event
+  // has a reward patch attached, and this player doesn't already have a
+  // patch with that exact name, grant it automatically. This has to run
+  // from the PLAYER's own session, not the owner's — a player's patches
+  // subcollection can only ever be written by that player themselves, so
+  // the owner's scan can't push a patch in directly. Same self-healing
+  // idiom used for the public-profile backfill: the grant just happens
+  // quietly the next time this player's own data loads.
+  //
+  // Also handles team-threshold rewards ("5 teammates check in, all 5 get
+  // a patch"). There's no single moment where one player's check-in can
+  // push a patch into four other players' own collections — so instead,
+  // every player independently re-checks this for themselves each time
+  // their data loads. That naturally produces the right behavior without
+  // any cross-player write: whoever's check-in happens to cross the
+  // threshold gets it right away since they're still in-app; anyone who
+  // checked in earlier gets it the next time they open the app, since
+  // that's when their own check re-runs and finds the threshold already
+  // met.
+  const grantingPatchRef = useRef(new Set());
+  useEffect(() => {
+    if (!user || myBookingsLoading || patchesLoading) return;
+    const ownedPatchNames = new Set(patches.map((p) => p.name));
+
+    const tryGrant = async (name, imageUrl) => {
+      if (ownedPatchNames.has(name) || grantingPatchRef.current.has(name)) return;
+      grantingPatchRef.current.add(name);
+      try {
+        await grantPatch(user.uid, name, imageUrl);
+      } catch (err) {
+        console.error("patch grant failed:", err);
+      } finally {
+        grantingPatchRef.current.delete(name);
+      }
+    };
+
+    myBookings.forEach((booking) => {
+      if (!booking.checkedIn) return;
+      const event = events.find((e) => e.id === booking.eventId);
+      if (!event) return;
+
+      if (event.checkInPatch?.imageUrl) {
+        tryGrant(event.checkInPatch.name, event.checkInPatch.imageUrl);
+      }
+
+      const teamReward = event.teamCheckInReward;
+      if (teamReward?.patch?.imageUrl && profile?.teamId && !ownedPatchNames.has(teamReward.patch.name)) {
+        getEventBookingsOnce(event.id).then((eventBookings) => {
+          const teammatesCheckedIn = eventBookings.filter((b) => b.checkedIn && b.teamId === profile.teamId).length;
+          if (teammatesCheckedIn >= teamReward.threshold) {
+            tryGrant(teamReward.patch.name, teamReward.patch.imageUrl);
+          }
+        });
+      }
+    });
+  }, [user, myBookings, myBookingsLoading, events, patches, patchesLoading, profile?.teamId]);
   const activeField =
     fields.find((f) => f.id === activeFieldId) ||
     (activeEvent ? fields.find((f) => f.id === activeEvent.fieldId) : null);
@@ -3731,6 +3966,12 @@ export default function App() {
         profile={profile}
         signature={signature}
         signWaiver={signWaiver}
+        myBooking={myBooking}
+        myBookingLoading={myBookingLoading}
+        whosGoing={whosGoing}
+        whosGoingLoading={whosGoingLoading}
+        bookEvent={bookEvent}
+        cancelBooking={cancelBooking}
       />
     ) : (
       <div className="h-full flex items-center justify-center" style={flatBg}>
@@ -3764,7 +4005,7 @@ export default function App() {
       />
     );
   } else if (screen === "schedule") {
-    content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} />;
+    content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} myBookings={myBookings} myBookingsLoading={myBookingsLoading} />;
   } else if (screen === "inbox") {
     content = (
       <SocialScreen
@@ -3871,6 +4112,9 @@ export default function App() {
       <div key={screen} className="flex-1 min-h-0 relative screen-transition">
         {content}
       </div>
+      {user && profile && !installGate && (
+        <PatchUnlockedOverlay unseenPatches={patches.filter((p) => p.seen === false)} user={user} markPatchSeen={markPatchSeen} />
+      )}
     </div>
   );
 }
