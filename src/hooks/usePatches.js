@@ -42,8 +42,33 @@ export function usePatches(uid) {
       name,
       imageUrl,
       addedAt: serverTimestamp(),
+      // No unlock notification for this one — the player just deliberately
+      // added it themselves, there's nothing to surprise them with.
+      seen: true,
     });
     return { id: patchId, name, imageUrl };
+  }
+
+  // For a patch that's already hosted somewhere (a check-in reward patch
+  // the owner uploaded once, to be granted to many players) — just
+  // references that same URL rather than re-uploading a duplicate copy
+  // into every player's own storage path.
+  async function grantPatch(uid, name, imageUrl) {
+    const patchId = doc(collection(db, "users", uid, "patches")).id;
+    await setDoc(doc(db, "users", uid, "patches", patchId), {
+      name,
+      imageUrl,
+      addedAt: serverTimestamp(),
+      granted: true,
+      // Starts unseen — this is exactly what drives the unlock
+      // notification. Marked seen once the player actually views it.
+      seen: false,
+    });
+    return { id: patchId, name, imageUrl };
+  }
+
+  async function markPatchSeen(uid, patchId) {
+    await updateDoc(doc(db, "users", uid, "patches", patchId), { seen: true });
   }
 
   async function removePatch(uid, patchId) {
@@ -64,5 +89,5 @@ export function usePatches(uid) {
     await updateDoc(doc(db, "publicProfiles", uid), { featuredPatch });
   }
 
-  return { patches, patchesLoading: loading, addPatch, removePatch, setFeaturedPatch };
+  return { patches, patchesLoading: loading, addPatch, grantPatch, markPatchSeen, removePatch, setFeaturedPatch };
 }

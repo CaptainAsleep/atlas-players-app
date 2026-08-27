@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, deleteDoc, doc, increment, onSnapshot, orderBy, query, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 // Does the current player have a real booking for this event? A single
@@ -53,6 +53,14 @@ export function useEventBookings(eventId) {
   return { bookings, bookingsLoading: loading };
 }
 
+// A one-time (non-live) read of an event's bookings — used by the
+// team-threshold patch check, which just needs a current count each time
+// it runs, not a live subscription per event.
+export async function getEventBookingsOnce(eventId) {
+  const snap = await getDocs(collection(db, "events", eventId, "bookings"));
+  return snap.docs.map((d) => d.data());
+}
+
 // A player's own full list of bookings — powers the real Schedule "Booked"
 // tab. Denormalized enough (title/fieldName/date) to render without a
 // second lookup per event.
@@ -93,6 +101,7 @@ export function useBookingActions() {
     batch.set(doc(db, "events", event.id, "bookings", uid), {
       uid,
       fieldId: event.fieldId,
+      teamId: profile?.teamId || null,
       callsign: profile?.callsign || "Player",
       avatarUrl: profile?.avatarUrl || null,
       bookedAt: serverTimestamp(),
