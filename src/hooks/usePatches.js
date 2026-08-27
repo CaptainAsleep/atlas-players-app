@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
-// Self-managed for now — there's no owner-app "award a patch" flow yet, so
-// this is honestly a personal collection the player curates themselves
-// (real patches they actually own), not an earned-achievement system. Same
-// storage/Firestore foundation a real earning system would read from later.
+// Patches are earned, not self-managed — granted automatically by
+// checkInFromScan (per-event) and the team-threshold check in App.jsx,
+// both writing here via grantPatch. Once granted, a patch is permanent —
+// there's no remove, same as a real earned medal. A player can still
+// choose which one to feature.
 export function usePatches(uid) {
   const [patches, setPatches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,24 +31,6 @@ export function usePatches(uid) {
     return unsub;
   }, [uid]);
 
-  // Takes an already-resized image Blob (resizing happens where the file
-  // picker lives, same as avatar upload) plus a display name.
-  async function addPatch(uid, name, blob) {
-    const patchId = doc(collection(db, "users", uid, "patches")).id;
-    const storageRef = ref(storage, `patches/${uid}/${patchId}.jpg`);
-    await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
-    const imageUrl = await getDownloadURL(storageRef);
-    await setDoc(doc(db, "users", uid, "patches", patchId), {
-      name,
-      imageUrl,
-      addedAt: serverTimestamp(),
-      // No unlock notification for this one — the player just deliberately
-      // added it themselves, there's nothing to surprise them with.
-      seen: true,
-    });
-    return { id: patchId, name, imageUrl };
-  }
-
   // For a patch that's already hosted somewhere (a check-in reward patch
   // the owner uploaded once, to be granted to many players) — just
   // references that same URL rather than re-uploading a duplicate copy
@@ -71,15 +53,6 @@ export function usePatches(uid) {
     await updateDoc(doc(db, "users", uid, "patches", patchId), { seen: true });
   }
 
-  async function removePatch(uid, patchId) {
-    await deleteDoc(doc(db, "users", uid, "patches", patchId));
-    try {
-      await deleteObject(ref(storage, `patches/${uid}/${patchId}.jpg`));
-    } catch {
-      // File may not exist under this exact path — not worth failing over.
-    }
-  }
-
   // Denormalized onto the profile doc (rather than just referencing a patch
   // id) so anywhere that displays the callsign can show the featured patch
   // with a single read, no extra query needed.
@@ -89,5 +62,5 @@ export function usePatches(uid) {
     await updateDoc(doc(db, "publicProfiles", uid), { featuredPatch });
   }
 
-  return { patches, patchesLoading: loading, addPatch, grantPatch, markPatchSeen, removePatch, setFeaturedPatch };
+  return { patches, patchesLoading: loading, grantPatch, markPatchSeen, setFeaturedPatch };
 }
