@@ -16,6 +16,8 @@ import { useAllTeams, useTeam, useTeamActions } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
+import { useAchievementCatalog } from "./hooks/useAchievementCatalog";
+import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce } from "./hooks/useBookings";
 
@@ -3779,6 +3781,35 @@ export default function App() {
       }
     });
   }, [user, myBookings, myBookingsLoading, events, patches, patchesLoading, profile?.teamId]);
+
+  // The admin-defined achievement catalog — same self-healing grant idiom
+  // as above, just evaluated against a much broader rule set (referral
+  // counts, lifetime totals, distinct fields/states, weekend streaks,
+  // etc.) instead of a single event's attached reward. Shares the same
+  // grantingPatchRef so a patch never gets double-submitted regardless of
+  // which of the two effects found it first.
+  const { catalog: achievementCatalog, catalogLoading: achievementCatalogLoading } = useAchievementCatalog();
+  useEffect(() => {
+    if (!user || myBookingsLoading || patchesLoading || achievementCatalogLoading) return;
+    const ownedPatchNames = new Set(patches.map((p) => p.name));
+    evaluateAchievements({
+      catalog: achievementCatalog,
+      myBookings,
+      events,
+      fields,
+      profile,
+      US_STATES,
+    }).then((earned) => {
+      earned.forEach((patch) => {
+        if (ownedPatchNames.has(patch.name) || grantingPatchRef.current.has(patch.name)) return;
+        grantingPatchRef.current.add(patch.name);
+        grantPatch(user.uid, patch.name, patch.imageUrl)
+          .catch((err) => console.error("achievement grant failed:", err))
+          .finally(() => grantingPatchRef.current.delete(patch.name));
+      });
+    }).catch((err) => console.error("achievement evaluation failed:", err));
+  }, [user, myBookings, myBookingsLoading, events, fields, patches, patchesLoading, profile, achievementCatalog, achievementCatalogLoading]);
+
   const activeField =
     fields.find((f) => f.id === activeFieldId) ||
     (activeEvent ? fields.find((f) => f.id === activeEvent.fieldId) : null);
