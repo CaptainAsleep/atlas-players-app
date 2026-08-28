@@ -15,7 +15,8 @@
     "firebase": "^10.12.2",
     "leaflet": "^1.9.4",
     "react-leaflet": "^4.2.1",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "html5-qrcode": "^2.3.8"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
