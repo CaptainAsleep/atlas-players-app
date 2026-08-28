@@ -16,7 +16,7 @@ import { useAllTeams, useTeam, useTeamActions } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
-import { useAchievementCatalog } from "./hooks/useAchievementCatalog";
+import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions } from "./hooks/useBookings";
@@ -135,6 +135,11 @@ async function shareContent(title, text) {
   }
   return "unsupported";
 }
+// The one hardcoded gate for the Secret Agent QR button — replace with
+// the real UID from Firebase console → Authentication → Users before this
+// goes live. Everything else in the redemption flow is generic; this is
+// the only spot identity actually matters.
+const ATLAS_OWNER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 const NEARBY_RADIUS_MILES = 50;
 // Prices come from real scraped listings as free text ("$20", "$20/person",
 // "varies") — pull out the first number we can find. Events with no
@@ -2953,6 +2958,123 @@ function splitPatchDisplay(patch) {
   return { title: patch.name, subtitle: null };
 }
 
+// Only ever shown to the one hardcoded owner UID — see ATLAS_OWNER_UID in
+// App(). Currently generates a QR for "secret-agent" specifically since
+// that's the only owner-redeemable patch that exists; if more get added
+// later, this is the spot to turn into a picker rather than a hardcoded id.
+function SecretPatchScreen({ onBack }) {
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+
+  useEffect(() => {
+    QRCode.toDataURL(`atlas:redeem:secret-agent`, {
+      width: 260,
+      margin: 1,
+      color: { dark: T.ash, light: "#FFFFFF" },
+    }).then(setQrDataUrl);
+  }, []);
+
+  return (
+    <div className="h-full overflow-y-auto flex flex-col items-center justify-center px-6" style={flatBg}>
+      <button onClick={onBack} className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center">
+        <ChevronLeft size={20} color={T.ash} />
+      </button>
+      <div className="text-[13px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.06em" }}>Owner Only</div>
+      <div className="text-[20px] font-semibold mb-6" style={{ ...display, color: T.ash }}>Secret Agent Patch</div>
+      {qrDataUrl ? (
+        <img src={qrDataUrl} alt="Secret Agent redemption code" className="w-64 h-64" style={{ borderRadius: 8, border: `1px solid ${T.line}` }} />
+      ) : (
+        <div className="w-64 h-64 flex items-center justify-center" style={{ background: T.panel, borderRadius: 8, border: `1px solid ${T.line}` }}>
+          <span className="text-[13px]" style={{ ...body, color: T.ashFaint }}>Generating…</span>
+        </div>
+      )}
+      <p className="text-[13px] text-center mt-6 max-w-xs" style={{ ...body, color: T.ashDim }}>
+        Have a player scan this from their own Profile → Scan a Patch Code. Same idempotent grant as everything
+        else — showing it to the same person twice is harmless, it won't duplicate.
+      </p>
+    </div>
+  );
+}
+
+// Available to any signed-in player — reads "atlas:redeem:{patchId}" from
+// any owner-issued QR (like Secret Agent's) and grants that catalog entry.
+// Not scoped to a specific patch; whatever the code points to is what gets
+// granted, so this scanner doesn't need updating if more redeemable
+// patches get added later.
+function RedeemScannerScreen({ onBack, user, grantPatch }) {
+  const containerRef = useRef(null);
+  const scannerRef = useRef(null);
+  const [status, setStatus] = useState(null);
+  const busyRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("html5-qrcode").then(({ Html5Qrcode }) => {
+      if (cancelled || !containerRef.current) return;
+      const scanner = new Html5Qrcode(containerRef.current.id);
+      scannerRef.current = scanner;
+      scanner
+        .start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          async (decodedText) => {
+            if (busyRef.current) return;
+            busyRef.current = true;
+            const result = await redeemPatchCode(decodedText, user.uid, grantPatch);
+            if (result.ok) {
+              setStatus({ ok: true, message: `${result.name} unlocked!` });
+            } else if (result.reason === "already-owned") {
+              setStatus({ ok: false, message: `You already have ${result.name}` });
+            } else if (result.reason === "not-found") {
+              setStatus({ ok: false, message: "That code doesn't match a real patch" });
+            } else {
+              setStatus({ ok: false, message: "Not a valid Atlas redemption code" });
+            }
+            setTimeout(() => {
+              setStatus(null);
+              busyRef.current = false;
+            }, 2200);
+          },
+          () => {}
+        )
+        .catch((err) => {
+          console.error("scanner start failed:", err);
+          setStatus({ ok: false, message: "Couldn't access the camera — check permissions and try again." });
+        });
+    });
+    return () => {
+      cancelled = true;
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {}).finally(() => scannerRef.current?.clear());
+      }
+    };
+  }, [user.uid]);
+
+  return (
+    <div className="h-full flex flex-col" style={{ background: "#000" }}>
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ background: T.panel, borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[16px] font-semibold mr-9" style={{ ...display, color: T.ash }}>Scan a Patch Code</h1>
+      </div>
+
+      <div id="atlas-redeem-reader" ref={containerRef} className="flex-1 min-h-0" />
+
+      <div className="px-6 py-4" style={{ background: T.panel, borderTop: `1px solid ${T.line}` }}>
+        {status ? (
+          <div className="py-3 text-center font-semibold text-[14px]" style={{ ...display, color: status.ok ? T.good : T.alert }}>
+            {status.message}
+          </div>
+        ) : (
+          <div className="py-3 text-center text-[13px]" style={{ ...body, color: T.ashFaint }}>
+            Point the camera at a patch redemption code
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeaturedPatch }) {
   const featuredImageUrl = profile?.featuredPatch?.imageUrl;
   const [viewerIndex, setViewerIndex] = useState(null);
@@ -3292,7 +3414,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches }) {
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -3483,6 +3605,16 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Patches</span>
             <ChevronRight size={15} color={T.ashFaint} />
           </button>
+          <button onClick={onOpenScanRedeem} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Scan a Patch Code</span>
+            <ChevronRight size={15} color={T.ashFaint} />
+          </button>
+          {user?.uid === ATLAS_OWNER_UID && (
+            <button onClick={onOpenSecretPatchQR} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
+              <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Secret Agent QR</span>
+              <ChevronRight size={15} color={T.ashFaint} />
+            </button>
+          )}
         </div>
 
         <button
@@ -3969,6 +4101,8 @@ export default function App() {
   };
   const openAccount = () => push("account");
   const openPatches = () => push("patches");
+  const openSecretPatchQR = () => push("secretPatchQR");
+  const openScanRedeem = () => push("scanRedeem");
   const openTeam = (teamId) => {
     setActiveTeamId(teamId);
     push("team");
@@ -4145,6 +4279,8 @@ export default function App() {
         onNavigate={goTab}
         onOpenAccount={openAccount}
         onOpenPatches={openPatches}
+        onOpenSecretPatchQR={openSecretPatchQR}
+        onOpenScanRedeem={openScanRedeem}
         onLogout={handleLogout}
         changePassword={changePassword}
         uploadAvatar={uploadAvatar}
@@ -4176,6 +4312,10 @@ export default function App() {
         setFeaturedPatch={setFeaturedPatch}
       />
     );
+  } else if (screen === "secretPatchQR") {
+    content = <SecretPatchScreen onBack={pop} />;
+  } else if (screen === "scanRedeem") {
+    content = <RedeemScannerScreen onBack={pop} user={user} grantPatch={grantPatch} />;
   }
 
   return (
