@@ -19,7 +19,7 @@ import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./leg
 import { useAchievementCatalog } from "./hooks/useAchievementCatalog";
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
-import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce } from "./hooks/useBookings";
+import { useMyBooking, useEventBookings, useMyBookings, useBookingActions } from "./hooks/useBookings";
 
 /* ---------- design tokens ---------- */
 const FONTS = `
@@ -2816,6 +2816,21 @@ function ProfileRow({ label, value, static: isStatic, href }) {
   return <div className="w-full flex items-center justify-between py-3.5">{content}</div>;
 }
 
+// A patch's achievement text can come from two different places: the
+// achievement catalog stores name/details as separate fields, while an
+// owner's check-in patch has the whole thing baked into one "Name: What
+// earns it" string (matching the format they were guided to type). This
+// normalizes both into the same {title, subtitle} shape for display,
+// without needing to touch how either is actually stored.
+function splitPatchDisplay(patch) {
+  if (patch.details) return { title: patch.name, subtitle: patch.details };
+  const colonIndex = patch.name.indexOf(":");
+  if (colonIndex > -1) {
+    return { title: patch.name.slice(0, colonIndex).trim(), subtitle: patch.name.slice(colonIndex + 1).trim() };
+  }
+  return { title: patch.name, subtitle: null };
+}
+
 function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeaturedPatch }) {
   const featuredImageUrl = profile?.featuredPatch?.imageUrl;
   const [viewerIndex, setViewerIndex] = useState(null);
@@ -2849,6 +2864,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
           <div className="grid grid-cols-2 gap-3 mb-4">
             {patches.map((patch, i) => {
               const isFeatured = featuredImageUrl === patch.imageUrl;
+              const { title, subtitle } = splitPatchDisplay(patch);
               return (
                 <button
                   key={patch.id}
@@ -2869,7 +2885,8 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
                     <Maximize2 size={12} color={T.ashDim} />
                   </button>
                   <img src={patch.imageUrl} alt={patch.name} className="w-16 h-16 mb-2 mt-2" style={{ objectFit: "contain" }} />
-                  <div className="text-[12px] font-medium" style={{ ...body, color: T.ash }}>{patch.name}</div>
+                  <div className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>{title}</div>
+                  {subtitle && <div className="text-[10px] mt-0.5 leading-snug" style={{ ...body, color: T.ashFaint }}>{subtitle}</div>}
                 </button>
               );
             })}
@@ -2913,9 +2930,14 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: "78%", maxHeight: "55vh", objectFit: "contain" }}
           />
-          <div className="text-[17px] font-semibold mt-4" style={{ ...display, color: "#FFFFFF" }}>
-            {patches[viewerIndex].name}
+          <div className="text-[17px] font-semibold mt-4 text-center px-6" style={{ ...display, color: "#FFFFFF" }}>
+            {splitPatchDisplay(patches[viewerIndex]).title}
           </div>
+          {splitPatchDisplay(patches[viewerIndex]).subtitle && (
+            <div className="text-[13px] mt-1 text-center px-8" style={{ ...body, color: "rgba(255,255,255,0.75)" }}>
+              {splitPatchDisplay(patches[viewerIndex]).subtitle}
+            </div>
+          )}
           {patches.length > 1 && (
             <div className="text-[12px] mt-1" style={{ ...mono, color: "rgba(255,255,255,0.6)" }}>
               {viewerIndex + 1} / {patches.length}
@@ -3632,7 +3654,11 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
       </div>
 
       <div className="text-[13px] font-bold mb-2" style={{ ...mono, color: "#F2C94C", letterSpacing: "0.14em" }}>✦ PATCH UNLOCKED ✦</div>
-      <div className="text-[24px] font-bold text-center mb-9 px-2" style={{ ...display, color: "#FFFFFF", lineHeight: 1.3 }}>{current.name}</div>
+      <div className="text-[24px] font-bold text-center px-2" style={{ ...display, color: "#FFFFFF", lineHeight: 1.3 }}>{splitPatchDisplay(current).title}</div>
+      {splitPatchDisplay(current).subtitle && (
+        <div className="text-[14px] text-center mb-9 px-6 mt-2" style={{ ...body, color: "rgba(255,255,255,0.75)" }}>{splitPatchDisplay(current).subtitle}</div>
+      )}
+      {!splitPatchDisplay(current).subtitle && <div className="mb-9" />}
 
       <button
         onClick={handleNext}
@@ -3734,16 +3760,11 @@ export default function App() {
   // idiom used for the public-profile backfill: the grant just happens
   // quietly the next time this player's own data loads.
   //
-  // Also handles team-threshold rewards ("5 teammates check in, all 5 get
-  // a patch"). There's no single moment where one player's check-in can
-  // push a patch into four other players' own collections — so instead,
-  // every player independently re-checks this for themselves each time
-  // their data loads. That naturally produces the right behavior without
-  // any cross-player write: whoever's check-in happens to cross the
-  // threshold gets it right away since they're still in-app; anyone who
-  // checked in earlier gets it the next time they open the app, since
-  // that's when their own check re-runs and finds the threshold already
-  // met.
+  // The same "no single moment can push a patch into someone else's
+  // collection" principle also applies to the "Squad Catalyst" achievement
+  // (5+ registered teammates checking into the same event) — see the
+  // achievement-catalog effect below, which uses the identical self-check
+  // pattern for exactly that reason.
   const grantingPatchRef = useRef(new Set());
   useEffect(() => {
     if (!user || myBookingsLoading || patchesLoading) return;
@@ -3769,18 +3790,8 @@ export default function App() {
       if (event.checkInPatch?.imageUrl) {
         tryGrant(event.checkInPatch.name, event.checkInPatch.imageUrl);
       }
-
-      const teamReward = event.teamCheckInReward;
-      if (teamReward?.patch?.imageUrl && profile?.teamId && !ownedPatchNames.has(teamReward.patch.name)) {
-        getEventBookingsOnce(event.id).then((eventBookings) => {
-          const teammatesCheckedIn = eventBookings.filter((b) => b.checkedIn && b.teamId === profile.teamId).length;
-          if (teammatesCheckedIn >= teamReward.threshold) {
-            tryGrant(teamReward.patch.name, teamReward.patch.imageUrl);
-          }
-        });
-      }
     });
-  }, [user, myBookings, myBookingsLoading, events, patches, patchesLoading, profile?.teamId]);
+  }, [user, myBookings, myBookingsLoading, events, patches, patchesLoading]);
 
   // The admin-defined achievement catalog — same self-healing grant idiom
   // as above, just evaluated against a much broader rule set (referral
@@ -3803,7 +3814,7 @@ export default function App() {
       earned.forEach((patch) => {
         if (ownedPatchNames.has(patch.name) || grantingPatchRef.current.has(patch.name)) return;
         grantingPatchRef.current.add(patch.name);
-        grantPatch(user.uid, patch.name, patch.imageUrl)
+        grantPatch(user.uid, patch.name, patch.imageUrl, patch.details || null)
           .catch((err) => console.error("achievement grant failed:", err))
           .finally(() => grantingPatchRef.current.delete(patch.name));
       });
