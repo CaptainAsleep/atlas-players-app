@@ -10,7 +10,7 @@ import QRCode from "qrcode";
 import { useFields } from "./hooks/useFields";
 import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
-import { useFavorites } from "./hooks/useFavorites";
+import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useAllTeams, useTeam, useTeamActions } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
@@ -111,6 +111,29 @@ function fullAddress(field) {
     return field.address;
   }
   return `${field.address}, ${field.city}`;
+}
+// No deep-linking into a specific field/event exists yet — this shares a
+// real text summary plus the app's general link, not a broken link that
+// looks like it should open straight to the thing being shared but
+// doesn't. Native share sheet where available (uses navigator.share, real
+// support on iOS/Android); falls back to copying text to the clipboard on
+// desktop browsers that don't support it. Returns "shared", "copied", or
+// "cancelled" so the caller can decide whether to show a confirmation.
+async function shareContent(title, text) {
+  const shareUrl = "https://playerapp.airsoftatlas.app";
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url: shareUrl });
+      return "shared";
+    } catch (err) {
+      return "cancelled"; // person backed out of the share sheet — not an error
+    }
+  }
+  if (navigator.clipboard) {
+    await navigator.clipboard.writeText(`${text} ${shareUrl}`);
+    return "copied";
+  }
+  return "unsupported";
 }
 const NEARBY_RADIUS_MILES = 50;
 // Prices come from real scraped listings as free text ("$20", "$20/person",
@@ -1298,7 +1321,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 }
 
 function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
-  myBooking, myBookingLoading, whosGoing, whosGoingLoading, bookEvent, cancelBooking }) {
+  myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   const isPast = (ev.endDate || ev.date) < localDateStr();
 
@@ -1311,6 +1334,8 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingError, setBookingError] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [showAttendees, setShowAttendees] = useState(false);
+  const [shareState, setShareState] = useState(null); // "copied" briefly, to confirm the clipboard fallback
 
   const isFull = ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking;
   const waiverBlocking = ev.waiver && !signature;
@@ -1340,6 +1365,14 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       setBookingError("Couldn't cancel — try again.");
     } finally {
       setBookingBusy(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const result = await shareContent(ev.title, `${ev.title} at ${ev.fieldName} — ${formatDate(ev.date, ev.endDate)}.`);
+    if (result === "copied") {
+      setShareState("copied");
+      setTimeout(() => setShareState(null), 2000);
     }
   };
 
@@ -1382,9 +1415,14 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
-              <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
-            </button>
+            <div className="flex gap-2">
+              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+                <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
+              </button>
+              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+                {shareState === "copied" ? <Check size={17} color={T.good} /> : <Share2 size={16} color={T.ash} />}
+              </button>
+            </div>
           </div>
           <div className="absolute bottom-4 left-5 right-5">
             <div className="flex gap-2 mb-2">
@@ -1431,12 +1469,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             {ev.interestCount > 0 && (
               <>
                 <div className="h-px" style={{ background: T.line }} />
-                <div className="flex gap-3 items-center">
+                <button onClick={() => setShowAttendees(true)} className="flex gap-3 items-center text-left w-full">
                   <Heart size={17} color={T.ashDim} />
-                  <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>
+                  <div className="text-[14px] font-medium flex-1" style={{ ...body, color: T.ash }}>
                     {ev.interestCount} {ev.interestCount === 1 ? "player" : "players"} interested
                   </div>
-                </div>
+                  <ChevronRight size={16} color={T.ashFaint} />
+                </button>
               </>
             )}
           </div>
@@ -1450,7 +1489,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           />
 
           {!whosGoingLoading && whosGoing.length > 0 && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <button onClick={() => setShowAttendees(true)} className="p-4 text-left w-full" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
               <Eyebrow>Who's Going ({whosGoing.length})</Eyebrow>
               <div className="flex flex-wrap gap-2 mt-1">
                 {whosGoing.slice(0, 12).map((b) => (
@@ -1468,7 +1507,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                   </div>
                 )}
               </div>
-            </div>
+            </button>
           )}
 
           {ev.waiver && (
@@ -1657,6 +1696,76 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         </div>
       )}
 
+      {showAttendees && (
+        <div
+          onClick={() => setShowAttendees(false)}
+          className="fixed inset-0 flex items-end"
+          style={{ background: "rgba(0,0,0,0.5)", zIndex: 1500 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-h-[75vh] overflow-y-auto"
+            style={{ background: T.void, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
+          >
+            <div className="sticky top-0 px-5 pt-4 pb-3 flex items-center justify-between" style={{ background: T.void, borderBottom: `1px solid ${T.line}` }}>
+              <h2 className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Who's In</h2>
+              <button onClick={() => setShowAttendees(false)} className="w-8 h-8 flex items-center justify-center">
+                <X size={18} color={T.ashDim} />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              {whosGoingLoading || whosInterestedLoading ? (
+                <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
+              ) : (
+                <>
+                  {whosGoing.length > 0 && (
+                    <>
+                      <Eyebrow>Booked ({whosGoing.length})</Eyebrow>
+                      <div className="flex flex-col gap-2 mb-5 mt-1">
+                        {whosGoing.map((b) => (
+                          <div key={b.uid} className="flex items-center gap-3">
+                            {b.avatarUrl ? (
+                              <div className="w-9 h-9 flex-shrink-0" style={{ backgroundImage: `url("${b.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+                            ) : (
+                              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                                {b.callsign.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{b.callsign}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {whosInterested.length > 0 && (
+                    <>
+                      <Eyebrow>Interested ({whosInterested.length})</Eyebrow>
+                      <div className="flex flex-col gap-2 mt-1">
+                        {whosInterested.map((p) => (
+                          <div key={p.uid} className="flex items-center gap-3">
+                            {p.avatarUrl ? (
+                              <div className="w-9 h-9 flex-shrink-0" style={{ backgroundImage: `url("${p.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+                            ) : (
+                              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                                {p.callsign.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{p.callsign}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {whosGoing.length === 0 && whosInterested.length === 0 && (
+                    <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>No one yet.</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPatchViewer && ev.checkInPatch?.imageUrl && (
         <div
           onClick={() => setShowPatchViewer(false)}
@@ -1687,6 +1796,14 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
 function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite }) {
   const [showPastEvents, setShowPastEvents] = useState(false);
+  const [shareState, setShareState] = useState(null);
+  const handleShare = async () => {
+    const result = await shareContent(field?.name, `${field?.name}${field?.city ? ` — ${field.city}` : ""}.`);
+    if (result === "copied") {
+      setShareState("copied");
+      setTimeout(() => setShareState(null), 2000);
+    }
+  };
   if (!field) {
     return (
       <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
@@ -1713,9 +1830,14 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
-            <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
-              <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
-            </button>
+            <div className="flex gap-2">
+              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+                <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
+              </button>
+              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+                {shareState === "copied" ? <Check size={17} color={T.good} /> : <Share2 size={16} color={T.ash} />}
+              </button>
+            </div>
           </div>
           <div className="absolute bottom-4 left-5 right-5">
             <div className="flex gap-2 mb-2">
@@ -3326,10 +3448,10 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
             <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{pastEventsCount}</div>
             <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Past Events</div>
           </div>
-          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <button onClick={onOpenPatches} className="p-3 text-center transition-transform duration-100 active:scale-[0.97]" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
             <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{patches?.length || 0}</div>
             <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Patches</div>
-          </div>
+          </button>
         </div>
 
         <Eyebrow>Invite Friends</Eyebrow>
@@ -3705,7 +3827,7 @@ export default function App() {
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms } = useAuth();
-  const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid);
+  const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
   const { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
@@ -3748,6 +3870,7 @@ export default function App() {
   const { signature, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
   const { booking: myBooking, bookingLoading: myBookingLoading } = useMyBooking(user?.uid, activeEvent?.id);
   const { bookings: whosGoing, bookingsLoading: whosGoingLoading } = useEventBookings(activeEvent?.id);
+  const { interested: whosInterested, interestedLoading: whosInterestedLoading } = useEventInterested(activeEvent?.id);
   const { bookings: myBookings, bookingsLoading: myBookingsLoading } = useMyBookings(user?.uid);
   const { bookEvent, cancelBooking } = useBookingActions();
 
@@ -3919,6 +4042,8 @@ export default function App() {
         myBookingLoading={myBookingLoading}
         whosGoing={whosGoing}
         whosGoingLoading={whosGoingLoading}
+        whosInterested={whosInterested}
+        whosInterestedLoading={whosInterestedLoading}
         bookEvent={bookEvent}
         cancelBooking={cancelBooking}
       />
