@@ -4349,7 +4349,7 @@ export default function App() {
   return (
     <div className="w-full h-screen flex flex-col" style={{ background: T.void }}>
       <style>{FONTS}</style>
-      <div key={screen} className="flex-1 min-h-0 relative screen-transition">
+      <div key={`${screen}:${activeEventId}:${activeFieldId}:${activeTeamId}:${activePlayerId}`} className="flex-1 min-h-0 relative screen-transition">
         {content}
       </div>
       {user && profile && !installGate && (
