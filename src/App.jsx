@@ -139,7 +139,7 @@ async function shareContent(title, text) {
 // the real UID from Firebase console → Authentication → Users before this
 // goes live. Everything else in the redemption flow is generic; this is
 // the only spot identity actually matters.
-const ATLAS_OWNER_UID = "REPLACE_WITH_YOUR_UID";
+const ATLAS_OWNER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 const NEARBY_RADIUS_MILES = 50;
 // Prices come from real scraped listings as free text ("$20", "$20/person",
 // "varies") — pull out the first number we can find. Events with no
