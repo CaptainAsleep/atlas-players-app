@@ -139,7 +139,7 @@ async function shareContent(title, text) {
 // the real UID from Firebase console → Authentication → Users before this
 // goes live. Everything else in the redemption flow is generic; this is
 // the only spot identity actually matters.
-const ATLAS_OWNER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
+const ATLAS_OWNER_UID = "REPLACE_WITH_YOUR_UID";
 const NEARBY_RADIUS_MILES = 50;
 // Prices come from real scraped listings as free text ("$20", "$20/person",
 // "varies") — pull out the first number we can find. Events with no
@@ -1345,11 +1345,10 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const isFull = ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking;
   const waiverBlocking = ev.waiver && !signature;
 
-  const handleBook = async () => {
-    if (waiverBlocking) {
-      setShowWaiver(true);
-      return;
-    }
+  // Extracted so both a normal "Book This Event" tap AND a just-completed
+  // waiver signature can trigger the same real booking action — signing is
+  // now step one of booking, not a separate standalone thing on this page.
+  const proceedToBook = async () => {
     setBookingBusy(true);
     setBookingError("");
     try {
@@ -1359,6 +1358,14 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     } finally {
       setBookingBusy(false);
     }
+  };
+
+  const handleBook = () => {
+    if (waiverBlocking) {
+      setShowWaiver(true);
+      return;
+    }
+    proceedToBook();
   };
 
   const handleCancel = async () => {
@@ -1405,6 +1412,10 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         waiverVersion: ev.waiver.version,
       });
       setShowWaiver(false);
+      // Signing is step one of booking now, not a standalone action —
+      // proceed straight into the real booking the moment the signature
+      // saves, rather than making the player tap "Book" a second time.
+      await proceedToBook();
     } catch (err) {
       setSignError("Couldn't save your signature — try again.");
     } finally {
@@ -1517,89 +1528,14 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
           {ev.waiver && (
             signature ? (
-              <div className="p-4 flex items-center gap-3" style={{ background: "rgba(52,211,153,0.08)", border: `1px solid ${T.good}`, borderRadius: 6 }}>
-                <Check size={18} color={T.good} />
-                <div>
-                  <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>Waiver signed</div>
-                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Signed as {signature.signedName}</div>
-                </div>
+              <div className="p-3 flex items-center gap-2" style={{ background: "rgba(52,211,153,0.08)", border: `1px solid ${T.good}`, borderRadius: 6 }}>
+                <Check size={15} color={T.good} />
+                <div className="text-[12px] font-medium" style={{ ...body, color: T.ash }}>Waiver signed as {signature.signedName}</div>
               </div>
-            ) : isPast ? null : !showWaiver ? (
-              <button
-                onClick={() => setShowWaiver(true)}
-                className="p-4 flex items-center justify-between w-full transition-transform duration-100 active:scale-[0.98]"
-                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.alert}` }}
-              >
-                <div className="flex items-center gap-3">
-                  <FileSignature size={18} color={T.alert} />
-                  <div className="text-left">
-                    <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>Waiver required</div>
-                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Read and sign before this event</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {ev.waiver.isDemo !== false && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
-                  )}
-                  <ChevronRight size={16} color={T.ashFaint} />
-                </div>
-              </button>
-            ) : (
-              <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-                <div className="flex items-center justify-between mb-2">
-                  <Eyebrow>{field?.name || ev.fieldName} Waiver</Eyebrow>
-                  {ev.waiver.isDemo !== false && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
-                  )}
-                </div>
-                <div
-                  onScroll={handleWaiverScroll}
-                  className="text-[12px] leading-relaxed p-3 mb-3"
-                  style={{ ...body, color: T.ashDim, background: T.panelAlt, borderRadius: 4, maxHeight: 220, overflowY: "auto", whiteSpace: "pre-wrap" }}
-                >
-                  {ev.waiver.text}
-                </div>
-                {!scrolledToEnd && (
-                  <p className="text-[11px] mb-3" style={{ ...body, color: T.ashFaint }}>Scroll to the bottom to continue.</p>
-                )}
-                {scrolledToEnd && (
-                  <>
-                    <label className="flex items-start gap-2 mb-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
-                      <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
-                      I have read and agree to the terms above.
-                    </label>
-                    <div className="mb-3">
-                      <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Signing As</div>
-                      <div
-                        className="px-3 py-2.5 text-[14px] font-medium"
-                        style={{ ...display, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: legalName ? T.ash : T.alert }}
-                      >
-                        {legalName || "Add your name in My Account to sign"}
-                      </div>
-                      <p className="text-[10px] mt-1" style={{ ...body, color: T.ashFaint }}>
-                        Matches your account — this can't be changed here.
-                      </p>
-                    </div>
-                    {signError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{signError}</p>}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowWaiver(false)}
-                        className="flex-1 py-2.5 text-[12px] font-medium"
-                        style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSign}
-                        disabled={!agreed || !legalName.trim() || signing}
-                        className="flex-1 py-2.5 text-[12px] font-semibold"
-                        style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
-                      >
-                        {signing ? "Signing…" : "Sign Waiver"}
-                      </button>
-                    </div>
-                  </>
-                )}
+            ) : !isPast && (
+              <div className="p-3 flex items-center gap-2" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+                <FileSignature size={15} color={T.ashDim} />
+                <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>This event requires a signed waiver — you'll sign it when you book.</div>
               </div>
             )
           )}
@@ -1698,6 +1634,74 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       {bookingError && (
         <div className="absolute bottom-20 left-0 right-0 px-5">
           <p className="text-[12px] text-center py-2" style={{ ...body, color: T.alert, background: T.panel, borderRadius: 4, border: `1px solid ${T.alert}` }}>{bookingError}</p>
+        </div>
+      )}
+
+      {showWaiver && ev.waiver && (
+        <div
+          onClick={() => !signing && setShowWaiver(false)}
+          className="fixed inset-0 flex items-end"
+          style={{ background: "rgba(0,0,0,0.5)", zIndex: 1500 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-h-[85vh] overflow-y-auto"
+            style={{ background: T.void, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
+          >
+            <div className="sticky top-0 px-5 pt-4 pb-3 flex items-center justify-between" style={{ background: T.void, borderBottom: `1px solid ${T.line}` }}>
+              <div>
+                <h2 className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Sign to Book</h2>
+                <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{field?.name || ev.fieldName} Waiver</p>
+              </div>
+              <button onClick={() => !signing && setShowWaiver(false)} className="w-8 h-8 flex items-center justify-center">
+                <X size={18} color={T.ashDim} />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              {ev.waiver.isDemo !== false && (
+                <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 mb-3" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+              )}
+              <div
+                onScroll={handleWaiverScroll}
+                className="text-[12px] leading-relaxed p-3 mb-3"
+                style={{ ...body, color: T.ashDim, background: T.panelAlt, borderRadius: 4, maxHeight: 220, overflowY: "auto", whiteSpace: "pre-wrap" }}
+              >
+                {ev.waiver.text}
+              </div>
+              {!scrolledToEnd && (
+                <p className="text-[11px] mb-3" style={{ ...body, color: T.ashFaint }}>Scroll to the bottom to continue.</p>
+              )}
+              {scrolledToEnd && (
+                <>
+                  <label className="flex items-start gap-2 mb-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
+                    <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
+                    I have read and agree to the terms above.
+                  </label>
+                  <div className="mb-3">
+                    <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Signing As</div>
+                    <div
+                      className="px-3 py-2.5 text-[14px] font-medium"
+                      style={{ ...display, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: legalName ? T.ash : T.alert }}
+                    >
+                      {legalName || "Add your name in My Account to sign"}
+                    </div>
+                    <p className="text-[10px] mt-1" style={{ ...body, color: T.ashFaint }}>
+                      Matches your account — this can't be changed here.
+                    </p>
+                  </div>
+                  {signError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{signError}</p>}
+                  <button
+                    onClick={handleSign}
+                    disabled={!agreed || !legalName.trim() || signing}
+                    className="w-full py-3 text-[13px] font-semibold"
+                    style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
+                  >
+                    {signing ? "Signing & Booking…" : "Sign & Book"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -3842,6 +3846,38 @@ function LegalAgreementScreen({ onAccept }) {
   );
 }
 
+const LOADING_KEYFRAMES = `
+@keyframes loadingPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
+  40% { transform: scale(1); opacity: 1; }
+}
+`;
+
+// Shared across every "waiting on auth/profile to resolve" gate in the App
+// shell — same three spots that used to just say "Loading…" as plain text.
+function LoadingScreen() {
+  return (
+    <div className="h-full flex items-center justify-center" style={flatBg}>
+      <style>{LOADING_KEYFRAMES}</style>
+      <div className="flex gap-2">
+        {[0, 0.15, 0.3].map((delay) => (
+          <div
+            key={delay}
+            style={{
+              width: 9,
+              height: 9,
+              borderRadius: 999,
+              background: T.accent,
+              animation: "loadingPulse 1.4s ease-in-out infinite",
+              animationDelay: `${delay}s`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const PATCH_UNLOCK_KEYFRAMES = `
 @keyframes patchPop {
   0% { transform: scale(0.3); opacity: 0; }
@@ -4130,19 +4166,11 @@ export default function App() {
   } else if (installGate) {
     content = <InstallGateScreen platform={installGate} deferredPrompt={deferredInstallPrompt} />;
   } else if (authLoading) {
-    content = (
-      <div className="h-full flex items-center justify-center" style={flatBg}>
-        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
-      </div>
-    );
+    content = <LoadingScreen />;
   } else if (!user) {
     content = <LoginScreen signIn={signIn} signUp={signUp} referralCode={referralCode} />;
   } else if (!profile) {
-    content = (
-      <div className="h-full flex items-center justify-center" style={flatBg}>
-        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
-      </div>
-    );
+    content = <LoadingScreen />;
   } else if (profile.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
     content = <LegalAgreementScreen onAccept={() => acceptTerms(CURRENT_TERMS_VERSION)} />;
   } else if (screen === "home") {
