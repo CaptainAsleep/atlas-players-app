@@ -238,6 +238,7 @@ function Tag({ children, tone = "neutral" }) {
     accent: { border: "transparent", color: "#FFFFFF", bg: T.ash },
     good: { border: "transparent", color: "#FFFFFF", bg: T.good },
     live: { border: "transparent", color: "#fff", bg: T.alert },
+    alert: { border: "transparent", color: "#fff", bg: T.alert },
   };
   const s = map[tone];
   return (
@@ -884,6 +885,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     // that's already over never belongs on a discovery page. Multi-day
     // events stay visible through their endDate, not just their start.
     if ((ev.endDate || ev.date) < today) return false;
+    if (ev.canceled) return false; // canceled events stay real data (existing bookings/favorites still reference them), just not browsable as if they were still happening
     const cat = cats.find((c) => c.key === activeCat);
     if (cat?.type && ev.type !== cat.type) return false;
     if (activeTodayOnly && !isLiveToday(ev)) return false;
@@ -1455,6 +1457,12 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         </div>
 
         <div className="px-5 mt-4 flex flex-col gap-3">
+          {ev.canceled && (
+            <div className="p-4" style={{ background: "rgba(188,51,39,0.1)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
+              <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.alert }}>This event has been canceled</div>
+              <p className="text-[12px] leading-relaxed" style={{ ...body, color: T.ashDim }}>The field owner has canceled this event. If you had booked or were interested, no action is needed on your end.</p>
+            </div>
+          )}
           {statusLabel && field?.notes && (
             <div className="p-4" style={{ background: "rgba(240,85,74,0.1)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
               <div className="text-[12px] font-semibold mb-1" style={{ ...display, color: T.alert }}>{statusLabel}</div>
@@ -1597,7 +1605,11 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} booked</div>
           )}
         </div>
-        {isPast ? (
+        {ev.canceled ? (
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.alert, border: `1px solid ${T.alert}`, borderRadius: 4 }}>
+            Event Canceled
+          </span>
+        ) : isPast ? (
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
             Event Ended
           </span>
@@ -2102,7 +2114,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
               <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
               <div className="text-[11px] font-medium" style={{ ...mono, color: isPastEv ? T.ashFaint : T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
             </div>
-            {isPastEv ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
+            {ev.canceled ? <Tag tone="alert">CANCELED</Tag> : isPastEv ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
           </button>
         );
       })}
@@ -4117,12 +4129,12 @@ export default function App() {
     (activeEvent ? fields.find((f) => f.id === activeEvent.fieldId) : null);
   const activeFieldEvents = activeField
     ? events
-        .filter((e) => e.fieldId === activeField.id && (e.endDate || e.date) >= localDateStr())
+        .filter((e) => e.fieldId === activeField.id && !e.canceled && (e.endDate || e.date) >= localDateStr())
         .sort((a, b) => a.date.localeCompare(b.date))
     : [];
   const activeFieldPastEvents = activeField
     ? events
-        .filter((e) => e.fieldId === activeField.id && (e.endDate || e.date) < localDateStr())
+        .filter((e) => e.fieldId === activeField.id && !e.canceled && (e.endDate || e.date) < localDateStr())
         .sort((a, b) => b.date.localeCompare(a.date)) // most recent first
     : [];
 
