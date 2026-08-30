@@ -1076,9 +1076,9 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         </div>
       ) : (
         <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
-          <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No upcoming games saved</div>
+          <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No upcoming games booked</div>
           <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
-            Tap the heart on any event's page and it'll show up here as your next game.
+            Book a spot at an event and it'll show up here as your next game.
           </p>
         </div>
       )}
