@@ -3885,6 +3885,222 @@ function InstallGateScreen({ platform, deferredPrompt }) {
   );
 }
 
+const ONBOARDING_EVENT_TYPES = [
+  { key: "OUTDOOR", label: "Outdoor", icon: TreePine },
+  { key: "MILSIM", label: "MilSim", icon: ChevronsUp },
+  { key: "INDOOR", label: "Indoor", icon: Home },
+  { key: "TOURNAMENT", label: "Tournament", icon: Trophy },
+];
+
+const ONBOARDING_FREQUENCIES = ["This is my first time", "A few times a year", "Monthly", "Weekly"];
+
+// Shown once, right after a brand-new signup, gated on completedOnboarding
+// being explicitly false — see the note on that field in useAuth.js for
+// why an existing, already-established account can never accidentally
+// see this. Real name and callsign save immediately as each step is
+// confirmed, so nothing is lost if someone closes the app partway through;
+// only the final "finish" call needs to succeed for the gate to lift.
+function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvatar, completeOnboarding }) {
+  const STEPS = ["name", "callsign", "photo", "eventTypes", "frequency"];
+  const [step, setStep] = useState(0);
+  const [firstName, setFirstName] = useState(profile?.firstName || "");
+  const [lastName, setLastName] = useState(profile?.lastName || "");
+  const [callsign, setCallsign] = useState(profile?.callsign || "");
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl || null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const [eventTypes, setEventTypes] = useState([]);
+  const [frequency, setFrequency] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef(null);
+
+  const current = STEPS[step];
+
+  const toggleEventType = (key) => {
+    setEventTypes((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  };
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Please choose an image file.");
+      return;
+    }
+    setAvatarError("");
+    setAvatarUploading(true);
+    try {
+      const resized = await resizeImageFile(file);
+      const url = await uploadAvatar(resized);
+      setAvatarUrl(url);
+    } catch (err) {
+      console.error("onboarding avatar upload failed:", err);
+      setAvatarError("Upload failed — try again, or skip for now.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const canContinue =
+    current === "name" ? firstName.trim() && lastName.trim() :
+    current === "callsign" ? callsign.trim() :
+    true; // photo, event types, and frequency are all optional
+
+  const handleNext = async () => {
+    setError("");
+    if (current === "callsign") {
+      setSaving(true);
+      try {
+        await updateProfileFields({ callsign: callsign.trim(), firstName: firstName.trim(), lastName: lastName.trim(), phone: profile?.phone || "" });
+      } catch (err) {
+        console.error("onboarding name/callsign save failed:", err);
+        setError("Couldn't save — try again.");
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
+    if (step < STEPS.length - 1) {
+      setStep(step + 1);
+    } else {
+      handleFinish();
+    }
+  };
+
+  const handleFinish = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await completeOnboarding({ preferredEventTypes: eventTypes, playFrequency: frequency });
+    } catch (err) {
+      console.error("completeOnboarding failed:", err);
+      setError("Couldn't finish setup — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="h-screen flex flex-col" style={flatBg}>
+      <style>{FONTS}</style>
+      <div className="px-6 pt-8 pb-4">
+        <div className="flex gap-1 mb-5">
+          {STEPS.map((s, i) => (
+            <div key={s} className="flex-1" style={{ height: 3, borderRadius: 999, background: i <= step ? T.ash : T.line }} />
+          ))}
+        </div>
+
+        {current === "name" && (
+          <>
+            <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>What's your real name?</h1>
+            <p className="text-[12px] mb-5" style={{ ...body, color: T.ashDim }}>
+              Used for waiver signatures and bookings only — other players only ever see your callsign, never this.
+            </p>
+            <TextField label="First Name" value={firstName} onChange={setFirstName} />
+            <TextField label="Last Name" value={lastName} onChange={setLastName} />
+          </>
+        )}
+
+        {current === "callsign" && (
+          <>
+            <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Pick your callsign</h1>
+            <p className="text-[12px] mb-5" style={{ ...body, color: T.ashDim }}>
+              This is what other players see — on rosters, teams, and anywhere your name shows up in the app.
+            </p>
+            <TextField label="Callsign" value={callsign} onChange={setCallsign} />
+          </>
+        )}
+
+        {current === "photo" && (
+          <>
+            <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Add a profile photo</h1>
+            <p className="text-[12px] mb-5" style={{ ...body, color: T.ashDim }}>Optional — you can always add one later from your profile.</p>
+            <div className="flex flex-col items-center py-4">
+              <button onClick={() => fileInputRef.current?.click()} className="relative mb-3">
+                {avatarUrl ? (
+                  <div className="w-24 h-24" style={{ backgroundImage: `url("${avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+                ) : (
+                  <div className="w-24 h-24 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 999, border: `1px solid ${T.line}` }}>
+                    <Camera size={26} color={T.ashFaint} />
+                  </div>
+                )}
+                {avatarUploading && (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.7)", borderRadius: 999 }}>
+                    <span className="text-[10px]" style={{ ...body, color: T.ashDim }}>Uploading…</span>
+                  </div>
+                )}
+              </button>
+              <button onClick={() => fileInputRef.current?.click()} className="text-[12px] font-semibold" style={{ ...body, color: T.accent }}>
+                {avatarUrl ? "Change Photo" : "Choose Photo"}
+              </button>
+              {avatarError && <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{avatarError}</p>}
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+            </div>
+          </>
+        )}
+
+        {current === "eventTypes" && (
+          <>
+            <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>What do you usually play?</h1>
+            <p className="text-[12px] mb-5" style={{ ...body, color: T.ashDim }}>Pick as many as apply — optional, helps us understand what our players are into.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {ONBOARDING_EVENT_TYPES.map(({ key, label, icon: Icon }) => {
+                const selected = eventTypes.includes(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleEventType(key)}
+                    className="p-4 flex flex-col items-center gap-2 transition-transform duration-100 active:scale-[0.97]"
+                    style={{ background: selected ? T.ash : T.panel, borderRadius: 8, border: `1px solid ${selected ? T.ash : T.line}` }}
+                  >
+                    <Icon size={20} color={selected ? "#FFFFFF" : T.ashDim} />
+                    <span className="text-[12px] font-semibold" style={{ ...body, color: selected ? "#FFFFFF" : T.ash }}>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {current === "frequency" && (
+          <>
+            <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>How often do you play?</h1>
+            <p className="text-[12px] mb-5" style={{ ...body, color: T.ashDim }}>Optional — just helps us get a sense of our community.</p>
+            <div className="flex flex-col gap-2">
+              {ONBOARDING_FREQUENCIES.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFrequency(f)}
+                  className="p-3.5 text-left text-[13px] font-medium transition-transform duration-100 active:scale-[0.98]"
+                  style={{ ...body, background: frequency === f ? T.ash : T.panel, color: frequency === f ? "#FFFFFF" : T.ash, borderRadius: 6, border: `1px solid ${frequency === f ? T.ash : T.line}` }}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="flex-1" />
+
+      <div className="px-6 pb-8">
+        {error && <p className="text-[12px] mb-2 text-center" style={{ ...body, color: T.alert }}>{error}</p>}
+        <button
+          onClick={handleNext}
+          disabled={!canContinue || saving}
+          className="w-full py-3.5 font-semibold text-[14px]"
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !canContinue || saving ? 0.5 : 1 }}
+        >
+          {saving ? "Saving…" : step < STEPS.length - 1 ? "Continue" : "Finish"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LegalAgreementScreen({ onAccept }) {
   const [tab, setTab] = useState("terms");
   const [checked, setChecked] = useState(false);
@@ -4093,7 +4309,7 @@ export default function App() {
 
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
@@ -4272,6 +4488,16 @@ export default function App() {
     content = <LoadingScreen />;
   } else if (profile.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
     content = <LegalAgreementScreen onAccept={() => acceptTerms(CURRENT_TERMS_VERSION)} />;
+  } else if (profile.completedOnboarding === false) {
+    content = (
+      <OnboardingWizardScreen
+        profile={profile}
+        user={user}
+        updateProfileFields={updateProfileFields}
+        uploadAvatar={uploadAvatar}
+        completeOnboarding={completeOnboarding}
+      />
+    );
   } else if (screen === "home") {
     content = (
       <HomeScreen
