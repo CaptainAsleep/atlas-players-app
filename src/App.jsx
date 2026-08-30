@@ -704,7 +704,7 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
   );
 }
 
-function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user }) {
+function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings }) {
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("Featured");
   const [viewMode, setViewMode] = useState("list");
@@ -791,17 +791,27 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   const today = localDateStr();
   const isLiveToday = (ev) => ev.date <= today && (ev.endDate || ev.date) >= today;
 
-  // The player's real next game: their soonest favorited event that hasn't
-  // ended yet. There's no booking/RSVP system yet — favorites are the only
-  // honest "games I'm going to" signal that actually exists right now.
-  const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
+  // The player's real next game — their soonest real booking that hasn't
+  // ended yet. Booking exists now, so this uses that as the actual "I'm
+  // going" signal instead of favorites — a merely-favorited event was
+  // never actually booked, and the check-in scanner would correctly
+  // reject a QR code generated for one, since there's no real booking to
+  // check in against.
+  const myEventBookingIds = myBookings.map((b) => b.eventId);
   const nextGame = events
-    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
+    .filter((e) => myEventBookingIds.includes(e.id) && !e.canceled && (e.endDate || e.date) >= today)
     .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
   const nextGameIsToday = nextGame ? isLiveToday(nextGame) : false;
 
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState(null);
+  // Live, not a one-time fetch — this is what makes instant confirmation
+  // possible at all. The player is actively looking at this exact screen
+  // at the moment they're scanned (they're holding the QR code up right
+  // now), so a real-time listener catches the change the instant it
+  // happens — no push notifications needed, no reload, nothing to poll.
+  const { booking: nextGameBooking } = useMyBooking(user?.uid, nextGame?.id);
+
   const handleCheckIn = async () => {
     if (!nextGame || !user) return;
     // Minimal payload by design — just enough for a future field-owner
@@ -1012,13 +1022,26 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 
           {nextGameIsToday ? (
             showCheckIn ? (
-              <div className="flex flex-col items-center pt-1">
-                {qrDataUrl && <img src={qrDataUrl} alt="Check-in QR code" className="mb-2" style={{ width: 160, height: 160, borderRadius: 4 }} />}
-                <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Show this to field staff to check in.</p>
-                <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
-                  Hide
-                </button>
-              </div>
+              nextGameBooking?.checkedIn ? (
+                <div className="flex flex-col items-center pt-1 pb-1">
+                  <div className="w-14 h-14 flex items-center justify-center mb-2" style={{ background: T.good, borderRadius: 999 }}>
+                    <Check size={26} color="#FFFFFF" strokeWidth={3} />
+                  </div>
+                  <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>You're checked in!</div>
+                  <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Have a great game.</p>
+                  <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center pt-1">
+                  {qrDataUrl && <img src={qrDataUrl} alt="Check-in QR code" className="mb-2" style={{ width: 160, height: 160, borderRadius: 4 }} />}
+                  <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Show this to field staff to check in.</p>
+                  <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
+                    Hide
+                  </button>
+                </div>
+              )
             ) : (
               <div className="flex items-center justify-between">
                 <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Ready when you are</span>
@@ -2087,7 +2110,13 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
   // cross-referenced against the live events list so capacity/details stay
   // current. Filters out any booking whose event no longer exists.
   const booked = myBookings
-    .map((b) => events.find((e) => e.id === b.eventId))
+    .map((b) => {
+      const ev = events.find((e) => e.id === b.eventId);
+      // Carries the booking's own checkedIn flag onto the event object —
+      // it lives on the booking, not the event, but this list is the one
+      // place a player would want to see it reflected.
+      return ev ? { ...ev, checkedIn: b.checkedIn } : null;
+    })
     .filter(Boolean)
     .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -2114,7 +2143,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
               <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
               <div className="text-[11px] font-medium" style={{ ...mono, color: isPastEv ? T.ashFaint : T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
             </div>
-            {ev.canceled ? <Tag tone="alert">CANCELED</Tag> : isPastEv ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
+            {ev.canceled ? <Tag tone="alert">CANCELED</Tag> : ev.checkedIn ? <Tag tone="good">CHECKED IN</Tag> : isPastEv ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
           </button>
         );
       })}
@@ -4194,6 +4223,7 @@ export default function App() {
         profile={profile}
         favorites={favorites}
         user={user}
+        myBookings={myBookings}
         onOpenEvent={openEvent}
         onOpenField={openField}
         onNavigate={goTab}
