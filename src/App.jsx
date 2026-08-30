@@ -829,8 +829,12 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     // email, or other personal info gets embedded in a scannable code.
     const payload = `atlas:checkin:${nextGame.id}:${user.uid}`;
     const dataUrl = await QRCode.toDataURL(payload, {
-      width: 240,
-      margin: 1,
+      width: 280,
+      // 4 modules is the actual QR code standard's minimum quiet zone
+      // (ISO/IEC 18004) — 1 was well under that, which genuinely does
+      // slow down real-world scanning, since the scanning algorithm needs
+      // that clear border to isolate the code from its surroundings.
+      margin: 4,
       color: { dark: T.ash, light: "#FFFFFF" }, // standard dark-on-white — most reliably scannable, and correct for the light theme (this was inverted, a leftover from before the palette flip)
     });
     setQrDataUrl(dataUrl);
@@ -3053,8 +3057,8 @@ function SecretPatchScreen({ onBack }) {
 
   useEffect(() => {
     QRCode.toDataURL(`atlas:redeem:secret-agent`, {
-      width: 260,
-      margin: 1,
+      width: 280,
+      margin: 4, // real quiet zone (ISO/IEC 18004 standard is 4 modules) — 1 was under-spec and slows real scanning
       color: { dark: T.ash, light: "#FFFFFF" },
     }).then(setQrDataUrl);
   }, []);
@@ -3101,7 +3105,20 @@ function RedeemScannerScreen({ onBack, user, grantPatch }) {
       scanner
         .start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          {
+            fps: 10,
+            // A function, not a fixed size — the library's own recommended
+            // pattern specifically because a fixed pixel box can get
+            // unevenly constrained on a different camera aspect ratio than
+            // expected (a tablet vs. a phone, for example). Computing it
+            // from the real viewfinder size at runtime guarantees a true
+            // square everywhere, on every device shape.
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+              const size = Math.floor(minEdge * 0.7);
+              return { width: size, height: size };
+            },
+          },
           async (decodedText) => {
             if (busyRef.current) return;
             busyRef.current = true;
@@ -3519,7 +3536,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
 
   useEffect(() => {
     if (!referralUrl) return;
-    QRCode.toDataURL(referralUrl, { width: 280, margin: 1, color: { dark: T.ash, light: "#FFFFFF" } }).then(setReferralQr);
+    QRCode.toDataURL(referralUrl, { width: 280, margin: 4, color: { dark: T.ash, light: "#FFFFFF" } }).then(setReferralQr);
   }, [referralUrl]);
 
   const handleCopyReferral = async () => {
