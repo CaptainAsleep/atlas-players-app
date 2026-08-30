@@ -3226,7 +3226,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); openViewer(i); }}
-                    className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center"
+                    className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center"
                     style={{ background: T.panelAlt, borderRadius: 999 }}
                   >
                     <Maximize2 size={12} color={T.ashDim} />
