@@ -1020,9 +1020,15 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           <div className="flex items-center justify-between mb-3">
             {nextGameIsToday ? <Tag tone="good">LIVE EVENT</Tag> : <Tag tone="live">UPCOMING EVENT</Tag>}
             {nextGameIsToday && (
-              <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.good }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Check-in available
-              </span>
+              nextGameBooking?.checkedIn ? (
+                <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.good }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Checked in
+                </span>
+              ) : (
+                <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.good }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Check-in available
+                </span>
+              )
             )}
           </div>
           <div className="font-semibold text-[17px]" style={{ ...display, color: T.ash }}>{nextGame.title}</div>
@@ -1031,27 +1037,29 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           </div>
 
           {nextGameIsToday ? (
-            showCheckIn ? (
-              nextGameBooking?.checkedIn ? (
-                <div className="flex flex-col items-center pt-1 pb-1">
-                  <div className="w-14 h-14 flex items-center justify-center mb-2" style={{ background: T.good, borderRadius: 999 }}>
-                    <Check size={26} color="#FFFFFF" strokeWidth={3} />
+            nextGameBooking?.checkedIn ? (
+              // Checked first, independent of showCheckIn — that's just
+              // local UI state for revealing the QR code, and resets to
+              // false on every refresh. Gating this behind it was the
+              // actual bug: after a refresh, a genuinely checked-in player
+              // would still see "Check In Now" again, since the real
+              // checked-in status was never even being looked at.
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 flex items-center justify-center" style={{ background: T.good, borderRadius: 999 }}>
+                    <Check size={14} color="#FFFFFF" strokeWidth={3} />
                   </div>
-                  <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>You're checked in!</div>
-                  <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Have a great game.</p>
-                  <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
-                    Close
-                  </button>
+                  <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>Check-In Complete</span>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center pt-1">
-                  {qrDataUrl && <img src={qrDataUrl} alt="Check-in QR code" className="mb-2" style={{ width: 160, height: 160, borderRadius: 4 }} />}
-                  <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Show this to field staff to check in.</p>
-                  <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
-                    Hide
-                  </button>
-                </div>
-              )
+              </div>
+            ) : showCheckIn ? (
+              <div className="flex flex-col items-center pt-1">
+                {qrDataUrl && <img src={qrDataUrl} alt="Check-in QR code" className="mb-2" style={{ width: 160, height: 160, borderRadius: 4 }} />}
+                <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Show this to field staff to check in.</p>
+                <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
+                  Hide
+                </button>
+              </div>
             ) : (
               <div className="flex items-center justify-between">
                 <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Ready when you are</span>
