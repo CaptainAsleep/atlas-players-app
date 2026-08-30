@@ -119,6 +119,16 @@ function fullAddress(field) {
 // support on iOS/Android); falls back to copying text to the clipboard on
 // desktop browsers that don't support it. Returns "shared", "copied", or
 // "cancelled" so the caller can decide whether to show a confirmation.
+//
+// On whether the shared link opens the installed PWA or a browser tab:
+// Android Chrome will capture it into the installed app, now that
+// handle_links is set in vite.config.js's manifest — but only if the PWA
+// was originally installed via Chrome specifically; Edge/Firefox installs
+// fall back to an in-app browser instead. On iOS, this is a real,
+// confirmed platform wall, not a missing setting — Safari opens every
+// link itself regardless of PWA install status, and there is currently no
+// workaround (confirmed on Apple's own developer forums, still true as of
+// iOS 18). No code change here or anywhere else can fix that half of it.
 async function shareContent(title, text) {
   const shareUrl = "https://playerapp.airsoftatlas.app";
   if (navigator.share) {
