@@ -1018,7 +1018,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       {nextGame ? (
         <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
           <div className="flex items-center justify-between mb-3">
-            <Tag tone="live">UPCOMING GAME</Tag>
+            {nextGameIsToday ? <Tag tone="good">LIVE EVENT</Tag> : <Tag tone="live">UPCOMING EVENT</Tag>}
             {nextGameIsToday && (
               <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.good }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Check-in available
