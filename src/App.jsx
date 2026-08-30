@@ -1953,15 +1953,6 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
 
           <FieldFacts field={field} />
 
-          {field.hours && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
-              <div className="flex justify-between text-[13px] gap-4">
-                <span style={{ ...body, color: T.ashFaint }}>Hours</span>
-                <span className="text-right" style={{ ...mono, color: T.ash }}>{field.hours}</span>
-              </div>
-            </div>
-          )}
-
           <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
             <Eyebrow>Scheduled Events</Eyebrow>
             {fieldEvents.length === 0 ? (
