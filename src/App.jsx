@@ -3093,7 +3093,7 @@ function RedeemScannerScreen({ onBack, user, grantPatch }) {
       scanner
         .start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: 250 },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
           async (decodedText) => {
             if (busyRef.current) return;
             busyRef.current = true;
