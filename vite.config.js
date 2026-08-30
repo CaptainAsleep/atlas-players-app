@@ -17,6 +17,14 @@ export default defineConfig({
         display: "standalone",
         start_url: "/",
         scope: "/",
+        // Tells Chromium browsers (Android Chrome, Edge) to capture any
+        // link within scope into the installed PWA instead of opening a
+        // regular browser tab — this is the actual mechanism a shared
+        // link needs to launch the installed app rather than the site.
+        // Has no effect on iOS Safari at all; see the note in App.jsx's
+        // shareContent function for why that's a real platform wall, not
+        // a missing setting.
+        handle_links: "preferred",
         icons: [
           { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
