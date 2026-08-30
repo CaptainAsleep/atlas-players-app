@@ -2393,7 +2393,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
 }
 
 function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, currentUserFriendUids, outgoingRequestUids,
-  sendRequest, cancelOrUnfriend, events }) {
+  sendRequest, cancelOrUnfriend, events, onOpenEvent }) {
   const { profile, profileLoading } = usePublicProfile(uid);
   const { favorites: theirFavorites } = useFavorites(uid);
   const { patches: theirPatches } = usePatches(uid);
@@ -2408,6 +2408,18 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
   const isFriend = currentUserFriendUids.has(uid);
   const isPending = outgoingRequestUids.has(uid);
   const isSelf = uid === currentUser?.uid;
+
+  // Only actually queries when they're a real, confirmed friend — the
+  // rules enforce this too, but gating the call itself avoids a doomed
+  // request and console noise for anyone who isn't. Friends-only, on
+  // purpose: a booking is a real commitment ("I will be at this specific
+  // place, on this date"), not a soft signal like a favorite, and that's
+  // real physical-location information worth keeping away from strangers.
+  const { bookings: theirBookings, bookingsLoading: theirBookingsLoading } = useMyBookings(isFriend || isSelf ? uid : null);
+  const booked = theirBookings
+    .map((b) => events.find((e) => e.id === b.eventId))
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   if (profileLoading) {
     return (
@@ -2509,23 +2521,38 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
           ))}
         </div>
 
-        {tab === "booked" && <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Booking isn't available in the app yet.</p>}
+        {tab === "booked" && (
+          !isFriend && !isSelf ? (
+            <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Only visible to friends.</p>
+          ) : theirBookingsLoading ? (
+            <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
+          ) : booked.length === 0 ? (
+            <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No booked games.</p>
+          ) : (
+            booked.map((ev) => (
+              <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+                <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
+                <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+              </button>
+            ))
+          )
+        )}
         {tab === "interested" && (
           interested.length === 0 ? <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Nothing upcoming.</p> :
           interested.map((ev) => (
-            <div key={ev.id} className="mb-2 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
               <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
-            </div>
+            </button>
           ))
         )}
         {tab === "past" && (
           past.length === 0 ? <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No past events.</p> :
           past.map((ev) => (
-            <div key={ev.id} className="mb-2 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.7 }}>
+            <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.7 }}>
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
               <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -4319,6 +4346,7 @@ export default function App() {
         sendRequest={sendRequest}
         cancelOrUnfriend={cancelOrUnfriend}
         events={events}
+        onOpenEvent={openEvent}
       />
     );
   } else if (screen === "team") {
