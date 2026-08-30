@@ -1389,6 +1389,11 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     try {
       await bookEvent(user.uid, profile, ev);
     } catch (err) {
+      // The friendly message stays generic on purpose, but logging the
+      // real error means it's actually visible in dev tools rather than
+      // silently swallowed — the difference between "permission-denied"
+      // and something else is the whole ballgame for debugging this.
+      console.error("bookEvent failed:", err.code || err.message || err);
       setBookingError("Couldn't book this event — try again.");
     } finally {
       setBookingBusy(false);
