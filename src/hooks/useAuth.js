@@ -72,6 +72,12 @@ export function useAuth() {
       email,
       callsign: finalCallsign,
       createdAt,
+      // Explicitly false, not just absent — this is what the onboarding
+      // wizard gates on. Only brand-new accounts from this point forward
+      // ever get this field at all, so an existing, already-established
+      // account (where this key simply doesn't exist) can never
+      // accidentally match the gate and get forced through it.
+      completedOnboarding: false,
       // Whoever's referral link/QR they came through, if any — captured
       // once at signup, not editable after.
       ...(referredBy ? { referredBy } : {}),
@@ -142,6 +148,14 @@ export function useAuth() {
     await updateDoc(doc(db, "users", auth.currentUser.uid), {
       acceptedTermsVersion: version,
       acceptedTermsAt: serverTimestamp(),
+    });
+  }
+
+  async function completeOnboarding(data) {
+    if (!auth.currentUser) return;
+    await updateDoc(doc(db, "users", auth.currentUser.uid), {
+      ...data,
+      completedOnboarding: true,
     });
   }
 
@@ -219,5 +233,6 @@ export function useAuth() {
     updateLanguage,
     deleteAccount,
     acceptTerms,
+    completeOnboarding,
   };
 }
