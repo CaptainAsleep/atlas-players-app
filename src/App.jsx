@@ -3998,8 +3998,24 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
             <p className="text-[12px] mb-5" style={{ ...body, color: T.ashDim }}>
               Used for waiver signatures and bookings only — other players only ever see your callsign, never this.
             </p>
-            <TextField label="First Name" value={firstName} onChange={setFirstName} />
-            <TextField label="Last Name" value={lastName} onChange={setLastName} />
+            <div className="mb-3">
+              <label className="text-[10px] font-semibold uppercase block mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>First Name</label>
+              <input
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none"
+                style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+              />
+            </div>
+            <div className="mb-3">
+              <label className="text-[10px] font-semibold uppercase block mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Last Name</label>
+              <input
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none"
+                style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+              />
+            </div>
           </>
         )}
 
@@ -4009,7 +4025,15 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
             <p className="text-[12px] mb-5" style={{ ...body, color: T.ashDim }}>
               This is what other players see — on rosters, teams, and anywhere your name shows up in the app.
             </p>
-            <TextField label="Callsign" value={callsign} onChange={setCallsign} />
+            <div className="mb-3">
+              <label className="text-[10px] font-semibold uppercase block mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Callsign</label>
+              <input
+                value={callsign}
+                onChange={(e) => setCallsign(e.target.value)}
+                className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none"
+                style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+              />
+            </div>
           </>
         )}
 
