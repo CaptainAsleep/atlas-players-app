@@ -1373,9 +1373,17 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 }
 
 function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
-  myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking }) {
+  myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   const isPast = (ev.endDate || ev.date) < localDateStr();
+  // Same formula as the actual charge, computed here purely for display —
+  // a player should see the real total before tapping, not just the
+  // field's own listed price. Recomputed from the real event price, not
+  // hardcoded, so this can never silently drift from what Stripe actually
+  // charges.
+  const entryPriceCents = Math.round(parseFloat(String(ev.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
+  const bookingFeeCents = entryPriceCents > 0 ? Math.min(Math.round(entryPriceCents * 0.10), 300) : 0;
+  const totalChargeCents = entryPriceCents + bookingFeeCents;
 
   const [showWaiver, setShowWaiver] = useState(false);
   const [showPatchViewer, setShowPatchViewer] = useState(false);
@@ -1398,16 +1406,30 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const proceedToBook = async () => {
     setBookingBusy(true);
     setBookingError("");
+    // A real, priced event goes through actual Stripe Checkout — the
+    // booking itself only gets created server-side once payment succeeds,
+    // not here. A free event (no real price set) keeps the original,
+    // instant flow, since there's no payment to wait on at all.
+    const isPaidEvent = entryPriceCents > 0;
     try {
-      await bookEvent(user.uid, profile, ev);
+      if (isPaidEvent) {
+        const url = await createBookingCheckout(ev.id);
+        window.location.href = url;
+        // Deliberately no setBookingBusy(false) here — the page is about
+        // to navigate away to Stripe, so leaving the button in its busy
+        // state avoids a flash of the normal button right before the
+        // redirect actually happens.
+      } else {
+        await bookEvent(user.uid, profile, ev);
+        setBookingBusy(false);
+      }
     } catch (err) {
       // The friendly message stays generic on purpose, but logging the
       // real error means it's actually visible in dev tools rather than
       // silently swallowed — the difference between "permission-denied"
       // and something else is the whole ballgame for debugging this.
-      console.error("bookEvent failed:", err.code || err.message || err);
-      setBookingError("Couldn't book this event — try again.");
-    } finally {
+      console.error("booking failed:", err.code || err.message || err);
+      setBookingError(isPaidEvent ? "Couldn't start checkout — try again." : "Couldn't book this event — try again.");
       setBookingBusy(false);
     }
   };
@@ -1689,7 +1711,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
             style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}
           >
-            {bookingBusy ? "…" : waiverBlocking ? "Sign Waiver to Book" : "Book This Event"}
+            {bookingBusy
+              ? "…"
+              : waiverBlocking
+              ? "Sign Waiver to Book"
+              : entryPriceCents > 0
+              ? `Book — $${(totalChargeCents / 100).toFixed(2)}`
+              : "Book This Event"}
           </button>
         )}
       </div>
@@ -4379,7 +4407,7 @@ export default function App() {
   const { bookings: whosGoing, bookingsLoading: whosGoingLoading } = useEventBookings(activeEvent?.id);
   const { interested: whosInterested, interestedLoading: whosInterestedLoading } = useEventInterested(activeEvent?.id);
   const { bookings: myBookings, bookingsLoading: myBookingsLoading } = useMyBookings(user?.uid);
-  const { bookEvent, cancelBooking } = useBookingActions();
+  const { bookEvent, cancelBooking, createBookingCheckout } = useBookingActions();
 
   // Closes the check-in patch loop: whenever a checked-in booking's event
   // has a reward patch attached, and this player doesn't already have a
@@ -4558,6 +4586,7 @@ export default function App() {
         whosInterestedLoading={whosInterestedLoading}
         bookEvent={bookEvent}
         cancelBooking={cancelBooking}
+        createBookingCheckout={createBookingCheckout}
       />
     ) : (
       <div className="h-full flex items-center justify-center" style={flatBg}>

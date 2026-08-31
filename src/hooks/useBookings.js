@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, writeBatch } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../lib/firebase";
 
 // Does the current player have a real booking for this event? A single
 // doc existence check, same idiom as favorites.
@@ -127,5 +128,16 @@ export function useBookingActions() {
     await batch.commit();
   }
 
-  return { bookEvent, cancelBooking };
+  // For a real, priced event — redirects to Stripe Checkout rather than
+  // writing a booking directly. The booking itself only gets created by
+  // the webhook, server-side, once payment actually succeeds — this
+  // function's whole job is just getting the player to a real checkout
+  // page, nothing more.
+  async function createBookingCheckout(eventId) {
+    const call = httpsCallable(functions, "createBookingCheckout");
+    const result = await call({ eventId });
+    return result.data.url;
+  }
+
+  return { bookEvent, cancelBooking, createBookingCheckout };
 }
