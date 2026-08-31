@@ -1443,6 +1443,9 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   };
 
   const handleCancel = async () => {
+    // Defensive, not just the UI gate above — this function should never
+    // silently cancel a paid booking, regardless of how it gets called.
+    if (myBooking?.paid) return;
     setBookingBusy(true);
     try {
       await cancelBooking(user.uid, ev.id);
@@ -1687,14 +1690,33 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           </span>
         ) : myBooking ? (
           confirmCancel ? (
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmCancel(false)} disabled={bookingBusy} className="px-3 py-3 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
-                Never mind
-              </button>
-              <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}>
-                {bookingBusy ? "…" : "Cancel Booking"}
-              </button>
-            </div>
+            myBooking.paid ? (
+              // Self-serve cancellation isn't safe to offer yet for a
+              // paid booking — the old cancel flow was just a Firestore
+              // delete with zero Stripe awareness, meaning a player could
+              // cancel and their money would just sit wherever it was
+              // paid, with no refund, no voucher, and no signal to either
+              // side that anything needed attention. Blocking this
+              // outright until the real voucher/refund design exists is
+              // safer than quietly letting that happen.
+              <div className="px-4 py-3 max-w-xs" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+                <p className="text-[12px] mb-2" style={{ ...body, color: T.ashDim }}>
+                  Canceling a paid booking isn't self-serve yet. Reach out on Discord and we'll take care of it directly.
+                </p>
+                <button onClick={() => setConfirmCancel(false)} className="text-[12px] font-medium" style={{ ...body, color: T.accent }}>
+                  Never mind
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmCancel(false)} disabled={bookingBusy} className="px-3 py-3 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+                  Never mind
+                </button>
+                <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}>
+                  {bookingBusy ? "…" : "Cancel Booking"}
+                </button>
+              </div>
+            )
           ) : (
             <button onClick={() => setConfirmCancel(true)} className="px-6 py-3 font-semibold text-[13px] flex items-center gap-2" style={{ ...display, background: T.good, color: "#FFFFFF", borderRadius: 4 }}>
               <Check size={15} /> Booked
