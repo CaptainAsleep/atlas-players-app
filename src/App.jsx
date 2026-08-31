@@ -1376,14 +1376,10 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout }) {
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   const isPast = (ev.endDate || ev.date) < localDateStr();
-  // Same formula as the actual charge, computed here purely for display —
-  // a player should see the real total before tapping, not just the
-  // field's own listed price. Recomputed from the real event price, not
-  // hardcoded, so this can never silently drift from what Stripe actually
-  // charges.
+  // Still needed to determine whether this is a paid event at all (for
+  // routing to the right booking flow) — the fee/total display itself
+  // was removed from the button, so only this piece survives.
   const entryPriceCents = Math.round(parseFloat(String(ev.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
-  const bookingFeeCents = entryPriceCents > 0 ? Math.min(Math.round(entryPriceCents * 0.10), 300) : 0;
-  const totalChargeCents = entryPriceCents + bookingFeeCents;
 
   const [showWaiver, setShowWaiver] = useState(false);
   const [showPatchViewer, setShowPatchViewer] = useState(false);
@@ -1733,13 +1729,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
             style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}
           >
-            {bookingBusy
-              ? "…"
-              : waiverBlocking
-              ? "Sign Waiver to Book"
-              : entryPriceCents > 0
-              ? `Book — $${(totalChargeCents / 100).toFixed(2)}`
-              : "Book This Event"}
+            {bookingBusy ? "…" : waiverBlocking ? "Sign Waiver to Book" : "Book This Event"}
           </button>
         )}
       </div>
