@@ -1389,6 +1389,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const [signError, setSignError] = useState("");
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
   const [shareState, setShareState] = useState(null); // "copied" briefly, to confirm the clipboard fallback
@@ -1410,11 +1411,17 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     try {
       if (isPaidEvent) {
         const url = await createBookingCheckout(ev.id);
-        window.location.href = url;
-        // Deliberately no setBookingBusy(false) here — the page is about
-        // to navigate away to Stripe, so leaving the button in its busy
-        // state avoids a flash of the normal button right before the
-        // redirect actually happens.
+        // Opens in a genuinely separate tab rather than navigating this
+        // app's own window away — a real, confirmed WebKit bug can
+        // corrupt this PWA's own rendering after returning from an
+        // external site through the same tab (found and fixed on the
+        // owner app's Payouts flow first). Opening separately also means
+        // this tab's own live listener on the booking never drops — the
+        // "Booked" state below will pick it up automatically the moment
+        // the webhook confirms payment, whichever tab that happens in.
+        window.open(url, "_blank");
+        setCheckoutOpenedInfo(true);
+        setBookingBusy(false);
       } else {
         await bookEvent(user.uid, profile, ev);
         setBookingBusy(false);
@@ -1736,6 +1743,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       {bookingError && (
         <div className="absolute bottom-20 left-0 right-0 px-5">
           <p className="text-[12px] text-center py-2" style={{ ...body, color: T.alert, background: T.panel, borderRadius: 4, border: `1px solid ${T.alert}` }}>{bookingError}</p>
+        </div>
+      )}
+      {checkoutOpenedInfo && !myBooking && (
+        <div className="absolute bottom-20 left-0 right-0 px-5">
+          <p className="text-[12px] text-center py-2" style={{ ...body, color: T.ash, background: T.panel, borderRadius: 4, border: `1px solid ${T.line}` }}>
+            Complete your payment in the new tab — this page will update on its own once it's confirmed.
+          </p>
         </div>
       )}
 
@@ -4342,6 +4356,32 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
 }
 
 export default function App() {
+  // The same proven fix from the owner app, ported over rather than
+  // rediscovered — a real WebKit bug can corrupt this PWA's own
+  // window.innerHeight/visualViewport.height after visiting an external
+  // site (Stripe) and returning, even when this app's own tab never
+  // navigates away itself (opening a sibling tab can still be enough to
+  // trigger a milder version of the same corruption). This remembers the
+  // largest height ever genuinely observed this session — from before any
+  // redirect could corrupt anything — since the bug only ever shrinks the
+  // reported value, never grows it.
+  useEffect(() => {
+    const setRealHeight = () => {
+      const current = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      const cached = parseInt(sessionStorage.getItem("atlas-known-good-height") || "0", 10);
+      const real = Math.max(current, cached);
+      sessionStorage.setItem("atlas-known-good-height", String(real));
+      document.documentElement.style.setProperty("--real-screen-height", `${real}px`);
+    };
+    setRealHeight();
+    window.visualViewport?.addEventListener("resize", setRealHeight);
+    window.addEventListener("resize", setRealHeight);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", setRealHeight);
+      window.removeEventListener("resize", setRealHeight);
+    };
+  }, []);
+
   // Only gates on phones — desktop/tablet browsers don't have the same
   // "installed app vs. browser tab" distinction that matters here, and a
   // hard gate there would just block legitimate desktop access for no
@@ -4739,7 +4779,7 @@ export default function App() {
   }
 
   return (
-    <div className="w-full h-screen flex flex-col" style={{ background: T.void }}>
+    <div className="w-full flex flex-col app-shell-height" style={{ background: T.void }}>
       <style>{FONTS}</style>
       <div key={`${screen}:${activeEventId}:${activeFieldId}:${activeTeamId}:${activePlayerId}`} className="flex-1 min-h-0 relative screen-transition">
         {content}
