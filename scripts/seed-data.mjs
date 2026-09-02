@@ -366,16 +366,6 @@ const fields = [
     dataSource: "sheet + darkfireairsoft.com",
   },
   {
-    id: "sektor7",
-    name: "Sektor7",
-    city: "Michigan",
-    indoorOutdoor: "outdoor",
-    status: "relocated",
-    relocatedTo: "darkfire-airsoft",
-    notes: "Per Darkfire Airsoft's site, Sektor7 lost their property in 2026 and now runs events out of Darkfire's Hillsdale field. No address or independent web presence found — was not in the original field sheet.",
-    dataSource: "darkfireairsoft.com",
-  },
-  {
     id: "mission-airsoft",
     name: "Mission Airsoft",
     city: "Mount Pleasant, MI",
