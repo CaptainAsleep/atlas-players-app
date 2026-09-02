@@ -293,6 +293,16 @@ export const createBookingCheckout = onCall(
     const bookingFeeCents = Math.min(Math.round(entryPriceCents * 0.10), 300);
     const totalCents = entryPriceCents + bookingFeeCents;
 
+    // A deterministic key, not a random one — the whole point is that a
+    // second call for the same player + event (impatient re-tap after the
+    // webhook hasn't confirmed yet, an app relaunch, a lost network blip)
+    // reuses this exact request instead of creating a second real Stripe
+    // Checkout Session. Stripe returns the original session (same URL,
+    // same underlying PaymentIntent) for any request repeated with this
+    // key within 24 hours, rather than charging the player again — this
+    // is what actually closes the "paid twice because the booking hadn't
+    // shown up yet" risk, not just the UI-side button-disabling, which a
+    // force-quit/relaunch would bypass entirely on its own.
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: request.auth.token?.email,
@@ -314,6 +324,8 @@ export const createBookingCheckout = onCall(
       metadata: { firebaseUid: uid, eventId, fieldId: eventData.fieldId, bookingFeeCents: String(bookingFeeCents) },
       success_url: "https://playerapp.airsoftatlas.app/?booking=success",
       cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
+    }, {
+      idempotencyKey: `booking-checkout:${eventId}:${uid}`,
     });
 
     return { url: session.url };

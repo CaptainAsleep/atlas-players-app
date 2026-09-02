@@ -1730,6 +1730,19 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
             Event Full
           </span>
+        ) : checkoutOpenedInfo ? (
+          // Real gap this closes: bookingBusy clears the instant the Stripe
+          // tab opens, so without this branch "Book This Event" goes right
+          // back to being a live, clickable button while myBooking is
+          // still null (webhook hasn't landed yet) — nothing stopped a
+          // second real charge from an impatient re-tap. The idempotency
+          // key on the backend is the actual hard guarantee against that;
+          // this is the UI half, so it doesn't even look tappable in the
+          // meantime. "Didn't finish, try again?" below is the escape
+          // hatch for someone who genuinely canceled on Stripe's page.
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+            Confirming Payment…
+          </span>
         ) : (
           <button
             onClick={handleBook}
@@ -1751,6 +1764,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           <p className="text-[12px] text-center py-2" style={{ ...body, color: T.ash, background: T.panel, borderRadius: 4, border: `1px solid ${T.line}` }}>
             Complete your payment in the new tab — this page will update on its own once it's confirmed.
           </p>
+          <button
+            onClick={() => setCheckoutOpenedInfo(false)}
+            className="w-full text-center text-[11px] font-medium mt-1.5"
+            style={{ ...body, color: T.accent }}
+          >
+            Didn't finish, or need to try again?
+          </button>
         </div>
       )}
 
