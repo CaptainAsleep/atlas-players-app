@@ -1,0 +1,91 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /avatars/{userId}/{fileName} {
+      // Avatars are publicly viewable (same as any social app profile photo)
+      // but only the owning user can upload/replace/delete their own.
+      // Split from create/update because request.resource (and therefore
+      // its size/contentType) doesn't exist on a delete request — folding
+      // delete into the same "write" rule as the size/type checks would
+      // silently deny every deletion, since those checks error out on null.
+      allow read: if true;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    match /patches/{userId}/{fileName} {
+      // Same rule shape as avatars — public read (a featured patch needs to
+      // be visible next to a callsign), owner-only write.
+      allow read: if true;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    match /teamPatches/{teamId}/{fileName} {
+      // Public read like everything else team-related, but only an officer
+      // of THAT specific team can upload/replace/delete its patch — checked
+      // by reading Firestore's own officer record for this team, so the
+      // permission model stays in one place rather than duplicated logic.
+      allow read: if true;
+      allow delete: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+      allow create, update: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer"
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    match /fieldGallery/{fieldId}/{fileName} {
+      // Same ownership-via-Firestore-lookup pattern as team patches — only
+      // this field's actual owner can add/remove gallery photos.
+      allow read: if true;
+      allow delete: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/fields/$(fieldId)).data.ownerId == request.auth.uid;
+      allow create, update: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/fields/$(fieldId)).data.ownerId == request.auth.uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    match /eventBanners/{fieldId}/{eventId}/{fileName} {
+      // Storing under the field's own id (not just the event's) means this
+      // rule only ever needs one lookup — checking that field's owner —
+      // rather than nesting a lookup inside a lookup to first discover
+      // which field an event belongs to.
+      allow read: if true;
+      allow delete: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/fields/$(fieldId)).data.ownerId == request.auth.uid;
+      allow create, update: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/fields/$(fieldId)).data.ownerId == request.auth.uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    match /eventPatches/{fieldId}/{eventId}/{fileName} {
+      // Same ownership pattern as event banners — the check-in reward
+      // patch an owner attaches to an event. Granting it to a player isn't
+      // wired up yet (needs the QR scanner), but the upload itself is real.
+      allow read: if true;
+      allow delete: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/fields/$(fieldId)).data.ownerId == request.auth.uid;
+      allow create, update: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/fields/$(fieldId)).data.ownerId == request.auth.uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    match /achievementPatches/{fileName} {
+      // The admin-only achievement catalog's artwork — public read, no
+      // client write at all. Uploaded only via the seed script, same
+      // pattern as the catalog documents themselves.
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

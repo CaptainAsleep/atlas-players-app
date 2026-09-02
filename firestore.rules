@@ -1,0 +1,329 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The admin-defined achievement catalog — public read (so the app can
+    // check and display them), but no client write at all. These are
+    // entered only via the seed script, same as fields and DTB — not
+    // something any owner or player can create, since they're app-wide
+    // achievements, not tied to any single field's owner.
+    match /achievementPatches/{patchId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /fields/{fieldId} {
+      allow read: if true;
+      allow create: if false; // fields are only added via the admin seed script
+      // Claiming has two paths. Both are written defensively with .get(key,
+      // default) rather than plain dot-access — none of our existing field
+      // docs have an ownerId/ownerEmailDomain key at all yet, and directly
+      // reading a genuinely-missing field errors out the whole rule (which
+      // Firestore treats as a silent deny) instead of safely reading as
+      // "unset." .get() sidesteps that entirely.
+      allow update: if request.auth != null && (
+        // Path 1: instant, verified claim — the field has a known owner
+        // domain on file (real fields with a real website), and the
+        // claiming account's own email matches it exactly. No manual
+        // review needed; the domain match IS the verification.
+        (resource.data.get('ownerId', null) == null
+          && resource.data.get('ownerEmailDomain', null) != null
+          && request.auth.token.get('email', '').split('@')[1] == resource.data.get('ownerEmailDomain', null)
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.claimed == true)
+        ||
+        // Path 2: pending review — no verifiable domain on file (Facebook-
+        // only fields, the Atlas Field test fixture), so a claim files a
+        // request instead of granting access outright. ownerId/claimed
+        // stay untouched here — those only get set via a manual approval
+        // in the Firestore console, same pattern used everywhere else
+        // without a real admin panel yet. Blocks a second pending request
+        // once one already exists, so requests can't pile up unresolved.
+        (resource.data.get('ownerId', null) == null
+          && resource.data.get('ownerEmailDomain', null) == null
+          && resource.data.get('claimPending', false) != true
+          && request.resource.data.get('ownerId', null) == null
+          && request.resource.data.get('claimed', false) != true
+          && request.resource.data.claimPending == true
+          && request.resource.data.claimRequestedBy == request.auth.uid)
+        ||
+        // Editing a field you already own.
+        resource.data.get('ownerId', null) == request.auth.uid
+      );
+      allow delete: if false;
+
+      // Banned players — private to the field's own owner. Deliberately
+      // NOT publicly readable (a ban list is sensitive information about
+      // specific players), unlike almost everything else here.
+      match /bannedPlayers/{uid} {
+        allow read, write: if request.auth != null && get(/databases/$(database)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid;
+      }
+    }
+    match /events/{eventId} {
+      allow read: if true;
+      // Creating a new event requires owning the field it belongs to —
+      // checked by reading that field's own ownerId.
+      allow create: if request.auth != null
+        && get(/databases/$(database)/documents/fields/$(request.resource.data.fieldId)).data.ownerId == request.auth.uid;
+      allow delete: if request.auth != null
+        && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid;
+      allow update: if request.auth != null && (
+        // Any signed-in player bumping the interest counter or the real
+        // booking counter — narrow, single-field changes only. A player
+        // action only ever touches one of these at a time; both stay
+        // listed since either alone is a legitimate, separate action.
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["interestCount", "bookedCount"])
+        ||
+        // The event's own field owner making a full edit.
+        get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+      );
+
+      // Real bookings — public read, same openness as team rosters, so a
+      // "who's going" list is basically free once this exists. Creating one
+      // requires being signed in as the exact uid being booked, and — this
+      // is the real enforcement, not just a UI nicety — if the event has a
+      // waiver, a matching signature must already exist first. A player
+      // can't route around this by calling Firestore directly; the rule
+      // itself checks for the signature. No update allowed — a booking is
+      // either there or it's been deleted (cancelled), nothing in between.
+      match /bookings/{uid} {
+        allow read: if true;
+        allow create: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && (
+            get(/databases/$(database)/documents/events/$(eventId)).data.get('waiver', null) == null
+            || exists(/databases/$(database)/documents/waiverSignatures/$(uid + '_' + eventId))
+          );
+        // Deletion blocked for a paid booking — this is the real
+        // backstop, not just the UI gate in the app. A client-side check
+        // alone could be bypassed (devtools, a future bug); this is the
+        // one place that can't be, since it's enforced regardless of what
+        // code actually calls it.
+        allow delete: if request.auth != null && request.auth.uid == uid
+          && resource.data.paid != true;
+        // Only the event's own field owner can mark a check-in, and only
+        // the checkedIn/checkedInAt fields — narrow, same pattern as the
+        // interestCount/bookedCount restriction on events itself. Reads
+        // fieldId directly off the booking doc (denormalized at booking
+        // time) rather than chaining through the event doc — a single
+        // lookup instead of two, consistent with how this schema always
+        // prefers denormalization over nested reads.
+        allow update: if request.auth != null
+          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt"]);
+      }
+
+      // The real, per-event "who's interested" list — same pattern as
+      // bookings, so both can be shown together in one segmented list
+      // (Booked, then Interested). Public read, self-only add/remove, no
+      // update — favoriting is just "does this doc exist," same idiom as
+      // the favorites collection itself.
+      match /interested/{uid} {
+        allow read: if true;
+        allow create: if request.auth != null && request.auth.uid == uid && request.resource.data.uid == uid;
+        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow update: if false;
+      }
+    }
+    // A field owner's own account — separate from the player users/{uid}
+    // collection entirely, even if the same person signs into both apps
+    // with the same email. Self-owned, same pattern as everything else.
+    match /owners/{ownerId} {
+      allow read: if request.auth != null && request.auth.uid == ownerId;
+      allow create, delete: if request.auth != null && request.auth.uid == ownerId;
+      // Subscription and billing fields are readable (so the owner app can
+      // show real status) but never writable by the owner's own client —
+      // only Cloud Functions, via the admin SDK, can set these, after
+      // actually verifying something with Stripe. Without this, the
+      // existing self-write rule would let anyone set their own account to
+      // "active" directly from browser devtools, no payment required.
+      allow update: if request.auth != null && request.auth.uid == ownerId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "subscriptionStatus", "subscriptionTier", "stripeCustomerId",
+          "stripeSubscriptionId", "currentPeriodEnd", "comped",
+          "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
+          "connectOnboardingComplete"
+        ]);
+    }
+    // A signed-in user can read and write ONLY their own profile document —
+    // never anyone else's, and never before they're authenticated. This is
+    // still where actual PII lives (email, phone, first/last name) — the
+    // publicProfiles collection below is the deliberately narrow, public-
+    // facing mirror used for viewing other players.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // A player's own mirror of their bookings — self-access covers
+      // create/delete (booking/canceling) via the parent rule above. This
+      // adds one narrow exception: the event's own field owner can also
+      // mark checkedIn/checkedInAt here, restricted to just those two
+      // fields. Necessary, not optional — the achievement engine and the
+      // player's own Schedule tab both read from this copy, not the
+      // event-side one the scanner naturally writes to, so without this
+      // a real check-in would silently never be visible here at all.
+      match /bookings/{eventId} {
+        // The player's own create — booking. This has to be explicit
+        // here, not inherited from the parent users/{userId} rule above:
+        // a match block on a parent document does not cascade down to
+        // its subcollections in Firestore, regardless of how broad the
+        // parent's own rule is.
+        allow create: if request.auth != null && request.auth.uid == userId;
+
+        // Deletion (canceling) blocked for a paid booking — same real
+        // backstop as the event-side mirror above. A client-side check
+        // alone could be bypassed; this is enforced regardless of what
+        // code actually calls it. Losing this delete rule entirely was a
+        // real regression once already — it got dropped when the
+        // update/read exceptions below were added, since only what those
+        // two needed was written, not what already existed. Worth being
+        // careful not to repeat that here.
+        allow delete: if request.auth != null && request.auth.uid == userId
+          && resource.data.paid != true;
+
+        allow update: if request.auth != null
+          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt"]);
+
+        // Real bookings are a real commitment ("I will physically be at
+        // this place, on this date") — a meaningfully stronger signal
+        // than a favorite, and public visibility of that carries a real
+        // physical-safety risk (anyone, not just people the player knows,
+        // could look up exactly where and when to find them). Friends-only
+        // read is the deliberate middle ground: the social-proof value
+        // ("yeah, they're locked in for Saturday") without exposing a
+        // specific person's future whereabouts to total strangers.
+        // Checks both possible orderings of the deterministic
+        // friendRequests id, since either person could have sent the
+        // original request.
+        allow read: if request.auth != null && (
+          request.auth.uid == userId
+          || (
+            exists(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId))
+            && get(/databases/$(database)/documents/friendRequests/$(request.auth.uid + '_' + userId)).data.status == "accepted"
+          )
+          || (
+            exists(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid))
+            && get(/databases/$(database)/documents/friendRequests/$(userId + '_' + request.auth.uid)).data.status == "accepted"
+          )
+        );
+      }
+
+      // Loosened to public read — favorited events/fields carry no PII,
+      // and being viewable is the whole point once other players can look
+      // at a profile (their Interested/Past events). Write stays owner-only.
+      match /favorites/{favoriteId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Same reasoning as favorites — patches are meant to be shown off,
+      // not private. Write stays owner-only.
+      match /patches/{patchId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // The public-facing mirror of a player's profile — deliberately narrow.
+    // Only ever contains callsign, avatarUrl, featuredPatch, teamId/Name,
+    // createdAt, and verified — never email, phone, or real name. Kept in
+    // sync by the same client functions that write the corresponding
+    // private fields on users/{uid}.
+    match /publicProfiles/{uid} {
+      allow read: if true;
+      allow create, delete: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && (
+        request.auth.uid == uid
+        ||
+        // Anyone signing up with this player's referral link can bump
+        // their referral count by exactly 1 — narrow, single-field,
+        // increment-only. This is the one deliberate exception to
+        // "only you can write your own profile," needed because
+        // referralCount has to be readable by achievement evaluation,
+        // and only the referrer's own profile is a safe place to keep it.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["referralCount"])
+          && request.resource.data.referralCount == resource.data.get('referralCount', 0) + 1)
+      );
+    }
+
+    // Friend requests. A top-level collection (not a subcollection under
+    // either user) because a friendship spans two accounts, and neither
+    // account's own rules should let it write into the other's data — this
+    // lets each side write only the field their own action actually
+    // controls. Doc id convention: "{fromUid}_{toUid}".
+    match /friendRequests/{requestId} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.fromUid
+        && request.resource.data.status == "pending";
+      // Only the recipient can accept — and only the status field changes.
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.toUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+        && request.resource.data.status == "accepted";
+      // Either side can remove it — the sender cancelling a pending
+      // request, the recipient declining one, or either side unfriending
+      // later (deleting an accepted request just ends the friendship).
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+    }
+
+    // Waiver signatures: a signed-in user can create and read only their
+    // OWN signature (never anyone else's), and can never edit or delete one
+    // once created — a signed waiver is a permanent record, not something
+    // that should be alterable after the fact. The document id itself
+    // (uid_eventId) enforces "one signature per event per player." A field
+    // owner can also read signatures tied to their own field's events —
+    // that's the whole point of the waiver existing, so they can actually
+    // see who's signed before letting them play.
+    match /waiverSignatures/{sigId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.uid
+        || get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+      );
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow update, delete: if false;
+    }
+
+    // Teams (clans). Public read — rosters, patches, and names are meant to
+    // be visible to everyone, not just members. Any signed-in user can
+    // create a team (they become its founding officer in the same batched
+    // write as the member doc below). Editing team info requires being an
+    // officer of THAT team, checked via a nested lookup into its own
+    // members subcollection.
+    match /teams/{teamId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+      allow delete: if false; // no team deletion in v1 — avoid an officer accidentally wiping a real clan's history
+
+      match /members/{memberUid} {
+        allow read: if true;
+        allow create: if request.auth != null && (
+          // Open joining — anyone signed in can join as a regular member,
+          // matching how real airsoft clans actually work (no gatekeeping).
+          (memberUid == request.auth.uid && request.resource.data.role == "member")
+          ||
+          // Founding officer — only the team's own creator, only for their
+          // own uid, only at the moment the team itself is created (checked
+          // via createdBy on the parent team doc).
+          (memberUid == request.auth.uid && request.resource.data.role == "officer"
+            && get(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid)
+          ||
+          // An existing officer adding/promoting someone.
+          (exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer")
+        );
+        allow update: if request.auth != null
+          && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+        allow delete: if request.auth != null && (
+          memberUid == request.auth.uid // leaving on your own
+          || (exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+              && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer") // an officer removing someone
+        );
+      }
+    }
+  }
+}

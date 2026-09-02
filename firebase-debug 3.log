@@ -1,0 +1,23 @@
+[debug] [2026-08-29T01:51:38.294Z] ----------------------------------------------------------------------
+[debug] [2026-08-29T01:51:38.296Z] Command:       /usr/local/bin/node /Users/michaelmarkivee/.npm/_npx/7750544ccf494d8b/node_modules/.bin/firebase deploy --only functions
+[debug] [2026-08-29T01:51:38.296Z] CLI Version:   15.28.2
+[debug] [2026-08-29T01:51:38.296Z] Platform:      darwin
+[debug] [2026-08-29T01:51:38.296Z] Node Version:  v24.19.0
+[debug] [2026-08-29T01:51:38.296Z] Detected Agent: unknown
+[debug] [2026-08-29T01:51:38.296Z] Time:          Fri Aug 28 2026 21:51:38 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-08-29T01:51:38.296Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-29T01:51:38.981Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-29T01:51:38.981Z] > authorizing via signed-in user (markivee@gmail.com)
+[debug] [2026-08-29T01:51:38.981Z] [iam] checking project atlas-players-app for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-08-29T01:51:38.990Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:51:38.990Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:51:38.990Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions [none]
+[debug] [2026-08-29T01:51:38.990Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions  x-goog-user-project=atlas-players-app
+[debug] [2026-08-29T01:51:38.990Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-08-29T01:51:39.151Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions 200
+[debug] [2026-08-29T01:51:39.151Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-08-29T01:51:39.152Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:51:39.152Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:51:39.152Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/atlas-players-app/serviceAccounts/atlas-players-app@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-08-29T01:51:39.152Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/atlas-players-app/serviceAccounts/atlas-players-app@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}

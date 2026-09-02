@@ -1,0 +1,152 @@
+[debug] [2026-08-29T01:56:02.898Z] ----------------------------------------------------------------------
+[debug] [2026-08-29T01:56:02.900Z] Command:       /usr/local/bin/node /Users/michaelmarkivee/.npm/_npx/7750544ccf494d8b/node_modules/.bin/firebase deploy --only functions
+[debug] [2026-08-29T01:56:02.900Z] CLI Version:   15.28.2
+[debug] [2026-08-29T01:56:02.900Z] Platform:      darwin
+[debug] [2026-08-29T01:56:02.900Z] Node Version:  v24.19.0
+[debug] [2026-08-29T01:56:02.900Z] Detected Agent: unknown
+[debug] [2026-08-29T01:56:02.900Z] Time:          Fri Aug 28 2026 21:56:02 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-08-29T01:56:02.900Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-29T01:56:03.644Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-29T01:56:03.645Z] > authorizing via signed-in user (markivee@gmail.com)
+[debug] [2026-08-29T01:56:03.645Z] [iam] checking project atlas-players-app for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-08-29T01:56:03.656Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:03.656Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:03.656Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions [none]
+[debug] [2026-08-29T01:56:03.657Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions  x-goog-user-project=atlas-players-app
+[debug] [2026-08-29T01:56:03.657Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-08-29T01:56:03.825Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions 200
+[debug] [2026-08-29T01:56:03.826Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-08-29T01:56:03.826Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:03.826Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:03.826Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/atlas-players-app/serviceAccounts/atlas-players-app@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-08-29T01:56:03.826Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/atlas-players-app/serviceAccounts/atlas-players-app@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2026-08-29T01:56:14.178Z] *** [apiv2] error from fetch(https://iam.googleapis.com/v1/projects/atlas-players-app/serviceAccounts/atlas-players-app@appspot.gserviceaccount.com:testIamPermissions, {"headers":{},"method":"POST","body":"{\"permissions\":[\"iam.serviceAccounts.actAs\"]}"}): ConnectTimeoutError: Connect Timeout Error (attempted addresses: 2001:4860:4844:400:::443, timeout: 10000ms)
+[debug] [2026-08-29T01:56:14.179Z] [functions] service account IAM check errored, deploy may fail: Failed to make request to https://iam.googleapis.com/v1/projects/atlas-players-app/serviceAccounts/atlas-players-app@appspot.gserviceaccount.com:testIamPermissions {"name":"FirebaseError","children":[],"exit":1,"message":"Failed to make request to https://iam.googleapis.com/v1/projects/atlas-players-app/serviceAccounts/atlas-players-app@appspot.gserviceaccount.com:testIamPermissions","original":{"name":"ConnectTimeoutError","code":"UND_ERR_CONNECT_TIMEOUT"},"status":500}
+[info] 
+[info] === Deploying to 'atlas-players-app'...
+[info] 
+[info] i  deploying functions 
+[debug] [2026-08-29T01:56:14.186Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:14.186Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:14.186Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app [none]
+[debug] [2026-08-29T01:56:14.336Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app 200
+[debug] [2026-08-29T01:56:14.337Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app {"projectNumber":"211739354235","projectId":"atlas-players-app","lifecycleState":"ACTIVE","name":"atlas-players-app","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-08-23T20:07:53.539Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2026-08-29T01:56:14.339Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:14.339Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:14.339Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/atlas-players-app/adminSdkConfig [none]
+[debug] [2026-08-29T01:56:15.749Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/atlas-players-app/adminSdkConfig 200
+[debug] [2026-08-29T01:56:15.749Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/atlas-players-app/adminSdkConfig {"projectId":"atlas-players-app","storageBucket":"atlas-players-app.firebasestorage.app"}
+[debug] [2026-08-29T01:56:15.750Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:15.750Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:15.750Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/atlas-players-app/configs [none]
+[debug] [2026-08-29T01:56:16.965Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/atlas-players-app/configs 200
+[debug] [2026-08-29T01:56:16.965Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/atlas-players-app/configs {}
+[debug] [2026-08-29T01:56:16.967Z] Validating nodejs source
+[debug] [2026-08-29T01:56:17.672Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Atlas Cloud Functions — Stripe subscriptions and webhooks",
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.1.0",
+    "firebase-functions": "^7.3.2",
+    "stripe": "^16.2.0"
+  },
+  "private": true
+}
+[debug] [2026-08-29T01:56:17.672Z] Building nodejs source
+[info] i  functions: Loading and analyzing source code for codebase default to determine what to deploy 
+[debug] [2026-08-29T01:56:17.672Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-08-29T01:56:17.686Z] Found firebase-functions binary at '/Users/michaelmarkivee/Desktop/Atlas/atlas-players-app/functions/node_modules/.bin/firebase-functions'
+[info] Serving at port 8703
+
+[debug] [2026-08-29T01:56:18.086Z] Got response from /__/functions.yaml {"endpoints":{"createSubscriptionCheckout":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","secretEnvironmentVariables":[{"key":"STRIPE_SECRET_KEY"}],"labels":{},"callableTrigger":{},"entryPoint":"createSubscriptionCheckout"},"stripeWebhook":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","secretEnvironmentVariables":[{"key":"STRIPE_SECRET_KEY"},{"key":"STRIPE_WEBHOOK_SECRET"}],"labels":{},"httpsTrigger":{"invoker":["public"]},"entryPoint":"stripeWebhook"}},"specVersion":"v1alpha1","requiredAPIs":[],"extensions":{},"params":[{"type":"secret","name":"STRIPE_SECRET_KEY"},{"type":"secret","name":"STRIPE_WEBHOOK_SECRET"}]}
+[debug] [2026-08-29T01:56:21.118Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:21.118Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:21.118Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/projects/atlas-players-app/locations/-/functions [none]
+[debug] [2026-08-29T01:56:21.658Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/projects/atlas-players-app/locations/-/functions 200
+[debug] [2026-08-29T01:56:21.659Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/projects/atlas-players-app/locations/-/functions {}
+[debug] [2026-08-29T01:56:21.659Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:21.659Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:21.660Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v2/projects/atlas-players-app/locations/-/functions filter=environment%3D%22GEN_2%22
+[debug] [2026-08-29T01:56:22.064Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v2/projects/atlas-players-app/locations/-/functions 200
+[debug] [2026-08-29T01:56:22.064Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v2/projects/atlas-players-app/locations/-/functions {"functions":[{"name":"projects/atlas-players-app/locations/us-central1/functions/helloWorld","buildConfig":{"build":"projects/211739354235/locations/us-central1/builds/6b42ec77-6184-4a68-8d3a-1b96753a4f83","runtime":"nodejs22","entryPoint":"helloWorld","source":{"storageSource":{"bucket":"gcf-v2-sources-211739354235-us-central1","object":"helloWorld/function-source.zip","generation":"1787968026319158"}},"environmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRepository":"projects/atlas-players-app/locations/us-central1/repositories/gcf-artifacts","sourceProvenance":{"resolvedStorageSource":{"bucket":"gcf-v2-sources-211739354235-us-central1","object":"helloWorld/function-source.zip","generation":"1787968026319158"}},"dockerRegistry":"ARTIFACT_REGISTRY","serviceAccount":"projects/atlas-players-app/serviceAccounts/211739354235-compute@developer.gserviceaccount.com","automaticUpdatePolicy":{}},"serviceConfig":{"service":"projects/atlas-players-app/locations/us-central1/services/helloworld","timeoutSeconds":60,"environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"atlas-players-app\",\"storageBucket\":\"atlas-players-app.firebasestorage.app\"}","GCLOUD_PROJECT":"atlas-players-app","EVENTARC_CLOUD_EVENT_SOURCE":"projects/atlas-players-app/locations/us-central1/services/helloWorld","FUNCTION_REGION":"us-central1","FUNCTION_TARGET":"helloWorld","LOG_EXECUTION_ID":"true"},"maxInstanceCount":20,"ingressSettings":"ALLOW_ALL","uri":"https://helloworld-nzjgjz2gza-uc.a.run.app","serviceAccountEmail":"211739354235-compute@developer.gserviceaccount.com","availableMemory":"256Mi","allTrafficOnLatestRevision":true,"revision":"helloworld-00002-jey","maxInstanceRequestConcurrency":80,"availableCpu":"1"},"state":"ACTIVE","updateTime":"2026-08-29T01:48:21.819666454Z","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"5561b02cbc53c1c401e79da4a028f27f06d51bca"},"environment":"GEN_2","url":"https://us-central1-atlas-players-app.cloudfunctions.net/helloWorld","createTime":"2026-08-29T01:40:10.247103052Z","satisfiesPzi":true}]}
+[info] i  extensions: ensuring required API firebaseextensions.googleapis.com is enabled... 
+[debug] [2026-08-29T01:56:22.067Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-29T01:56:22.067Z] > authorizing via signed-in user (markivee@gmail.com)
+[debug] [2026-08-29T01:56:22.067Z] [iam] checking project atlas-players-app for permissions ["firebase.projects.get","firebaseextensions.instances.list"]
+[debug] [2026-08-29T01:56:22.068Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:22.068Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:22.068Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions [none]
+[debug] [2026-08-29T01:56:22.068Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions  x-goog-user-project=atlas-players-app
+[debug] [2026-08-29T01:56:22.068Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions {"permissions":["firebase.projects.get","firebaseextensions.instances.list"]}
+[debug] [2026-08-29T01:56:22.216Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions 200
+[debug] [2026-08-29T01:56:22.217Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/atlas-players-app:testIamPermissions {"permissions":["firebase.projects.get","firebaseextensions.instances.list"]}
+[debug] [2026-08-29T01:56:22.217Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:22.217Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:22.218Z] >>> [apiv2][query] GET https://firebaseextensions.googleapis.com/v1beta/projects/atlas-players-app/instances pageSize=100&pageToken=
+[debug] [2026-08-29T01:56:23.514Z] <<< [apiv2][status] GET https://firebaseextensions.googleapis.com/v1beta/projects/atlas-players-app/instances 200
+[debug] [2026-08-29T01:56:23.514Z] <<< [apiv2][body] GET https://firebaseextensions.googleapis.com/v1beta/projects/atlas-players-app/instances {}
+[debug] [2026-08-29T01:56:23.516Z] Attempting to merge .env secret bindings {} into declared secrets...)}
+[debug] [2026-08-29T01:56:23.516Z] createSubscriptionCheckout declared secrets: [{"key":"STRIPE_SECRET_KEY","secret":"STRIPE_SECRET_KEY","projectId":"atlas-players-app"}]
+[debug] [2026-08-29T01:56:23.516Z] stripeWebhook declared secrets: [{"key":"STRIPE_SECRET_KEY","secret":"STRIPE_SECRET_KEY","projectId":"atlas-players-app"},{"key":"STRIPE_WEBHOOK_SECRET","secret":"STRIPE_WEBHOOK_SECRET","projectId":"atlas-players-app"}]
+[debug] [2026-08-29T01:56:23.517Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.518Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.518Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY [none]
+[debug] [2026-08-29T01:56:23.675Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY 200
+[debug] [2026-08-29T01:56:23.675Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY {"name":"projects/211739354235/secrets/STRIPE_SECRET_KEY","replication":{"automatic":{}},"createTime":"2026-08-29T00:36:59.830703Z","labels":{"firebase-managed":"functions"},"etag":"\"165a24c45d0d35\""}
+[debug] [2026-08-29T01:56:23.676Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.676Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.676Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY/versions/latest [none]
+[debug] [2026-08-29T01:56:23.804Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY/versions/latest 200
+[debug] [2026-08-29T01:56:23.805Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY/versions/latest {"name":"projects/211739354235/secrets/STRIPE_SECRET_KEY/versions/1","createTime":"2026-08-29T00:37:10.668884Z","state":"ENABLED","replicationStatus":{"automatic":{}},"etag":"\"165a24c4ff8e54\""}
+[debug] [2026-08-29T01:56:23.806Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.806Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.806Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_WEBHOOK_SECRET [none]
+[debug] [2026-08-29T01:56:23.908Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_WEBHOOK_SECRET 200
+[debug] [2026-08-29T01:56:23.908Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_WEBHOOK_SECRET {"name":"projects/211739354235/secrets/STRIPE_WEBHOOK_SECRET","replication":{"automatic":{}},"createTime":"2026-08-29T01:53:29.966404Z","labels":{"firebase-managed":"functions"},"etag":"\"165a25d5f58ed9\""}
+[debug] [2026-08-29T01:56:23.909Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.909Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:23.909Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_WEBHOOK_SECRET/versions/latest [none]
+[debug] [2026-08-29T01:56:24.035Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_WEBHOOK_SECRET/versions/latest 200
+[debug] [2026-08-29T01:56:24.035Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_WEBHOOK_SECRET/versions/latest {"name":"projects/211739354235/secrets/STRIPE_WEBHOOK_SECRET/versions/1","createTime":"2026-08-29T01:53:30.649997Z","state":"ENABLED","replicationStatus":{"automatic":{}},"etag":"\"165a25d5fc858d\""}
+[info] i  functions: preparing functions directory for uploading... 
+[info] i  functions: packaged /Users/michaelmarkivee/Desktop/Atlas/atlas-players-app/functions (32.57 KB) for uploading 
+[info] i  functions: ensuring required API run.googleapis.com is enabled... 
+[info] i  functions: ensuring required API eventarc.googleapis.com is enabled... 
+[info] i  functions: ensuring required API pubsub.googleapis.com is enabled... 
+[info] i  functions: ensuring required API storage.googleapis.com is enabled... 
+[info] i  functions: generating the service identity for pubsub.googleapis.com... 
+[debug] [2026-08-29T01:56:24.065Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:24.065Z] Checked if tokens are valid: true, expires at: 1787969485471
+[info] i  functions: generating the service identity for eventarc.googleapis.com... 
+[debug] [2026-08-29T01:56:24.065Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:24.065Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:24.065Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/pubsub.googleapis.com:generateServiceIdentity [none]
+[debug] [2026-08-29T01:56:24.065Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/pubsub.googleapis.com:generateServiceIdentity  x-goog-user-project=211739354235
+[debug] [2026-08-29T01:56:24.065Z] >>> [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/pubsub.googleapis.com:generateServiceIdentity {}
+[debug] [2026-08-29T01:56:24.066Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/eventarc.googleapis.com:generateServiceIdentity [none]
+[debug] [2026-08-29T01:56:24.066Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/eventarc.googleapis.com:generateServiceIdentity  x-goog-user-project=211739354235
+[debug] [2026-08-29T01:56:24.066Z] >>> [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/eventarc.googleapis.com:generateServiceIdentity {}
+[debug] [2026-08-29T01:56:24.392Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/pubsub.googleapis.com:generateServiceIdentity 200
+[debug] [2026-08-29T01:56:24.392Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/pubsub.googleapis.com:generateServiceIdentity {"name":"operations/finished.DONE_OPERATION","done":true,"response":{"@type":"type.googleapis.com/google.api.serviceusage.v1beta1.ServiceIdentity","email":"service-211739354235@gcp-sa-pubsub.iam.gserviceaccount.com","uniqueId":"113870646528246828390"}}
+[debug] [2026-08-29T01:56:24.451Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/eventarc.googleapis.com:generateServiceIdentity 200
+[debug] [2026-08-29T01:56:24.452Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/211739354235/services/eventarc.googleapis.com:generateServiceIdentity {"name":"operations/finished.DONE_OPERATION","done":true,"response":{"@type":"type.googleapis.com/google.api.serviceusage.v1beta1.ServiceIdentity","email":"service-211739354235@gcp-sa-eventarc.iam.gserviceaccount.com","uniqueId":"113183660067220024627"}}
+[info] i  functions: ensuring required API secretmanager.googleapis.com is enabled... 
+[debug] [2026-08-29T01:56:24.454Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:24.455Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:24.455Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:24.455Z] Checked if tokens are valid: true, expires at: 1787969485471
+[debug] [2026-08-29T01:56:24.455Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY/versions/latest [none]
+[debug] [2026-08-29T01:56:24.456Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_WEBHOOK_SECRET/versions/latest [none]
+[debug] [2026-08-29T01:56:24.551Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY/versions/latest 200
+[debug] [2026-08-29T01:56:24.551Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/atlas-players-app/secrets/STRIPE_SECRET_KEY/versions/latest {"name":"projects/211739354235/secrets/STRIPE_SECRET_KEY/versions/1","createTime":"2026-08-29T00:37:10.668884Z","state":"ENABLED","replicationStatus":{"automatic":{}},"etag":"\"165a24c4ff8e54\""}
+[debug] [2026-08-29T01:56:24.551Z] Resolved latest secret version of STRIPE_SECRET_KEY to 1.
