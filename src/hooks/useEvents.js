@@ -15,7 +15,10 @@ export function useEvents(fieldId) {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => !e.draft));
+        // Soft-deleted events (owner app's deleteEvent) stay in Firestore
+        // so the admin portal can still see their booking/revenue history —
+        // they just shouldn't be visible here, same as a real delete used to be.
+        setEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => !e.draft && !e.deleted));
         setLoading(false);
       },
       (err) => {
