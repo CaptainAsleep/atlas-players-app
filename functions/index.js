@@ -32,6 +32,16 @@ const TIER_PRICE_IDS = {
   enterprise: "price_1U9a8XE1l1o0GwwHEIyDU5Qh",
 };
 
+// The specific Billing Portal Configuration set up in the Stripe Dashboard
+// (Settings -> Billing -> Customer portal) with cancellation and plan
+// switching turned on. Pinning this id explicitly means the portal always
+// opens with those features enabled, regardless of which configuration
+// Stripe happens to have marked as account-wide "default" — that default
+// can silently change (e.g. if a second configuration is ever created for
+// something else), which would otherwise quietly disable self-serve
+// cancel with no error to notice it by.
+const BILLING_PORTAL_CONFIG_ID = "bpc_1UBJNRE1l1o0GwwHGZhfRsXy";
+
 // Called from the owner app (via the Firebase SDK's httpsCallable) once an
 // owner picks a tier. request.auth.uid comes from their verified ID token
 // — never trust a client-supplied uid for something that creates a real
@@ -78,6 +88,44 @@ export const createSubscriptionCheckout = onCall(
       },
       success_url: "https://ownerapp.airsoftatlas.app/?checkout=success",
       cancel_url: "https://ownerapp.airsoftatlas.app/?checkout=cancelled",
+    });
+
+    return { url: session.url };
+  }
+);
+
+// Opens Stripe's own hosted Customer Portal — an owner can see invoices,
+// switch tiers, update their card, or cancel outright, all on Stripe's
+// page, the same self-serve pattern as checkout above. This is what makes
+// "I meant to cancel and got charged anyway" no longer possible: there's
+// a real button that leads straight to a real cancel flow, not a support
+// request that depends on someone reading Discord in time.
+//
+// One-time setup this depends on: the Customer Portal has to be turned on
+// in the Stripe Dashboard first (Settings -> Billing -> Customer portal),
+// with "Cancel subscriptions" and "Switch plans" enabled and the three
+// tier prices added to the portal's list of switchable products — Stripe
+// has no API for this, it's a dashboard-only configuration step. Without
+// it, this call fails with a Stripe error asking for that configuration.
+export const createBillingPortalSession = onCall(
+  { secrets: [stripeSecretKey], invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const stripe = new Stripe(stripeSecretKey.value());
+    const db = getFirestore();
+    const ownerSnap = await db.collection("owners").doc(uid).get();
+    const customerId = ownerSnap.data()?.stripeCustomerId;
+    if (!customerId) {
+      throw new HttpsError("failed-precondition", "No billing account on file yet — choose a plan first.");
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      configuration: BILLING_PORTAL_CONFIG_ID,
+      return_url: "https://ownerapp.airsoftatlas.app/?billing=return",
     });
 
     return { url: session.url };
