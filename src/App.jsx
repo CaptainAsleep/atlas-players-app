@@ -112,9 +112,10 @@ function fullAddress(field) {
   }
   return `${field.address}, ${field.city}`;
 }
-// No deep-linking into a specific field/event exists yet — this shares a
-// real text summary plus the app's general link, not a broken link that
-// looks like it should open straight to the thing being shared but
+// Optional `url` lets a caller share a deep link (e.g. a field's
+// ?field=<slug> page, which App() reads back out of the URL on load) —
+// callers that don't pass one still get the app's general link, not a
+// broken link that looks like it should open straight to something but
 // doesn't. Native share sheet where available (uses navigator.share, real
 // support on iOS/Android); falls back to copying text to the clipboard on
 // desktop browsers that don't support it. Returns "shared", "copied", or
@@ -129,8 +130,8 @@ function fullAddress(field) {
 // link itself regardless of PWA install status, and there is currently no
 // workaround (confirmed on Apple's own developer forums, still true as of
 // iOS 18). No code change here or anywhere else can fix that half of it.
-async function shareContent(title, text) {
-  const shareUrl = "https://playerapp.airsoftatlas.app";
+async function shareContent(title, text, url) {
+  const shareUrl = url || "https://playerapp.airsoftatlas.app";
   if (navigator.share) {
     try {
       await navigator.share({ title, text, url: shareUrl });
@@ -1919,20 +1920,26 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   );
 }
 
-function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite }) {
+function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite, fieldsLoading }) {
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [shareState, setShareState] = useState(null);
   const handleShare = async () => {
-    const result = await shareContent(field?.name, `${field?.name}${field?.city ? ` — ${field.city}` : ""}.`);
+    const fieldShareUrl = field?.id ? `https://playerapp.airsoftatlas.app/?field=${field.id}` : undefined;
+    const result = await shareContent(field?.name, `${field?.name}${field?.city ? ` — ${field.city}` : ""}.`, fieldShareUrl);
     if (result === "copied") {
       setShareState("copied");
       setTimeout(() => setShareState(null), 2000);
     }
   };
   if (!field) {
+    // A deep link (?field=<slug>) can land here before useFields()'s
+    // real-time listener has resolved its first snapshot — don't flash
+    // "not found" while that's still in flight.
     return (
       <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
-        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Field not found.</p>
+        <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>
+          {fieldsLoading ? "Loading field…" : "Field not found."}
+        </p>
         <BottomNav active="home" onNavigate={onNavigate} />
       </div>
     );
@@ -4437,9 +4444,17 @@ export default function App() {
     return localStorage.getItem("atlas_referral") || null;
   });
 
-  const [stack, setStack] = useState(["home"]);
+  // Field deep link — a shared field URL (?field=<slug>) should open
+  // straight to that field's detail screen. Read once on load, same as
+  // referralCode above, and seed the nav stack with it directly so the
+  // field screen is already queued up before auth/onboarding gates clear
+  // (those gates render ahead of any screen check, so this just waits
+  // quietly behind them rather than needing a separate redirect effect).
+  const [fieldDeepLinkId] = useState(() => new URLSearchParams(window.location.search).get("field"));
+
+  const [stack, setStack] = useState(() => (fieldDeepLinkId ? ["home", "field"] : ["home"]));
   const [activeEventId, setActiveEventId] = useState(null);
-  const [activeFieldId, setActiveFieldId] = useState(null);
+  const [activeFieldId, setActiveFieldId] = useState(() => fieldDeepLinkId || null);
   const [activeTeamId, setActiveTeamId] = useState(null);
   const [activePlayerId, setActivePlayerId] = useState(null);
   const screen = stack[stack.length - 1];
@@ -4650,6 +4665,7 @@ export default function App() {
     content = (
       <FieldDetailScreen
         field={activeField}
+        fieldsLoading={fieldsLoading}
         fieldEvents={activeFieldEvents}
         pastFieldEvents={activeFieldPastEvents}
         relocatedField={relocatedField}
