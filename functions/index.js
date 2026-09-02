@@ -263,7 +263,7 @@ export const createBookingCheckout = onCall(
         application_fee_amount: bookingFeeCents,
         transfer_data: { destination: ownerData.stripeConnectAccountId },
       },
-      metadata: { firebaseUid: uid, eventId, fieldId: eventData.fieldId },
+      metadata: { firebaseUid: uid, eventId, fieldId: eventData.fieldId, bookingFeeCents: String(bookingFeeCents) },
       success_url: "https://playerapp.airsoftatlas.app/?booking=success",
       cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
     });
@@ -350,7 +350,7 @@ export const stripeWebhook = onRequest(
           // subscription checkouts are fully handled by the
           // customer.subscription.* events above, not this one.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents } = session.metadata;
             const eventRef = db.collection("events").doc(eventId);
             const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
             const bookingRef = eventRef.collection("bookings").doc(uid);
@@ -382,6 +382,14 @@ export const stripeWebhook = onRequest(
                 paid: true,
                 stripeCheckoutSessionId: session.id,
                 amountPaidCents: session.amount_total,
+                // Atlas's actual cut of this booking (the Stripe
+                // application_fee_amount set at checkout time in
+                // createBookingCheckout) — stored explicitly so revenue
+                // reporting (admin portal) never has to recompute the fee
+                // formula from amountPaidCents. Read straight off checkout
+                // metadata since it was already computed once, at checkout
+                // creation.
+                bookingFeeCents: bookingFeeCents != null ? Number(bookingFeeCents) : null,
               });
               t.set(userBookingRef, {
                 eventId,

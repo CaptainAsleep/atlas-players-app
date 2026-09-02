@@ -128,8 +128,19 @@ service cloud.firestore {
     // A field owner's own account — separate from the player users/{uid}
     // collection entirely, even if the same person signs into both apps
     // with the same email. Self-owned, same pattern as everything else.
+    //
+    // isAdmin() also gets read access here — same hardcoded-uid pattern as
+    // ATLAS_OWNER_UID in the player app's own code, just enforced at the
+    // rules layer too, since this is the one collection the admin portal
+    // needs beyond what's already publicly readable (fields/events/
+    // bookings are all `allow read: if true` already). Read-only: admin
+    // never gets a write exception here, same as owners themselves don't
+    // for billing fields below.
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'lg4HMLTJvsPfSEN1pvNhMV4fbct1';
+    }
     match /owners/{ownerId} {
-      allow read: if request.auth != null && request.auth.uid == ownerId;
+      allow read: if request.auth != null && (request.auth.uid == ownerId || isAdmin());
       allow create, delete: if request.auth != null && request.auth.uid == ownerId;
       // Subscription and billing fields are readable (so the owner app can
       // show real status) but never writable by the owner's own client —
