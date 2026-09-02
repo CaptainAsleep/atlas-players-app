@@ -14,7 +14,7 @@ service cloud.firestore {
     match /fields/{fieldId} {
       allow read: if true;
       allow create: if false; // fields are only added via the admin seed script
-      // Claiming has two paths. Both are written defensively with .get(key,
+      // Claiming has three paths. All are written defensively with .get(key,
       // default) rather than plain dot-access — none of our existing field
       // docs have an ownerId/ownerEmailDomain key at all yet, and directly
       // reading a genuinely-missing field errors out the whole rule (which
@@ -45,6 +45,25 @@ service cloud.firestore {
           && request.resource.data.get('claimed', false) != true
           && request.resource.data.claimPending == true
           && request.resource.data.claimRequestedBy == request.auth.uid)
+        ||
+        // Path 3: instant, unverified claim — no domain AND no website on
+        // file to automatically verify against at all (Facebook-only
+        // fields, test fixtures). A bad claim here can only affect
+        // listing content, never money — Stripe's own KYC still gates any
+        // real payout for the claiming account — so this claims instantly
+        // rather than stalling the owner on manual review, flagged
+        // claimVerification == 'unverified' so it can still be spot-
+        // checked or disputed later. Real website-verification claims
+        // (a domain mismatch but a real site to prove ownership of)
+        // never come through here at all — those are written server-side
+        // by the verifyWebsiteClaim Cloud Function via the Admin SDK,
+        // which bypasses these rules entirely after actually confirming
+        // the code is live on the site.
+        (resource.data.get('ownerId', null) == null
+          && resource.data.get('website', null) == null
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.claimed == true
+          && request.resource.data.claimVerification == 'unverified')
         ||
         // Editing a field you already own.
         resource.data.get('ownerId', null) == request.auth.uid

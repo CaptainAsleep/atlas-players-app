@@ -1,7 +1,7 @@
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 
 initializeApp();
@@ -497,3 +497,140 @@ export const stripeWebhook = onRequest(
     }
   }
 );
+
+// --- Field claim verification: "prove you own this website" flow ---
+//
+// When a field has no ownerEmailDomain on file (so the domain-match path
+// in firestore.rules can't apply) but the claiming owner does have a real
+// website for their field, they can prove ownership the same way Google
+// Search Console or Shopify domain verification works: generate a
+// one-time code, ask them to paste it somewhere on their own site, then
+// fetch that page server-side and confirm the code is actually there.
+// Both functions below use the Admin SDK, which bypasses Firestore
+// security rules entirely — the same trust model already used by the
+// Stripe webhook to write subscriptionStatus/payoutsEnabled/etc. This is
+// deliberate: a client-side security rule can't safely grant "you now own
+// this field" on its own, since nothing stops any signed-in user from
+// writing whatever they want to a document they don't yet own — the
+// actual proof-of-ownership check has to happen server-side.
+
+function generateClaimCode() {
+  // Short, human-typeable, unambiguous: uppercase letters + digits with
+  // 0/O/1/I left out so a misread character can't cause a mismatch.
+  const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  let code = "atlas-verify-";
+  for (let i = 0; i < 8; i++) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return code;
+}
+
+// Step 1: the owner asks for a code to paste on their own site. Requesting
+// a code grants nothing by itself — it just stores the code (and who
+// asked for it) on the field doc so step 2 below has something to check
+// against; only a confirmed match in verifyWebsiteClaim actually hands
+// over ownership.
+export const requestFieldClaimCode = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const fieldId = request.data?.fieldId;
+    if (!fieldId) {
+      throw new HttpsError("invalid-argument", "Missing fieldId.");
+    }
+
+    const db = getFirestore();
+    const fieldRef = db.collection("fields").doc(fieldId);
+    const fieldSnap = await fieldRef.get();
+    if (!fieldSnap.exists) {
+      throw new HttpsError("not-found", "Field not found.");
+    }
+    const fieldData = fieldSnap.data();
+    if (fieldData.ownerId) {
+      throw new HttpsError("failed-precondition", "This field has already been claimed.");
+    }
+    if (!fieldData.website) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This field has no website on file to verify against."
+      );
+    }
+
+    const code = generateClaimCode();
+    await fieldRef.update({
+      claimVerificationCode: code,
+      claimVerificationRequestedBy: uid,
+      claimVerificationRequestedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { code, website: fieldData.website };
+  }
+);
+
+// Step 2: the owner says they've pasted the code on their site — fetch it
+// server-side and look for the code. Real ownership check happens here,
+// never trusting the client's word that the code is actually live.
+export const verifyWebsiteClaim = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const fieldId = request.data?.fieldId;
+    if (!fieldId) {
+      throw new HttpsError("invalid-argument", "Missing fieldId.");
+    }
+
+    const db = getFirestore();
+    const fieldRef = db.collection("fields").doc(fieldId);
+    const fieldSnap = await fieldRef.get();
+    if (!fieldSnap.exists) {
+      throw new HttpsError("not-found", "Field not found.");
+    }
+    const fieldData = fieldSnap.data();
+    if (fieldData.ownerId) {
+      throw new HttpsError("failed-precondition", "This field has already been claimed.");
+    }
+    if (fieldData.claimVerificationRequestedBy !== uid || !fieldData.claimVerificationCode) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Request a verification code for this field first."
+      );
+    }
+
+    let pageText;
+    try {
+      const res = await fetch(fieldData.website, {
+        redirect: "follow",
+        signal: AbortSignal.timeout(10000),
+      });
+      pageText = await res.text();
+    } catch (err) {
+      console.error("verifyWebsiteClaim fetch error:", err);
+      throw new HttpsError(
+        "unavailable",
+        `Couldn't reach ${fieldData.website} — check the site is up and try again.`
+      );
+    }
+
+    if (!pageText.includes(fieldData.claimVerificationCode)) {
+      return { verified: false };
+    }
+
+    await fieldRef.update({
+      ownerId: uid,
+      claimed: true,
+      claimVerification: "website",
+      claimVerificationCode: FieldValue.delete(),
+      claimVerificationRequestedBy: FieldValue.delete(),
+      claimVerificationRequestedAt: FieldValue.delete(),
+    });
+
+    return { verified: true };
+  }
+);
+
