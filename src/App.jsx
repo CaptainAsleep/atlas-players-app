@@ -1089,9 +1089,9 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         </div>
       ) : (
         <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
-          <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No upcoming games booked</div>
+          <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No upcoming games reserved</div>
           <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
-            Book a spot at an event and it'll show up here as your next game.
+            Reserve a spot at an event and it'll show up here as your next game.
           </p>
         </div>
       )}
@@ -1398,7 +1398,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const isFull = ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking;
   const waiverBlocking = ev.waiver && !signature;
 
-  // Extracted so both a normal "Book This Event" tap AND a just-completed
+  // Extracted so both a normal "Reserve This Event" tap AND a just-completed
   // waiver signature can trigger the same real booking action — signing is
   // now step one of booking, not a separate standalone thing on this page.
   const proceedToBook = async () => {
@@ -1418,7 +1418,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         // external site through the same tab (found and fixed on the
         // owner app's Payouts flow first). Opening separately also means
         // this tab's own live listener on the booking never drops — the
-        // "Booked" state below will pick it up automatically the moment
+        // "Reserved" state below will pick it up automatically the moment
         // the webhook confirms payment, whichever tab that happens in.
         window.open(url, "_blank");
         setCheckoutOpenedInfo(true);
@@ -1433,7 +1433,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       // silently swallowed — the difference between "permission-denied"
       // and something else is the whole ballgame for debugging this.
       console.error("booking failed:", err.code || err.message || err);
-      setBookingError(isPaidEvent ? "Couldn't start checkout — try again." : "Couldn't book this event — try again.");
+      setBookingError(isPaidEvent ? "Couldn't start checkout — try again." : "Couldn't reserve this event — try again.");
       setBookingBusy(false);
     }
   };
@@ -1495,7 +1495,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       setShowWaiver(false);
       // Signing is step one of booking now, not a standalone action —
       // proceed straight into the real booking the moment the signature
-      // saves, rather than making the player tap "Book" a second time.
+      // saves, rather than making the player tap "Reserve" a second time.
       await proceedToBook();
     } catch (err) {
       setSignError("Couldn't save your signature — try again.");
@@ -1539,7 +1539,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           {ev.canceled && (
             <div className="p-4" style={{ background: "rgba(188,51,39,0.1)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
               <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.alert }}>This event has been canceled</div>
-              <p className="text-[12px] leading-relaxed" style={{ ...body, color: T.ashDim }}>The field owner has canceled this event. If you had booked or were interested, no action is needed on your end.</p>
+              <p className="text-[12px] leading-relaxed" style={{ ...body, color: T.ashDim }}>The field owner has canceled this event. If you had reserved or were interested, no action is needed on your end.</p>
             </div>
           )}
           {statusLabel && field?.notes && (
@@ -1622,7 +1622,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             ) : !isPast && (
               <div className="p-3 flex items-center gap-2" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
                 <FileSignature size={15} color={T.ashDim} />
-                <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>This event requires a signed waiver — you'll sign it when you book.</div>
+                <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>This event requires a signed waiver — you'll sign it when you reserve.</div>
               </div>
             )
           )}
@@ -1681,7 +1681,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             {ev.price || field?.admission || "See listing"}
           </div>
           {typeof ev.maxCapacity === "number" && (
-            <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} booked</div>
+            <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
           )}
         </div>
         {ev.canceled ? (
@@ -1717,13 +1717,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                   Never mind
                 </button>
                 <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}>
-                  {bookingBusy ? "…" : "Cancel Booking"}
+                  {bookingBusy ? "…" : "Cancel Reservation"}
                 </button>
               </div>
             )
           ) : (
             <button onClick={() => setConfirmCancel(true)} className="px-6 py-3 font-semibold text-[13px] flex items-center gap-2" style={{ ...display, background: T.good, color: "#FFFFFF", borderRadius: 4 }}>
-              <Check size={15} /> Booked
+              <Check size={15} /> Reserved
             </button>
           )
         ) : isFull ? (
@@ -1732,7 +1732,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           </span>
         ) : checkoutOpenedInfo ? (
           // Real gap this closes: bookingBusy clears the instant the Stripe
-          // tab opens, so without this branch "Book This Event" goes right
+          // tab opens, so without this branch "Reserve This Event" goes right
           // back to being a live, clickable button while myBooking is
           // still null (webhook hasn't landed yet) — nothing stopped a
           // second real charge from an impatient re-tap. The idempotency
@@ -1750,7 +1750,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
             style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}
           >
-            {bookingBusy ? "…" : waiverBlocking ? "Sign Waiver to Book" : "Book This Event"}
+            {bookingBusy ? "…" : waiverBlocking ? "Sign Waiver to Reserve" : "Reserve This Event"}
           </button>
         )}
       </div>
@@ -1787,7 +1787,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           >
             <div className="sticky top-0 px-5 pt-4 pb-3 flex items-center justify-between" style={{ background: T.void, borderBottom: `1px solid ${T.line}` }}>
               <div>
-                <h2 className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Sign to Book</h2>
+                <h2 className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Sign to Reserve</h2>
                 <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{field?.name || ev.fieldName} Waiver</p>
               </div>
               <button onClick={() => !signing && setShowWaiver(false)} className="w-8 h-8 flex items-center justify-center">
@@ -1833,7 +1833,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                     className="w-full py-3 text-[13px] font-semibold"
                     style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
                   >
-                    {signing ? "Signing & Booking…" : "Sign & Book"}
+                    {signing ? "Signing & Reserving…" : "Sign & Reserve"}
                   </button>
                 </>
               )}
@@ -1866,7 +1866,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                 <>
                   {whosGoing.length > 0 && (
                     <>
-                      <Eyebrow>Booked ({whosGoing.length})</Eyebrow>
+                      <Eyebrow>Reserved ({whosGoing.length})</Eyebrow>
                       <div className="flex flex-col gap-2 mb-5 mt-1">
                         {whosGoing.map((b) => (
                           <div key={b.uid} className="flex items-center gap-3">
@@ -2220,7 +2220,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const TABS = [
-    { key: "booked", label: "Booked" },
+    { key: "booked", label: "Reserved" },
     { key: "interested", label: "Interested" },
     { key: "past", label: "Past" },
   ];
@@ -2275,9 +2275,9 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
               <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 <Calendar size={22} color={T.ashDim} strokeWidth={1.7} />
               </div>
-              <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No booked games</div>
+              <div className="text-[16px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No reserved games</div>
               <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>
-                Book an event from its detail page and it'll show up here — separate from what you're just interested in.
+                Reserve an event from its detail page and it'll show up here — separate from what you're just interested in.
               </p>
             </div>
           ) : renderList(booked, "auto")
@@ -2607,7 +2607,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
         )}
 
         <div className="flex gap-1 mb-3" style={{ borderBottom: `1px solid ${T.line}` }}>
-          {[["booked", "Booked"], ["interested", "Interested"], ["past", "Past"]].map(([key, label]) => (
+          {[["booked", "Reserved"], ["interested", "Interested"], ["past", "Past"]].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -2625,7 +2625,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
           ) : theirBookingsLoading ? (
             <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
           ) : booked.length === 0 ? (
-            <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No booked games.</p>
+            <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No reserved games.</p>
           ) : (
             booked.map((ev) => (
               <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
