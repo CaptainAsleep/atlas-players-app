@@ -1,6 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Single hardcoded admin uid — same pattern as ATLAS_OWNER_UID in the
+    // player app's own code, just enforced at the rules layer too.
+    // Declared here at the top (rather than down by owners/{ownerId},
+    // where it used to live) since more than one match block now needs it
+    // — fields/{fieldId}/private/{docId} (shipping addresses) included.
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'lg4HMLTJvsPfSEN1pvNhMV4fbct1';
+    }
+
     // The admin-defined achievement catalog — public read (so the app can
     // check and display them), but no client write at all. These are
     // entered only via the seed script, same as fields and DTB — not
@@ -76,6 +85,26 @@ service cloud.firestore {
       match /bannedPlayers/{uid} {
         allow read, write: if request.auth != null && get(/databases/$(database)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid;
       }
+
+      // Private, field-scoped operational data that must never be public,
+      // unlike the fields/{fieldId} doc itself (allow read: if true above).
+      // Currently just the shipping/mailing address for welcome-package
+      // fulfillment (stickers, tablet stand) — collected separately from
+      // the field's public address because some fields are unstaffed and
+      // that public address isn't where mail should actually go. Owner can
+      // read/write their own field's doc here; isAdmin() gets read (to
+      // actually ship the package) and write (so Michael can fix a typo
+      // without having to ask the owner to redo it).
+      match /private/{docId} {
+        allow read: if request.auth != null && (
+          get(/databases/$(database)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid
+          || isAdmin()
+        );
+        allow write: if request.auth != null && (
+          get(/databases/$(database)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid
+          || isAdmin()
+        );
+      }
     }
     match /events/{eventId} {
       allow read: if true;
@@ -148,16 +177,6 @@ service cloud.firestore {
     // collection entirely, even if the same person signs into both apps
     // with the same email. Self-owned, same pattern as everything else.
     //
-    // isAdmin() also gets read access here — same hardcoded-uid pattern as
-    // ATLAS_OWNER_UID in the player app's own code, just enforced at the
-    // rules layer too, since this is the one collection the admin portal
-    // needs beyond what's already publicly readable (fields/events/
-    // bookings are all `allow read: if true` already). Read-only: admin
-    // never gets a write exception here, same as owners themselves don't
-    // for billing fields below.
-    function isAdmin() {
-      return request.auth != null && request.auth.uid == 'lg4HMLTJvsPfSEN1pvNhMV4fbct1';
-    }
     match /owners/{ownerId} {
       allow read: if request.auth != null && (request.auth.uid == ownerId || isAdmin());
       allow create, delete: if request.auth != null && request.auth.uid == ownerId;
