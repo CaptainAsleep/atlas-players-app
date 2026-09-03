@@ -393,6 +393,18 @@ export const stripeWebhook = onRequest(
                 subscriptionTier: sub.metadata?.tier || null,
                 stripeSubscriptionId: sub.id,
                 currentPeriodEnd: new Date(sub.current_period_end * 1000),
+                // Set the instant someone hits "Cancel" in the Stripe
+                // portal — the subscription itself stays "active" (they
+                // keep access through what they already paid for, our
+                // portal config is "cancel at period end," not immediate)
+                // right up until the real customer.subscription.deleted
+                // event below fires at the actual period end. Without
+                // this flag, the owner app would show "ACTIVE, renews on
+                // <date>" with zero indication anything was canceled —
+                // exactly the "did my cancellation actually go through?"
+                // anxiety this whole billing-portal feature was built to
+                // eliminate.
+                cancelAtPeriodEnd: !!sub.cancel_at_period_end,
               },
               { merge: true }
             );
@@ -404,7 +416,7 @@ export const stripeWebhook = onRequest(
           const uid = sub.metadata?.firebaseUid;
           if (uid) {
             await db.collection("owners").doc(uid).set(
-              { subscriptionStatus: "canceled" },
+              { subscriptionStatus: "canceled", cancelAtPeriodEnd: false },
               { merge: true }
             );
           }
