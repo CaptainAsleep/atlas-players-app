@@ -204,11 +204,17 @@ export const checkPayoutsStatus = onCall(
     }
 
     const account = await stripe.accounts.retrieve(accountId);
+    // account.settings.payouts.schedule comes back on a plain retrieve, no
+    // expand needed — {interval: "daily"|"weekly"|"monthly"|"manual",
+    // delay_days, weekly_anchor?, monthly_anchor?}. Cached on the owner doc
+    // so the owner app can show a real payout-timing estimate (e.g. on the
+    // post-event payout celebration) without a live Stripe call every time.
     await ownerRef.set(
       {
         payoutsEnabled: account.payouts_enabled,
         chargesEnabled: account.charges_enabled,
         connectOnboardingComplete: account.details_submitted,
+        payoutSchedule: account.settings?.payouts?.schedule || null,
       },
       { merge: true }
     );
@@ -481,6 +487,7 @@ export const stripeWebhook = onRequest(
                 payoutsEnabled: account.payouts_enabled,
                 chargesEnabled: account.charges_enabled,
                 connectOnboardingComplete: account.details_submitted,
+                payoutSchedule: account.settings?.payouts?.schedule || null,
               },
               { merge: true }
             );
