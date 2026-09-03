@@ -4314,6 +4314,48 @@ const PATCH_UNLOCK_KEYFRAMES = `
 }
 `;
 
+// Shown once, right after a brand-new account accepts the legal agreement
+// and before the onboarding wizard's name/callsign/photo steps — the same
+// full-bleed blue treatment as the patch-unlock moment above (reuses its
+// keyframes) so a first-time player's very first screen in the app feels
+// like an event, not a form. Purely local UI state, not persisted: it
+// naturally never reappears because completedOnboarding flips true once
+// the wizard finishes, and this only ever renders while that's still
+// false.
+function WelcomeSplashScreen({ onContinue }) {
+  return (
+    <div
+      className="fixed inset-0 flex flex-col items-center justify-center px-8"
+      style={{ background: "rgba(0,44,72,0.97)", zIndex: 3000, animation: "patchOverlayIn 0.3s ease-out" }}
+    >
+      <style>{PATCH_UNLOCK_KEYFRAMES}</style>
+
+      <div className="relative mb-7" style={{ animation: "patchGlow 2.4s ease-in-out infinite" }}>
+        <div style={{ position: "absolute", inset: -40, background: "radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 70%)", borderRadius: "50%" }} />
+        <div
+          className="overflow-hidden"
+          style={{ width: 120, height: 120, borderRadius: 16, position: "relative", animation: "patchPop 0.55s cubic-bezier(0.34,1.56,0.64,1)" }}
+        >
+          <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Atlas" className="w-full h-full" style={{ objectFit: "cover" }} />
+        </div>
+      </div>
+
+      <div className="text-[24px] font-bold text-center px-2 mb-2" style={{ ...display, color: "#FFFFFF", lineHeight: 1.3 }}>Welcome to Atlas!</div>
+      <div className="text-[14px] text-center mb-9 px-6" style={{ ...body, color: "rgba(255,255,255,0.75)" }}>
+        Real events, real players, right in your pocket. Let's get your profile set up.
+      </div>
+
+      <button
+        onClick={onContinue}
+        className="px-9 py-3.5 font-semibold text-[14px] transition-transform duration-100 active:scale-95"
+        style={{ ...display, background: "#FFFFFF", color: T.ash, borderRadius: 999 }}
+      >
+        Let's get started
+      </button>
+    </div>
+  );
+}
+
 // Grandiose, scalable — handles one unlocked patch or a whole stack of
 // them the same way, revealing one at a time so a big multi-patch login
 // never feels like a wall of clutter. Advances through the stack and
@@ -4614,6 +4656,10 @@ export default function App() {
     setStack(["home"]); // reset navigation so the next sign-in starts clean
   };
 
+  // Local only, not persisted — see WelcomeSplashScreen's own comment for
+  // why that's the right call here.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+
   let content;
   if (installGate === null) {
     content = null; // brief instant while the install check resolves — nothing flashes before it
@@ -4627,6 +4673,8 @@ export default function App() {
     content = <LoadingScreen />;
   } else if (profile.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
     content = <LegalAgreementScreen onAccept={() => acceptTerms(CURRENT_TERMS_VERSION)} />;
+  } else if (profile.completedOnboarding === false && !welcomeDismissed) {
+    content = <WelcomeSplashScreen onContinue={() => setWelcomeDismissed(true)} />;
   } else if (profile.completedOnboarding === false) {
     content = (
       <OnboardingWizardScreen
