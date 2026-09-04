@@ -10,6 +10,26 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == 'lg4HMLTJvsPfSEN1pvNhMV4fbct1';
     }
 
+    // Field-count cap per subscription tier — Basic and Pro are single-
+    // field plans, Unlimited covers up to 3 fields on one account (beyond
+    // that is manual/Discord-only, not self-serve, per the pricing page).
+    // Anything unrecognized (no tier yet, a lapsed one) defaults to 1 —
+    // the same cap a first-time, not-yet-subscribed owner effectively
+    // has, since claiming a first field is always allowed before ever
+    // picking a plan (see the owner app's own onboarding gate).
+    function tierFieldCap(tier) {
+      return tier == 'unlimited' ? 3 : 1;
+    }
+
+    // Firestore rules can't run an aggregate/count query, so field-count
+    // enforcement relies on a denormalized counter (claimedFieldCount) on
+    // the owner's own doc, kept honest by the owners/{ownerId} rule below
+    // (self-writes to it are only ever allowed to go up by exactly 1).
+    function ownerCanClaimAnotherField(uid) {
+      let owner = get(/databases/$(database)/documents/owners/$(uid)).data;
+      return owner.get('claimedFieldCount', 0) < tierFieldCap(owner.get('subscriptionTier', 'basic'));
+    }
+
     // The admin-defined achievement catalog — public read (so the app can
     // check and display them), but no client write at all. These are
     // entered only via the seed script, same as fields and DTB — not
@@ -38,7 +58,8 @@ service cloud.firestore {
           && resource.data.get('ownerEmailDomain', null) != null
           && request.auth.token.get('email', '').split('@')[1] == resource.data.get('ownerEmailDomain', null)
           && request.resource.data.ownerId == request.auth.uid
-          && request.resource.data.claimed == true)
+          && request.resource.data.claimed == true
+          && ownerCanClaimAnotherField(request.auth.uid))
         ||
         // Path 2: pending review — no verifiable domain on file (Facebook-
         // only fields, the Atlas Field test fixture), so a claim files a
@@ -72,7 +93,8 @@ service cloud.firestore {
           && resource.data.get('website', null) == null
           && request.resource.data.ownerId == request.auth.uid
           && request.resource.data.claimed == true
-          && request.resource.data.claimVerification == 'unverified')
+          && request.resource.data.claimVerification == 'unverified'
+          && ownerCanClaimAnotherField(request.auth.uid))
         ||
         // Editing a field you already own.
         resource.data.get('ownerId', null) == request.auth.uid
@@ -192,7 +214,17 @@ service cloud.firestore {
           "stripeSubscriptionId", "currentPeriodEnd", "comped",
           "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
           "connectOnboardingComplete"
-        ]);
+        ])
+        // claimedFieldCount backs the field-count cap above — the client
+        // needs to increment its own copy in the same batch as a field
+        // claim (there's no Cloud Function on that path), so this can't
+        // just be added to the fully-blocked list above. Instead it can
+        // only ever go up, by exactly 1, one claim at a time — an owner
+        // could still pointlessly inflate their own count (harmless,
+        // only makes their own cap tighter) but can never wind it back
+        // down to sneak past the cap on a later claim.
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["claimedFieldCount"])
+          || request.resource.data.claimedFieldCount == resource.data.get('claimedFieldCount', 0) + 1);
     }
     // A signed-in user can read and write ONLY their own profile document —
     // never anyone else's, and never before they're authenticated. This is

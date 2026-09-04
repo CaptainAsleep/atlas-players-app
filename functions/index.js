@@ -21,16 +21,29 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeConnectWebhookSecret = defineSecret("STRIPE_CONNECT_WEBHOOK_SECRET");
 
 // Real Stripe Price IDs — created in the Stripe Dashboard under Products,
-// one price per tier, monthly recurring. Replace these three placeholders
-// with the real "price_..." ids once those products exist. Annual billing
-// isn't wired up yet — this is monthly-only for the first real version;
-// adding an annual price per tier later just means adding three more ids
-// here and a plan-length toggle on the checkout call.
+// one price per tier, monthly recurring. Renamed from starter/pro/
+// enterprise to basic/pro/unlimited to match the live pricing page and
+// the two-axis (tier + field-count) model — pro's id is unchanged, only
+// basic and unlimited got new Prices when the tiers were repriced.
+// Annual billing isn't wired up yet — this is monthly-only for the first
+// real version; adding an annual price per tier later just means adding
+// three more ids here and a plan-length toggle on the checkout call.
 const TIER_PRICE_IDS = {
-  starter: "price_1U9a7nE1l1o0GwwHhhRNBvz9",
+  basic: "price_1UBnGZE1l1o0GwwHp8dTW7o9",
   pro: "price_1U9a8DE1l1o0GwwHeCFO6rPn",
-  enterprise: "price_1U9a8XE1l1o0GwwHEIyDU5Qh",
+  unlimited: "price_1UBnHBE1l1o0GwwHuUOp4ZLh",
 };
+
+// How many fields a single account may have claimed at once, by tier —
+// the second axis of the pricing model (the first is event/player caps,
+// enforced elsewhere). Basic and Pro are single-field plans; Unlimited
+// covers up to 3 fields on one account, same flat price. Beyond 3 is
+// manual/Discord-only, not self-serve, per the pricing page. Anything
+// unrecognized (no subscription yet, a lapsed one) defaults to 1 — a
+// first-time owner can always claim their first field before ever
+// picking a plan, per the owner app's own onboarding gate.
+const FIELD_CAPS = { basic: 1, pro: 1, unlimited: 3 };
+const DEFAULT_FIELD_CAP = 1;
 
 // The specific Billing Portal Configuration set up in the Stripe Dashboard
 // (Settings -> Billing -> Customer portal) with cancellation and plan
@@ -621,6 +634,22 @@ export const verifyWebsiteClaim = onCall(
       );
     }
 
+    // Field-count cap — this path writes via the Admin SDK, so it
+    // bypasses firestore.rules entirely; the same check has to be done
+    // explicitly here (the two plain-client claim paths get theirs from
+    // the rules themselves).
+    const ownerRef = db.collection("owners").doc(uid);
+    const ownerSnap = await ownerRef.get();
+    const ownerData = ownerSnap.data() || {};
+    const fieldCap = FIELD_CAPS[ownerData.subscriptionTier] ?? DEFAULT_FIELD_CAP;
+    const claimedFieldCount = ownerData.claimedFieldCount || 0;
+    if (claimedFieldCount >= fieldCap) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Your current plan doesn't include another field — upgrade your plan, or reach out on Discord, to claim more."
+      );
+    }
+
     let pageText;
     try {
       const res = await fetch(fieldData.website, {
@@ -648,6 +677,7 @@ export const verifyWebsiteClaim = onCall(
       claimVerificationRequestedBy: FieldValue.delete(),
       claimVerificationRequestedAt: FieldValue.delete(),
     });
+    await ownerRef.update({ claimedFieldCount: FieldValue.increment(1) });
 
     return { verified: true };
   }
