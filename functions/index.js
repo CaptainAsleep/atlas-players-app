@@ -261,6 +261,27 @@ export const checkPayoutsStatus = onCall(
 // step. The booking record itself is NOT created here — only once the
 // webhook below confirms payment actually succeeded, since a real booking
 // should never exist for a payment that never went through.
+// Shared by createBookingCheckout and bookFreeEvent below — resolves the
+// real entry price (the event's flat price + whichever Price Options
+// choice, if any, was picked) and validates that choice. The only place
+// this logic lives, so the paid and free booking paths can never drift
+// out of sync with each other on what a given selection actually costs.
+function resolveEntryPrice(eventData, selectedChoiceId) {
+  const basePriceCents = Math.round(parseFloat(String(eventData.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
+  const priceOptions = eventData.priceOptions;
+  let selectedChoice = null;
+  if (priceOptions?.choices?.length) {
+    selectedChoice = priceOptions.choices.find((c) => c.id === selectedChoiceId) || null;
+    if (priceOptions.required && !selectedChoice) {
+      throw new HttpsError("invalid-argument", `Choose a valid ${priceOptions.label || "option"} before booking.`);
+    }
+    if (selectedChoiceId && !selectedChoice) {
+      throw new HttpsError("invalid-argument", "That option isn't available for this event anymore.");
+    }
+  }
+  return { entryPriceCents: basePriceCents + (selectedChoice?.priceCents || 0), selectedChoice };
+}
+
 export const createBookingCheckout = onCall(
   { secrets: [stripeSecretKey], invoker: "public" },
   async (request) => {
@@ -321,27 +342,7 @@ export const createBookingCheckout = onCall(
       throw new HttpsError("failed-precondition", "This field hasn't finished payment setup yet.");
     }
 
-    const basePriceCents = Math.round(parseFloat(String(eventData.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
-
-    // Price Options: one optional group of player-picked, differently-
-    // priced choices (weapon class, BB weight, etc.). The id the client
-    // sends is just a selection — the real price always comes from the
-    // event document itself, never trusted from the client directly,
-    // same trust model as the flat price above.
-    const selectedChoiceId = request.data?.selectedChoiceId || null;
-    const priceOptions = eventData.priceOptions;
-    let selectedChoice = null;
-    if (priceOptions?.choices?.length) {
-      selectedChoice = priceOptions.choices.find((c) => c.id === selectedChoiceId) || null;
-      if (priceOptions.required && !selectedChoice) {
-        throw new HttpsError("invalid-argument", `Choose a valid ${priceOptions.label || "option"} before booking.`);
-      }
-      if (selectedChoiceId && !selectedChoice) {
-        throw new HttpsError("invalid-argument", "That option isn't available for this event anymore.");
-      }
-    }
-
-    const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0);
+    const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
     if (!entryPriceCents || entryPriceCents <= 0) {
       throw new HttpsError("failed-precondition", "This event doesn't have a valid price set.");
     }
@@ -393,6 +394,109 @@ export const createBookingCheckout = onCall(
     });
 
     return { url: session.url };
+  }
+);
+
+// The free-event sibling of createBookingCheckout above — for an event
+// (or a Price Options choice) that comes out to genuinely $0, never
+// touching Stripe at all. This used to be a plain client-side Firestore
+// write (bookEvent in useBookings.js, straight from the player app); it's
+// server-side now because that client write had no price check behind it
+// whatsoever — any signed-in player could call it directly (e.g. from
+// browser devtools) for ANY event, including a real paid one, and walk
+// away with a free, unpaid "booking" with zero Stripe involvement.
+// firestore.rules no longer allows a client to create a booking document
+// at all (see the removed create rules there) — every booking, paid or
+// free, now goes through a Cloud Function that resolves the real price
+// itself before ever writing anything.
+export const bookFreeEvent = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in to book.");
+    }
+    const uid = request.auth.uid;
+    const eventId = request.data?.eventId;
+    if (!eventId) {
+      throw new HttpsError("invalid-argument", "Missing eventId.");
+    }
+
+    const db = getFirestore();
+    const eventRef = db.collection("events").doc(eventId);
+    const bookingRef = eventRef.collection("bookings").doc(uid);
+    const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
+
+    const eventSnap = await eventRef.get();
+    if (!eventSnap.exists) {
+      throw new HttpsError("not-found", "Event not found.");
+    }
+    const eventData = eventSnap.data();
+
+    if (eventData.canceled) {
+      throw new HttpsError("failed-precondition", "This event has been canceled.");
+    }
+
+    // Waiver requirement, re-checked server-side — the same rule the old
+    // client-side create rule used to enforce, now enforced here since
+    // that rule is gone.
+    if (eventData.waiver) {
+      const sigSnap = await db.collection("waiverSignatures").doc(`${uid}_${eventId}`).get();
+      if (!sigSnap.exists) {
+        throw new HttpsError("failed-precondition", "Waiver must be signed before booking.");
+      }
+    }
+
+    const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
+    // The real backstop: if this event (plus whatever was picked) isn't
+    // actually free, this is the wrong function to have called —
+    // createBookingCheckout is. A well-behaved client never reaches this
+    // with a paid total; this is what stops a misbehaving one.
+    if (entryPriceCents > 0) {
+      throw new HttpsError("failed-precondition", "This event requires payment — use checkout instead.");
+    }
+
+    const profileSnap = await db.collection("users").doc(uid).get();
+    const profileData = profileSnap.data() || {};
+    const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {};
+
+    // A real transaction, not just a plain write — the same oversell
+    // protection createBookingCheckout's webhook already has, now applied
+    // here too: re-checks capacity and "already booked" against the
+    // current state right before writing, not whatever was true when this
+    // function started.
+    await db.runTransaction(async (t) => {
+      const [freshEventSnap, existingBooking] = await Promise.all([t.get(eventRef), t.get(bookingRef)]);
+      if (existingBooking.exists) {
+        throw new HttpsError("already-exists", "Already booked for this event.");
+      }
+      const freshEventData = freshEventSnap.data();
+      if (typeof freshEventData.maxCapacity === "number" && (freshEventData.bookedCount || 0) >= freshEventData.maxCapacity) {
+        throw new HttpsError("failed-precondition", "This event is full.");
+      }
+      const now = new Date();
+      t.set(bookingRef, {
+        uid,
+        fieldId: eventData.fieldId,
+        teamId: profileData.teamId || null,
+        callsign: profileData.callsign || "Player",
+        avatarUrl: profileData.avatarUrl || null,
+        bookedAt: now,
+        ...choiceFields,
+      });
+      t.set(userBookingRef, {
+        eventId,
+        fieldId: eventData.fieldId,
+        eventTitle: eventData.title || null,
+        fieldName: eventData.fieldName || null,
+        date: eventData.date || null,
+        endDate: eventData.endDate || null,
+        bookedAt: now,
+        ...choiceFields,
+      });
+      t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + 1 });
+    });
+
+    return { booked: true };
   }
 );
 

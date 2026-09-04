@@ -157,13 +157,18 @@ service cloud.firestore {
       // either there or it's been deleted (cancelled), nothing in between.
       match /bookings/{uid} {
         allow read: if true;
-        allow create: if request.auth != null
-          && request.auth.uid == uid
-          && request.resource.data.uid == uid
-          && (
-            get(/databases/$(database)/documents/events/$(eventId)).data.get('waiver', null) == null
-            || exists(/databases/$(database)/documents/waiverSignatures/$(uid + '_' + eventId))
-          );
+        // A booking is money-adjacent even when the price is $0 — it's
+        // proof of entry, and this used to let any signed-in player
+        // write one directly (waiver check aside), with no verification
+        // that the event's real price (base + whatever Price Options
+        // choice) actually came out to zero. That meant a paid event
+        // could be "booked" for free from browser devtools, no Stripe
+        // involved at all. Booking creation is Cloud-Function-only now,
+        // same trust model as subscriptionStatus/payoutsEnabled below —
+        // createBookingCheckout's webhook for a real charge,
+        // bookFreeEvent for a genuinely free one, both of which resolve
+        // the actual price themselves before writing anything.
+        allow create: if false;
         // Deletion blocked for a paid booking — this is the real
         // backstop, not just the UI gate in the app. A client-side check
         // alone could be bypassed (devtools, a future bug); this is the
@@ -243,12 +248,15 @@ service cloud.firestore {
       // event-side one the scanner naturally writes to, so without this
       // a real check-in would silently never be visible here at all.
       match /bookings/{eventId} {
-        // The player's own create — booking. This has to be explicit
-        // here, not inherited from the parent users/{userId} rule above:
-        // a match block on a parent document does not cascade down to
-        // its subcollections in Firestore, regardless of how broad the
-        // parent's own rule is.
-        allow create: if request.auth != null && request.auth.uid == userId;
+        // This mirror doc used to inherit a create rule of its own (a
+        // match block on a parent document doesn't cascade to
+        // subcollections, so it always needed one explicitly) — now
+        // locked down the same way as the event-side booking above and
+        // for the same reason: booking creation, paid or free, is
+        // Cloud-Function-only, so both copies of a booking are always
+        // written together by the same trusted process instead of two
+        // separate client writes that could drift apart.
+        allow create: if false;
 
         // Deletion (canceling) blocked for a paid booking — same real
         // backstop as the event-side mirror above. A client-side check

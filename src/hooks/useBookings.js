@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, writeBatch } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../lib/firebase";
 
@@ -93,39 +93,17 @@ export function useMyBookings(uid) {
 }
 
 export function useBookingActions() {
-  // A real batch, not two separate calls like favorites uses — a booking
-  // is a bigger commitment (gated behind a signed waiver), so all three
-  // writes succeed together or none do, rather than risking a booking
-  // that exists in one place but not the other.
+  // Cloud-Function-only now, not a direct client write — firestore.rules
+  // no longer allows a client to create a booking document at all. This
+  // used to be a plain writeBatch straight from here with no server-side
+  // price check behind it whatsoever (a real security gap: anyone could
+  // call it directly for any event, paid or not, and get in for free).
+  // bookFreeEvent resolves the real price itself and only writes if it
+  // actually comes out to $0 — profile lookup and all three writes now
+  // happen server-side, in one transaction, so this is just the trigger.
   async function bookEvent(uid, profile, event, selectedChoice) {
-    // selectedChoice, when passed, is the actual { id, label, priceCents }
-    // object off the event's own priceOptions — this whole path only ever
-    // runs when the computed total (base + choice) is $0, so the choice
-    // recorded here can only ever be a free one; nothing paid moves
-    // through this function at all.
-    const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {};
-    const batch = writeBatch(db);
-    batch.set(doc(db, "events", event.id, "bookings", uid), {
-      uid,
-      fieldId: event.fieldId,
-      teamId: profile?.teamId || null,
-      callsign: profile?.callsign || "Player",
-      avatarUrl: profile?.avatarUrl || null,
-      bookedAt: serverTimestamp(),
-      ...choiceFields,
-    });
-    batch.set(doc(db, "users", uid, "bookings", event.id), {
-      eventId: event.id,
-      fieldId: event.fieldId,
-      eventTitle: event.title,
-      fieldName: event.fieldName,
-      date: event.date,
-      endDate: event.endDate || null,
-      bookedAt: serverTimestamp(),
-      ...choiceFields,
-    });
-    batch.update(doc(db, "events", event.id), { bookedCount: increment(1) });
-    await batch.commit();
+    const call = httpsCallable(functions, "bookFreeEvent");
+    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null });
   }
 
   async function cancelBooking(uid, eventId) {
