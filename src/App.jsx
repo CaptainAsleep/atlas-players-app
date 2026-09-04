@@ -194,6 +194,18 @@ function timeBasedGreeting() {
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
+// Native <input type="time"> (owner app) stores/emits 24-hour "HH:MM".
+// Older events may still carry a free-text value like "9:00 AM (gates)"
+// from before that field was a time picker — that won't match the
+// pattern below, so it's returned as-is rather than mangled.
+function formatTimeStr(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t || "");
+  if (!m) return t || "";
+  let h = parseInt(m[1], 10);
+  const suffix = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m[2]} ${suffix}`;
+}
 function formatDate(dateStr, endDateStr) {
   if (!dateStr) return "";
   const opts = { weekday: "short", month: "short", day: "numeric" };
@@ -457,7 +469,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
       </div>
       <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
       <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
-      <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{formatDate(ev.date, ev.endDate)}{ev.startTime ? ` · ${ev.startTime}` : ""}</div>
+      <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{formatDate(ev.date, ev.endDate)}{ev.startTime ? ` · ${formatTimeStr(ev.startTime)}` : ""}</div>
       <div className="flex items-center justify-between mt-1.5">
         {typeof distanceMi === "number" ? (
           <div className="text-[11px] font-medium flex items-center gap-1" style={{ ...mono, color: T.ashFaint }}>
@@ -1038,7 +1050,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           </div>
           <div className="font-semibold text-[17px]" style={{ ...display, color: T.ash }}>{nextGame.title}</div>
           <div className="text-[12px] mb-4" style={{ ...body, color: T.ashDim }}>
-            {nextGame.fieldName} — {formatDate(nextGame.date, nextGame.endDate)}{nextGame.startTime ? ` · ${nextGame.startTime}` : ""}
+            {nextGame.fieldName} — {formatDate(nextGame.date, nextGame.endDate)}{nextGame.startTime ? ` · ${formatTimeStr(nextGame.startTime)}` : ""}
           </div>
 
           {nextGameIsToday ? (
@@ -1565,7 +1577,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                 <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{formatDate(ev.date, ev.endDate)}</div>
                 {(ev.startTime || ev.endTime) && (
                   <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>
-                    {ev.startTime}{ev.endTime ? ` – ${ev.endTime}` : ""}
+                    {formatTimeStr(ev.startTime)}{ev.endTime ? ` – ${formatTimeStr(ev.endTime)}` : ""}
                   </div>
                 )}
               </div>
