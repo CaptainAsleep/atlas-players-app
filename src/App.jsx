@@ -1380,9 +1380,17 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   // Still needed to determine whether this is a paid event at all (for
   // routing to the right booking flow) — the fee/total display itself
   // was removed from the button, so only this piece survives.
-  const entryPriceCents = Math.round(parseFloat(String(ev.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
+  const basePriceCents = Math.round(parseFloat(String(ev.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
 
   const [showWaiver, setShowWaiver] = useState(false);
+  // Price Options — a group of player-picked, differently-priced choices
+  // (weapon class, BB weight, etc.), set by the field owner on the event.
+  // Absent for a normal flat-price or free event.
+  const [selectedChoiceId, setSelectedChoiceId] = useState(null);
+  const priceOptions = ev.priceOptions;
+  const selectedChoice = priceOptions?.choices?.find((c) => c.id === selectedChoiceId) || null;
+  const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0);
+  const choiceMissing = !!priceOptions?.required && !selectedChoice;
   const [showPatchViewer, setShowPatchViewer] = useState(false);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -1411,7 +1419,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     const isPaidEvent = entryPriceCents > 0;
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId);
         // Opens in a genuinely separate tab rather than navigating this
         // app's own window away — a real, confirmed WebKit bug can
         // corrupt this PWA's own rendering after returning from an
@@ -1424,7 +1432,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
-        await bookEvent(user.uid, profile, ev);
+        await bookEvent(user.uid, profile, ev, selectedChoice);
         setBookingBusy(false);
       }
     } catch (err) {
@@ -1439,6 +1447,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   };
 
   const handleBook = () => {
+    if (choiceMissing) return; // Reserve is already disabled for this case — just a defensive no-op
     if (waiverBlocking) {
       setShowWaiver(true);
       return;
@@ -1613,6 +1622,31 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             </button>
           )}
 
+          {priceOptions?.choices?.length > 0 && !myBooking && !isPast && !ev.canceled && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${choiceMissing ? T.accent : T.line}` }}>
+              <Eyebrow>{priceOptions.label}{priceOptions.required ? "" : " (optional)"}</Eyebrow>
+              <div className="flex flex-wrap gap-2">
+                {priceOptions.choices.map((c) => {
+                  const picked = selectedChoiceId === c.id;
+                  const priceLabel = c.priceCents === 0 ? "Free" : c.priceCents % 100 === 0 ? `$${c.priceCents / 100}` : `$${(c.priceCents / 100).toFixed(2)}`;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedChoiceId(picked ? (priceOptions.required ? c.id : null) : c.id)}
+                      className="px-3 py-2 text-[12px] font-semibold"
+                      style={{ ...body, color: picked ? "#FFFFFF" : T.ashDim, background: picked ? T.ash : T.panelAlt, borderRadius: 999 }}
+                    >
+                      {c.label} — {priceLabel}
+                    </button>
+                  );
+                })}
+              </div>
+              {choiceMissing && (
+                <p className="text-[11px] mt-2" style={{ ...body, color: T.accent }}>Choose one to continue.</p>
+              )}
+            </div>
+          )}
+
           {ev.waiver && (
             signature ? (
               <div className="p-3 flex items-center gap-2" style={{ background: "rgba(52,211,153,0.08)", border: `1px solid ${T.good}`, borderRadius: 6 }}>
@@ -1678,7 +1712,9 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         <div>
           <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
           <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>
-            {ev.price || field?.admission || "See listing"}
+            {selectedChoice
+              ? (entryPriceCents % 100 === 0 ? `$${entryPriceCents / 100}` : `$${(entryPriceCents / 100).toFixed(2)}`)
+              : (ev.price || field?.admission || "See listing")}
           </div>
           {typeof ev.maxCapacity === "number" && (
             <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
@@ -1746,11 +1782,11 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         ) : (
           <button
             onClick={handleBook}
-            disabled={bookingBusy}
+            disabled={bookingBusy || choiceMissing}
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
-            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}
+            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
           >
-            {bookingBusy ? "…" : waiverBlocking ? "Sign Waiver to Reserve" : "Reserve This Event"}
+            {bookingBusy ? "…" : choiceMissing ? `Choose ${priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : "Reserve This Event"}
           </button>
         )}
       </div>

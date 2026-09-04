@@ -321,7 +321,27 @@ export const createBookingCheckout = onCall(
       throw new HttpsError("failed-precondition", "This field hasn't finished payment setup yet.");
     }
 
-    const entryPriceCents = Math.round(parseFloat(String(eventData.price || "").replace(/[^0-9.]/g, "")) * 100);
+    const basePriceCents = Math.round(parseFloat(String(eventData.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
+
+    // Price Options: one optional group of player-picked, differently-
+    // priced choices (weapon class, BB weight, etc.). The id the client
+    // sends is just a selection — the real price always comes from the
+    // event document itself, never trusted from the client directly,
+    // same trust model as the flat price above.
+    const selectedChoiceId = request.data?.selectedChoiceId || null;
+    const priceOptions = eventData.priceOptions;
+    let selectedChoice = null;
+    if (priceOptions?.choices?.length) {
+      selectedChoice = priceOptions.choices.find((c) => c.id === selectedChoiceId) || null;
+      if (priceOptions.required && !selectedChoice) {
+        throw new HttpsError("invalid-argument", `Choose a valid ${priceOptions.label || "option"} before booking.`);
+      }
+      if (selectedChoiceId && !selectedChoice) {
+        throw new HttpsError("invalid-argument", "That option isn't available for this event anymore.");
+      }
+    }
+
+    const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0);
     if (!entryPriceCents || entryPriceCents <= 0) {
       throw new HttpsError("failed-precondition", "This event doesn't have a valid price set.");
     }
@@ -347,7 +367,9 @@ export const createBookingCheckout = onCall(
           currency: "usd",
           product_data: {
             name: eventData.title,
-            description: `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name}`,
+            description: selectedChoice
+              ? `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name} — ${selectedChoice.label}`
+              : `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name}`,
           },
           unit_amount: totalCents,
         },
@@ -357,7 +379,13 @@ export const createBookingCheckout = onCall(
         application_fee_amount: bookingFeeCents,
         transfer_data: { destination: ownerData.stripeConnectAccountId },
       },
-      metadata: { firebaseUid: uid, eventId, fieldId: eventData.fieldId, bookingFeeCents: String(bookingFeeCents) },
+      metadata: {
+        firebaseUid: uid,
+        eventId,
+        fieldId: eventData.fieldId,
+        bookingFeeCents: String(bookingFeeCents),
+        ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: String(selectedChoice.priceCents) } : {}),
+      },
       success_url: "https://playerapp.airsoftatlas.app/?booking=success",
       cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
     }, {
@@ -466,7 +494,7 @@ export const stripeWebhook = onRequest(
           // subscription checkouts are fully handled by the
           // customer.subscription.* events above, not this one.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, selectedChoiceLabel, selectedChoicePriceCents } = session.metadata;
             const eventRef = db.collection("events").doc(eventId);
             const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
             const bookingRef = eventRef.collection("bookings").doc(uid);
@@ -506,6 +534,13 @@ export const stripeWebhook = onRequest(
                 // metadata since it was already computed once, at checkout
                 // creation.
                 bookingFeeCents: bookingFeeCents != null ? Number(bookingFeeCents) : null,
+                // Which Price Options choice this player picked, if the
+                // event has that group — read straight off checkout
+                // metadata since it was already validated once, server-
+                // side, at checkout creation. Null for an event with no
+                // Price Options group at all.
+                selectedChoiceLabel: selectedChoiceLabel || null,
+                selectedChoicePriceCents: selectedChoicePriceCents != null ? Number(selectedChoicePriceCents) : null,
               });
               t.set(userBookingRef, {
                 eventId,
@@ -516,6 +551,7 @@ export const stripeWebhook = onRequest(
                 endDate: eventData?.endDate || null,
                 bookedAt: now,
                 paid: true,
+                selectedChoiceLabel: selectedChoiceLabel || null,
               });
               t.update(eventRef, { bookedCount: (eventData?.bookedCount || 0) + 1 });
             });

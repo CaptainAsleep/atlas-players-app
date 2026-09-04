@@ -97,7 +97,13 @@ export function useBookingActions() {
   // is a bigger commitment (gated behind a signed waiver), so all three
   // writes succeed together or none do, rather than risking a booking
   // that exists in one place but not the other.
-  async function bookEvent(uid, profile, event) {
+  async function bookEvent(uid, profile, event, selectedChoice) {
+    // selectedChoice, when passed, is the actual { id, label, priceCents }
+    // object off the event's own priceOptions — this whole path only ever
+    // runs when the computed total (base + choice) is $0, so the choice
+    // recorded here can only ever be a free one; nothing paid moves
+    // through this function at all.
+    const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {};
     const batch = writeBatch(db);
     batch.set(doc(db, "events", event.id, "bookings", uid), {
       uid,
@@ -106,6 +112,7 @@ export function useBookingActions() {
       callsign: profile?.callsign || "Player",
       avatarUrl: profile?.avatarUrl || null,
       bookedAt: serverTimestamp(),
+      ...choiceFields,
     });
     batch.set(doc(db, "users", uid, "bookings", event.id), {
       eventId: event.id,
@@ -115,6 +122,7 @@ export function useBookingActions() {
       date: event.date,
       endDate: event.endDate || null,
       bookedAt: serverTimestamp(),
+      ...choiceFields,
     });
     batch.update(doc(db, "events", event.id), { bookedCount: increment(1) });
     await batch.commit();
@@ -133,9 +141,9 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId) {
+  async function createBookingCheckout(eventId, selectedChoiceId) {
     const call = httpsCallable(functions, "createBookingCheckout");
-    const result = await call({ eventId });
+    const result = await call({ eventId, selectedChoiceId: selectedChoiceId || null });
     return result.data.url;
   }
 
