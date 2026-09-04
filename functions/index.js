@@ -21,18 +21,30 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeConnectWebhookSecret = defineSecret("STRIPE_CONNECT_WEBHOOK_SECRET");
 
 // Real Stripe Price IDs — created in the Stripe Dashboard under Products,
-// one price per tier, monthly recurring. Renamed from starter/pro/
-// enterprise to basic/pro/unlimited to match the live pricing page and
-// the two-axis (tier + field-count) model — pro's id is unchanged, only
-// basic and unlimited got new Prices when the tiers were repriced.
-// Annual billing isn't wired up yet — this is monthly-only for the first
-// real version; adding an annual price per tier later just means adding
-// three more ids here and a plan-length toggle on the checkout call.
+// one price per tier, monthly AND annual recurring (annual added
+// 2026-09-04). Renamed from starter/pro/enterprise to basic/pro/unlimited
+// to match the live pricing page and the two-axis (tier + field-count)
+// model.
 const TIER_PRICE_IDS = {
-  basic: "price_1UBnGZE1l1o0GwwHp8dTW7o9",
-  pro: "price_1U9a8DE1l1o0GwwHeCFO6rPn",
-  unlimited: "price_1UBnHBE1l1o0GwwHuUOp4ZLh",
+  basic: { monthly: "price_1UBnGZE1l1o0GwwHp8dTW7o9", annual: "price_1UBnq1E1l1o0GwwHqg73fj0t" },
+  pro: { monthly: "price_1U9a8DE1l1o0GwwHeCFO6rPn", annual: "price_1UBnqXE1l1o0GwwHRlpfcGVq" },
+  unlimited: { monthly: "price_1UBnHBE1l1o0GwwHuUOp4ZLh", annual: "price_1UBnqzE1l1o0GwwHGmt9zpH7" },
 };
+
+// Reverse lookup (Stripe Price id -> tier key), built from the map above.
+// The subscription webhook below uses this to read an owner's real
+// current tier straight off their subscription's actual Price, rather
+// than trusting the tier/billingPeriod stored in subscription metadata
+// at checkout time — that metadata never gets touched again if the owner
+// later switches plans through Stripe's own Customer Portal (which this
+// app's portal config explicitly allows, subscription_update.enabled),
+// so it can silently go stale. Deriving from the live Price on every
+// webhook event self-heals regardless of which path changed the plan.
+const PRICE_ID_TO_TIER = Object.fromEntries(
+  Object.entries(TIER_PRICE_IDS).flatMap(([tier, byPeriod]) =>
+    Object.values(byPeriod).map((priceId) => [priceId, tier])
+  )
+);
 
 // How many fields a single account may have claimed at once, by tier —
 // the second axis of the pricing model (the first is event/player caps,
@@ -68,9 +80,10 @@ export const createSubscriptionCheckout = onCall(
     }
     const uid = request.auth.uid;
     const tier = request.data?.tier;
-    const priceId = TIER_PRICE_IDS[tier];
+    const billingPeriod = request.data?.billingPeriod === "annual" ? "annual" : "monthly";
+    const priceId = TIER_PRICE_IDS[tier]?.[billingPeriod];
     if (!priceId) {
-      throw new HttpsError("invalid-argument", `Unknown tier: ${tier}`);
+      throw new HttpsError("invalid-argument", `Unknown tier/billing period: ${tier}/${billingPeriod}`);
     }
 
     const stripe = new Stripe(stripeSecretKey.value());
@@ -97,7 +110,7 @@ export const createSubscriptionCheckout = onCall(
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
         trial_period_days: 30, // the "first month free" promise from the pricing page
-        metadata: { firebaseUid: uid, tier },
+        metadata: { firebaseUid: uid, tier, billingPeriod },
       },
       success_url: "https://ownerapp.airsoftatlas.app/?checkout=success",
       cancel_url: "https://ownerapp.airsoftatlas.app/?checkout=cancelled",
@@ -116,10 +129,14 @@ export const createSubscriptionCheckout = onCall(
 //
 // One-time setup this depends on: the Customer Portal has to be turned on
 // in the Stripe Dashboard first (Settings -> Billing -> Customer portal),
-// with "Cancel subscriptions" and "Switch plans" enabled and the three
-// tier prices added to the portal's list of switchable products — Stripe
-// has no API for this, it's a dashboard-only configuration step. Without
-// it, this call fails with a Stripe error asking for that configuration.
+// with "Cancel subscriptions" and "Switch plans" enabled and all six
+// tier/billing-period prices (monthly + annual x Basic/Pro/Unlimited)
+// added to the portal's list of switchable products — Stripe has no API
+// for this, it's a dashboard-only configuration step. Without a price in
+// that list, an existing subscriber can't self-switch to it from the
+// portal (checkout for a brand-new subscription is unaffected either
+// way — that always goes through createSubscriptionCheckout above,
+// which doesn't depend on this portal config at all).
 export const createBillingPortalSession = onCall(
   { secrets: [stripeSecretKey], invoker: "public" },
   async (request) => {
@@ -395,6 +412,13 @@ export const stripeWebhook = onRequest(
           const sub = event.data.object;
           const uid = sub.metadata?.firebaseUid;
           if (uid) {
+            // Read off the subscription's actual current Price rather
+            // than metadata (see the PRICE_ID_TO_TIER comment above) —
+            // this self-heals subscriptionTier/billingPeriod even for a
+            // plan switch made through Stripe's own Customer Portal.
+            const price = sub.items?.data?.[0]?.price;
+            const tier = (price && PRICE_ID_TO_TIER[price.id]) || sub.metadata?.tier || null;
+            const billingPeriod = price?.recurring?.interval === "year" ? "annual" : "monthly";
             await db.collection("owners").doc(uid).set(
               {
                 // Stripe's own status values: "trialing", "active",
@@ -403,7 +427,8 @@ export const stripeWebhook = onRequest(
                 // exact real state (e.g. show a grace-period banner on
                 // "past_due" instead of an instant hard lockout).
                 subscriptionStatus: sub.status,
-                subscriptionTier: sub.metadata?.tier || null,
+                subscriptionTier: tier,
+                billingPeriod,
                 stripeSubscriptionId: sub.id,
                 currentPeriodEnd: new Date(sub.current_period_end * 1000),
                 // Set the instant someone hits "Cancel" in the Stripe

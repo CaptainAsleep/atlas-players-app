@@ -210,7 +210,7 @@ service cloud.firestore {
       // "active" directly from browser devtools, no payment required.
       allow update: if request.auth != null && request.auth.uid == ownerId
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          "subscriptionStatus", "subscriptionTier", "stripeCustomerId",
+          "subscriptionStatus", "subscriptionTier", "billingPeriod", "stripeCustomerId",
           "stripeSubscriptionId", "currentPeriodEnd", "comped",
           "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
           "connectOnboardingComplete"
