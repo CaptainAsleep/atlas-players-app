@@ -20,147 +20,13 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 // verify either one.
 const stripeConnectWebhookSecret = defineSecret("STRIPE_CONNECT_WEBHOOK_SECRET");
 
-// Real Stripe Price IDs — created in the Stripe Dashboard under Products,
-// one price per tier, monthly AND annual recurring (annual added
-// 2026-09-04). Renamed from starter/pro/enterprise to basic/pro/unlimited
-// to match the live pricing page and the two-axis (tier + field-count)
-// model.
-const TIER_PRICE_IDS = {
-  basic: { monthly: "price_1UBnGZE1l1o0GwwHp8dTW7o9", annual: "price_1UBnq1E1l1o0GwwHqg73fj0t" },
-  pro: { monthly: "price_1U9a8DE1l1o0GwwHeCFO6rPn", annual: "price_1UBnqXE1l1o0GwwHRlpfcGVq" },
-  unlimited: { monthly: "price_1UBnHBE1l1o0GwwHuUOp4ZLh", annual: "price_1UBnqzE1l1o0GwwHGmt9zpH7" },
-};
-
-// Reverse lookup (Stripe Price id -> tier key), built from the map above.
-// The subscription webhook below uses this to read an owner's real
-// current tier straight off their subscription's actual Price, rather
-// than trusting the tier/billingPeriod stored in subscription metadata
-// at checkout time — that metadata never gets touched again if the owner
-// later switches plans through Stripe's own Customer Portal (which this
-// app's portal config explicitly allows, subscription_update.enabled),
-// so it can silently go stale. Deriving from the live Price on every
-// webhook event self-heals regardless of which path changed the plan.
-const PRICE_ID_TO_TIER = Object.fromEntries(
-  Object.entries(TIER_PRICE_IDS).flatMap(([tier, byPeriod]) =>
-    Object.values(byPeriod).map((priceId) => [priceId, tier])
-  )
-);
-
-// How many fields a single account may have claimed at once, by tier —
-// the second axis of the pricing model (the first is event/player caps,
-// enforced elsewhere). Basic and Pro are single-field plans; Unlimited
-// covers up to 3 fields on one account, same flat price. Beyond 3 is
-// manual/Discord-only, not self-serve, per the pricing page. Anything
-// unrecognized (no subscription yet, a lapsed one) defaults to 1 — a
-// first-time owner can always claim their first field before ever
-// picking a plan, per the owner app's own onboarding gate.
-const FIELD_CAPS = { basic: 1, pro: 1, unlimited: 3 };
-const DEFAULT_FIELD_CAP = 1;
-
-// The specific Billing Portal Configuration set up in the Stripe Dashboard
-// (Settings -> Billing -> Customer portal) with cancellation and plan
-// switching turned on. Pinning this id explicitly means the portal always
-// opens with those features enabled, regardless of which configuration
-// Stripe happens to have marked as account-wide "default" — that default
-// can silently change (e.g. if a second configuration is ever created for
-// something else), which would otherwise quietly disable self-serve
-// cancel with no error to notice it by.
-const BILLING_PORTAL_CONFIG_ID = "bpc_1UBJNRE1l1o0GwwHGZhfRsXy";
-
-// Called from the owner app (via the Firebase SDK's httpsCallable) once an
-// owner picks a tier. request.auth.uid comes from their verified ID token
-// — never trust a client-supplied uid for something that creates a real
-// charge. Returns a Stripe-hosted Checkout URL; the owner app just
-// redirects to it, no custom card form anywhere in this project.
-export const createSubscriptionCheckout = onCall(
-  { secrets: [stripeSecretKey], invoker: "public" },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Must be signed in to start a subscription.");
-    }
-    const uid = request.auth.uid;
-    const tier = request.data?.tier;
-    const billingPeriod = request.data?.billingPeriod === "annual" ? "annual" : "monthly";
-    const priceId = TIER_PRICE_IDS[tier]?.[billingPeriod];
-    if (!priceId) {
-      throw new HttpsError("invalid-argument", `Unknown tier/billing period: ${tier}/${billingPeriod}`);
-    }
-
-    const stripe = new Stripe(stripeSecretKey.value());
-    const db = getFirestore();
-    const ownerRef = db.collection("owners").doc(uid);
-    const ownerSnap = await ownerRef.get();
-    const ownerData = ownerSnap.data() || {};
-
-    // Reuse an existing Stripe customer for this owner rather than
-    // creating a fresh one every time they hit checkout.
-    let customerId = ownerData.stripeCustomerId;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: ownerData.email || request.auth.token?.email,
-        metadata: { firebaseUid: uid },
-      });
-      customerId = customer.id;
-      await ownerRef.set({ stripeCustomerId: customerId }, { merge: true });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: {
-        trial_period_days: 30, // the "first month free" promise from the pricing page
-        metadata: { firebaseUid: uid, tier, billingPeriod },
-      },
-      success_url: "https://ownerapp.airsoftatlas.app/?checkout=success",
-      cancel_url: "https://ownerapp.airsoftatlas.app/?checkout=cancelled",
-    });
-
-    return { url: session.url };
-  }
-);
-
-// Opens Stripe's own hosted Customer Portal — an owner can see invoices,
-// switch tiers, update their card, or cancel outright, all on Stripe's
-// page, the same self-serve pattern as checkout above. This is what makes
-// "I meant to cancel and got charged anyway" no longer possible: there's
-// a real button that leads straight to a real cancel flow, not a support
-// request that depends on someone reading Discord in time.
-//
-// One-time setup this depends on: the Customer Portal has to be turned on
-// in the Stripe Dashboard first (Settings -> Billing -> Customer portal),
-// with "Cancel subscriptions" and "Switch plans" enabled and all six
-// tier/billing-period prices (monthly + annual x Basic/Pro/Unlimited)
-// added to the portal's list of switchable products — Stripe has no API
-// for this, it's a dashboard-only configuration step. Without a price in
-// that list, an existing subscriber can't self-switch to it from the
-// portal (checkout for a brand-new subscription is unaffected either
-// way — that always goes through createSubscriptionCheckout above,
-// which doesn't depend on this portal config at all).
-export const createBillingPortalSession = onCall(
-  { secrets: [stripeSecretKey], invoker: "public" },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-    const uid = request.auth.uid;
-    const stripe = new Stripe(stripeSecretKey.value());
-    const db = getFirestore();
-    const ownerSnap = await db.collection("owners").doc(uid).get();
-    const customerId = ownerSnap.data()?.stripeCustomerId;
-    if (!customerId) {
-      throw new HttpsError("failed-precondition", "No billing account on file yet — choose a plan first.");
-    }
-
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      configuration: BILLING_PORTAL_CONFIG_ID,
-      return_url: "https://ownerapp.airsoftatlas.app/?billing=return",
-    });
-
-    return { url: session.url };
-  }
-);
+// Atlas Standard: $0/month subscription — Atlas's entire revenue on a
+// local field is the per-ticket platform fee computed in
+// computeStandardFee() below, applied inside createBookingCheckout.
+// (The old per-tier Stripe subscription infra — TIER_PRICE_IDS,
+// PRICE_ID_TO_TIER, FIELD_CAPS, BILLING_PORTAL_CONFIG_ID — was removed
+// 2026-09 when the flat $50/$200/$350 tiers were eliminated; nobody was
+// ever a real paying subscriber on them.)
 
 // Called from the owner app to start (or resume) Stripe Connect onboarding
 // — this is the "get paid for player bookings" flow, entirely separate
@@ -282,6 +148,15 @@ function resolveEntryPrice(eventData, selectedChoiceId) {
   return { entryPriceCents: basePriceCents + (selectedChoice?.priceCents || 0), selectedChoice };
 }
 
+// Atlas Standard's platform fee: 3.5% + $1.30, capped at $5.00 total.
+// Whether the player pays this on top (feeModel "pass_to_player", the
+// default) or it's deducted from the field's payout (feeModel "absorb")
+// is decided by the caller — this only computes the fee amount itself,
+// same number either way.
+function computeStandardFee(entryPriceCents) {
+  return Math.min(Math.round(entryPriceCents * 0.035) + 130, 500);
+}
+
 // Mirrors distanceMiles() in the player app's src/App.jsx exactly — kept
 // in sync manually since functions/ and src/ don't share a module here.
 function distanceMilesServer(lat1, lng1, lat2, lng2) {
@@ -388,9 +263,17 @@ export const createBookingCheckout = onCall(
     // can sit open for minutes before it's paid, so it's the wrong moment
     // to decide something time-sensitive like that.
     const walkOnNearField = isNearField(request.data?.location, fieldData);
-    // The real, agreed booking fee: 10% of entry cost, capped at $3.
-    const bookingFeeCents = Math.min(Math.round(entryPriceCents * 0.10), 300);
-    const totalCents = entryPriceCents + bookingFeeCents;
+    // Atlas Standard's platform fee (3.5% + $1.30, capped at $5) — see
+    // computeStandardFee() above. Whether the player pays it on top or
+    // it comes out of the field's payout depends on the fee model this
+    // owner locked in at sign-up (owners.feeModel); pass-to-player is the
+    // default when unset, which also covers any owner mid-onboarding
+    // (should be impossible to reach here without one, since the owner
+    // app gates further access on picking a fee model, but this keeps
+    // the math sane rather than throwing if that ever changes).
+    const bookingFeeCents = computeStandardFee(entryPriceCents);
+    const passFeeToPlayer = ownerData.feeModel !== "absorb";
+    const totalCents = passFeeToPlayer ? entryPriceCents + bookingFeeCents : entryPriceCents;
 
     // A deterministic key, not a random one — the whole point is that a
     // second call for the same player + event (impatient re-tap after the
@@ -576,7 +459,8 @@ export const bookFreeEvent = onCall(
 // land on the success_url above without payment actually having gone
 // through, so the redirect is only ever immediate visual feedback. This
 // webhook, verified against Stripe's signature, is the one trustworthy
-// source of truth for what an owner's subscription actually is.
+// source of truth for whether a booking (or a Connect account's payout
+// setup) is actually real.
 export const stripeWebhook = onRequest(
   { secrets: [stripeSecretKey, stripeWebhookSecret, stripeConnectWebhookSecret], invoker: "public" },
   async (req, res) => {
@@ -611,64 +495,9 @@ export const stripeWebhook = onRequest(
 
     try {
       switch (event.type) {
-        case "customer.subscription.created":
-        case "customer.subscription.updated": {
-          const sub = event.data.object;
-          const uid = sub.metadata?.firebaseUid;
-          if (uid) {
-            // Read off the subscription's actual current Price rather
-            // than metadata (see the PRICE_ID_TO_TIER comment above) —
-            // this self-heals subscriptionTier/billingPeriod even for a
-            // plan switch made through Stripe's own Customer Portal.
-            const price = sub.items?.data?.[0]?.price;
-            const tier = (price && PRICE_ID_TO_TIER[price.id]) || sub.metadata?.tier || null;
-            const billingPeriod = price?.recurring?.interval === "year" ? "annual" : "monthly";
-            await db.collection("owners").doc(uid).set(
-              {
-                // Stripe's own status values: "trialing", "active",
-                // "past_due", "canceled", "unpaid", etc. — stored as-is
-                // rather than remapped, so the owner app can react to the
-                // exact real state (e.g. show a grace-period banner on
-                // "past_due" instead of an instant hard lockout).
-                subscriptionStatus: sub.status,
-                subscriptionTier: tier,
-                billingPeriod,
-                stripeSubscriptionId: sub.id,
-                currentPeriodEnd: new Date(sub.current_period_end * 1000),
-                // Set the instant someone hits "Cancel" in the Stripe
-                // portal — the subscription itself stays "active" (they
-                // keep access through what they already paid for, our
-                // portal config is "cancel at period end," not immediate)
-                // right up until the real customer.subscription.deleted
-                // event below fires at the actual period end. Without
-                // this flag, the owner app would show "ACTIVE, renews on
-                // <date>" with zero indication anything was canceled —
-                // exactly the "did my cancellation actually go through?"
-                // anxiety this whole billing-portal feature was built to
-                // eliminate.
-                cancelAtPeriodEnd: !!sub.cancel_at_period_end,
-              },
-              { merge: true }
-            );
-          }
-          break;
-        }
-        case "customer.subscription.deleted": {
-          const sub = event.data.object;
-          const uid = sub.metadata?.firebaseUid;
-          if (uid) {
-            await db.collection("owners").doc(uid).set(
-              { subscriptionStatus: "canceled", cancelAtPeriodEnd: false },
-              { merge: true }
-            );
-          }
-          break;
-        }
         case "checkout.session.completed": {
           const session = event.data.object;
-          // Only booking-fee checkouts carry this metadata shape —
-          // subscription checkouts are fully handled by the
-          // customer.subscription.* events above, not this one.
+          // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
             const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField } = session.metadata;
             const eventRef = db.collection("events").doc(eventId);
@@ -787,7 +616,7 @@ export const stripeWebhook = onRequest(
 // fetch that page server-side and confirm the code is actually there.
 // Both functions below use the Admin SDK, which bypasses Firestore
 // security rules entirely — the same trust model already used by the
-// Stripe webhook to write subscriptionStatus/payoutsEnabled/etc. This is
+// Stripe webhook to write payoutsEnabled/chargesEnabled/etc. This is
 // deliberate: a client-side security rule can't safely grant "you now own
 // this field" on its own, since nothing stops any signed-in user from
 // writing whatever they want to a document they don't yet own — the
@@ -881,21 +710,10 @@ export const verifyWebsiteClaim = onCall(
       );
     }
 
-    // Field-count cap — this path writes via the Admin SDK, so it
-    // bypasses firestore.rules entirely; the same check has to be done
-    // explicitly here (the two plain-client claim paths get theirs from
-    // the rules themselves).
+    // No field-count cap anymore (removed along with the subscription
+    // tiers it used to key off of) — any owner can claim unlimited
+    // fields. ownerRef is still needed below to bump claimedFieldCount.
     const ownerRef = db.collection("owners").doc(uid);
-    const ownerSnap = await ownerRef.get();
-    const ownerData = ownerSnap.data() || {};
-    const fieldCap = FIELD_CAPS[ownerData.subscriptionTier] ?? DEFAULT_FIELD_CAP;
-    const claimedFieldCount = ownerData.claimedFieldCount || 0;
-    if (claimedFieldCount >= fieldCap) {
-      throw new HttpsError(
-        "resource-exhausted",
-        "Your current plan doesn't include another field — upgrade your plan, or reach out on Discord, to claim more."
-      );
-    }
 
     let pageText;
     try {
