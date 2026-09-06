@@ -140,6 +140,10 @@ const achievementPatches = [
   { id: "new-operator", name: "New Operator", imageFile: "newoperator.png",
     details: "Create a Profile", trigger: { type: "account_created" } },
 
+  { id: "walk-on-survivor", name: "Walk-On Survivor", imageFile: "walkonsurvivor.png",
+    details: "Create your account and book your first game on-site at the field, before you even reach the counter",
+    trigger: { type: "walkon_flagged_booking" } },
+
   { id: "secret-agent", name: "Secret Agent", imageFile: "secretagent.png",
     details: "Only given out by the owner of Atlas", trigger: null },
 

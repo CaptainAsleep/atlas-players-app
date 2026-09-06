@@ -101,9 +101,12 @@ export function useBookingActions() {
   // bookFreeEvent resolves the real price itself and only writes if it
   // actually comes out to $0 — profile lookup and all three writes now
   // happen server-side, in one transaction, so this is just the trigger.
-  async function bookEvent(uid, profile, event, selectedChoice) {
+  async function bookEvent(uid, profile, event, selectedChoice, location) {
     const call = httpsCallable(functions, "bookFreeEvent");
-    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null });
+    // location is a best-effort { lat, lng } reading (or null) the caller
+    // already tried to grab — used server-side only to decide the
+    // Walk-On Survivor patch, never required for booking to succeed.
+    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null });
   }
 
   async function cancelBooking(uid, eventId) {
@@ -119,9 +122,12 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location) {
     const call = httpsCallable(functions, "createBookingCheckout");
-    const result = await call({ eventId, selectedChoiceId: selectedChoiceId || null });
+    // Same best-effort { lat, lng } (or null) as bookEvent — carried
+    // through Checkout Session metadata since the webhook that actually
+    // creates the booking runs with no browser present at all.
+    const result = await call({ eventId, selectedChoiceId: selectedChoiceId || null, location: location || null });
     return result.data.url;
   }
 

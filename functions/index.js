@@ -282,6 +282,39 @@ function resolveEntryPrice(eventData, selectedChoiceId) {
   return { entryPriceCents: basePriceCents + (selectedChoice?.priceCents || 0), selectedChoice };
 }
 
+// Mirrors distanceMiles() in the player app's src/App.jsx exactly — kept
+// in sync manually since functions/ and src/ don't share a module here.
+function distanceMilesServer(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// How close a claimed location has to be to the field to count as "at the
+// field" for the Walk-On Survivor patch. Generous on purpose — GPS drift
+// plus large outdoor properties (parking lots, back fields) both eat into
+// this, and the only cost of being too generous is a cosmetic patch
+// occasionally going to someone who was in the lot rather than at the
+// counter. Too tight just means real walk-ons quietly never get it.
+const WALK_ON_RADIUS_MILES = 1;
+
+// Shared by both booking paths — resolves a client-supplied best-effort
+// location (or its absence) down to a single boolean. "First-ever
+// booking" is deliberately NOT decided here: that's only safe to check
+// transactionally, right where each path actually creates its booking
+// record, since this function runs well before that (at checkout
+// creation, for the paid path — which can sit open for minutes before
+// the webhook fires).
+function isNearField(location, fieldData) {
+  if (!location || typeof location.lat !== "number" || typeof location.lng !== "number") return false;
+  if (typeof fieldData?.lat !== "number" || typeof fieldData?.lng !== "number") return false;
+  return distanceMilesServer(location.lat, location.lng, fieldData.lat, fieldData.lng) <= WALK_ON_RADIUS_MILES;
+}
+
 export const createBookingCheckout = onCall(
   { secrets: [stripeSecretKey], invoker: "public" },
   async (request) => {
@@ -346,6 +379,15 @@ export const createBookingCheckout = onCall(
     if (!entryPriceCents || entryPriceCents <= 0) {
       throw new HttpsError("failed-precondition", "This event doesn't have a valid price set.");
     }
+
+    // Walk-On Survivor eligibility (proximity only) — computed now, while
+    // fieldData is already in hand, and carried through Checkout Session
+    // metadata since the webhook that actually creates the booking runs
+    // with no browser present at all. "First-ever booking" is checked
+    // later, in the webhook's transaction, not here — a checkout session
+    // can sit open for minutes before it's paid, so it's the wrong moment
+    // to decide something time-sensitive like that.
+    const walkOnNearField = isNearField(request.data?.location, fieldData);
     // The real, agreed booking fee: 10% of entry cost, capped at $3.
     const bookingFeeCents = Math.min(Math.round(entryPriceCents * 0.10), 300);
     const totalCents = entryPriceCents + bookingFeeCents;
@@ -386,6 +428,9 @@ export const createBookingCheckout = onCall(
         fieldId: eventData.fieldId,
         bookingFeeCents: String(bookingFeeCents),
         ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: String(selectedChoice.priceCents) } : {}),
+        // Stripe metadata values are strings only — "true"/absent, not a
+        // real boolean.
+        ...(walkOnNearField ? { walkOnNearField: "true" } : {}),
       },
       success_url: "https://playerapp.airsoftatlas.app/?booking=success",
       cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
@@ -459,13 +504,32 @@ export const bookFreeEvent = onCall(
     const profileData = profileSnap.data() || {};
     const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {};
 
+    // Walk-On Survivor: earned by creating an account and completing a
+    // first-ever booking while physically at the field — the "extra
+    // effort" moment of signing up on the spot rather than ahead of time.
+    // The client sends a best-effort location reading (silently omitted
+    // if geolocation was denied, unavailable, or timed out — this never
+    // blocks booking either way); "first-ever booking" is verified here,
+    // not trusted from the client, since it's a one-shot Firestore check
+    // anyway and this is the natural place to also do it transactionally.
+    let walkOnEligible = false;
+    const loc = request.data?.location;
+    if (loc) {
+      const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
+      walkOnEligible = isNearField(loc, fieldSnap.data());
+    }
+
     // A real transaction, not just a plain write — the same oversell
     // protection createBookingCheckout's webhook already has, now applied
     // here too: re-checks capacity and "already booked" against the
     // current state right before writing, not whatever was true when this
     // function started.
     await db.runTransaction(async (t) => {
-      const [freshEventSnap, existingBooking] = await Promise.all([t.get(eventRef), t.get(bookingRef)]);
+      const [freshEventSnap, existingBooking, priorBookingsSnap] = await Promise.all([
+        t.get(eventRef),
+        t.get(bookingRef),
+        walkOnEligible ? t.get(db.collection("users").doc(uid).collection("bookings").limit(1)) : Promise.resolve(null),
+      ]);
       if (existingBooking.exists) {
         throw new HttpsError("already-exists", "Already booked for this event.");
       }
@@ -473,6 +537,12 @@ export const bookFreeEvent = onCall(
       if (typeof freshEventData.maxCapacity === "number" && (freshEventData.bookedCount || 0) >= freshEventData.maxCapacity) {
         throw new HttpsError("failed-precondition", "This event is full.");
       }
+      // Re-confirmed inside the transaction rather than trusted from a
+      // check earlier in the function — this is what actually stops two
+      // simultaneous first bookings (two tabs, say) from both counting as
+      // "first."
+      const isFirstEverBooking = walkOnEligible && priorBookingsSnap.empty;
+      const walkOnFields = isFirstEverBooking ? { walkOnEligible: true } : {};
       const now = new Date();
       t.set(bookingRef, {
         uid,
@@ -482,6 +552,7 @@ export const bookFreeEvent = onCall(
         avatarUrl: profileData.avatarUrl || null,
         bookedAt: now,
         ...choiceFields,
+        ...walkOnFields,
       });
       t.set(userBookingRef, {
         eventId,
@@ -492,6 +563,7 @@ export const bookFreeEvent = onCall(
         endDate: eventData.endDate || null,
         bookedAt: now,
         ...choiceFields,
+        ...walkOnFields,
       });
       t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + 1 });
     });
@@ -598,10 +670,11 @@ export const stripeWebhook = onRequest(
           // subscription checkouts are fully handled by the
           // customer.subscription.* events above, not this one.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, selectedChoiceLabel, selectedChoicePriceCents } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField } = session.metadata;
             const eventRef = db.collection("events").doc(eventId);
             const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
             const bookingRef = eventRef.collection("bookings").doc(uid);
+            const walkOnNear = walkOnNearField === "true";
 
             // The real, authoritative check — the one in
             // createBookingCheckout only prevents the overwhelming
@@ -610,15 +683,22 @@ export const stripeWebhook = onRequest(
             // same instant, since it's the one place that actually
             // creates the booking record.
             await db.runTransaction(async (t) => {
-              const [eventSnap, existingBooking, profileSnap] = await Promise.all([
+              const [eventSnap, existingBooking, profileSnap, priorBookingsSnap] = await Promise.all([
                 t.get(eventRef),
                 t.get(bookingRef),
                 t.get(db.collection("users").doc(uid)),
+                walkOnNear ? t.get(db.collection("users").doc(uid).collection("bookings").limit(1)) : Promise.resolve(null),
               ]);
               if (existingBooking.exists) return; // already booked somehow — don't double up
               const eventData = eventSnap.data();
               const profileData = profileSnap.data() || {};
               const now = new Date();
+              // Same "confirm inside the transaction, don't trust an
+              // earlier moment" reasoning as bookFreeEvent — this is what
+              // actually decides "first-ever," not the proximity flag
+              // carried in from checkout creation, which could be minutes
+              // stale by the time payment actually completes.
+              const walkOnFields = (walkOnNear && priorBookingsSnap.empty) ? { walkOnEligible: true } : {};
 
               t.set(bookingRef, {
                 uid,
@@ -645,6 +725,7 @@ export const stripeWebhook = onRequest(
                 // Price Options group at all.
                 selectedChoiceLabel: selectedChoiceLabel || null,
                 selectedChoicePriceCents: selectedChoicePriceCents != null ? Number(selectedChoicePriceCents) : null,
+                ...walkOnFields,
               });
               t.set(userBookingRef, {
                 eventId,
@@ -656,6 +737,7 @@ export const stripeWebhook = onRequest(
                 bookedAt: now,
                 paid: true,
                 selectedChoiceLabel: selectedChoiceLabel || null,
+                ...walkOnFields,
               });
               t.update(eventRef, { bookedCount: (eventData?.bookedCount || 0) + 1 });
             });

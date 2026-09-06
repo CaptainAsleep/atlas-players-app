@@ -191,6 +191,14 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
         });
         break;
       }
+      // Doesn't filter on checkedIn like the others — the moment this is
+      // rewarding (signing up on the spot, before the counter) already
+      // happened at booking time, upstream in bookFreeEvent; waiting for
+      // a later check-in would test the wrong thing.
+      case "walkon_flagged_booking": {
+        qualifies = myBookings.some((b) => b.walkOnEligible === true);
+        break;
+      }
       case "team_threshold_any_event": {
         if (profile?.teamId) {
           for (const x of checkedIn) {

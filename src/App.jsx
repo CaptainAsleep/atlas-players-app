@@ -194,6 +194,22 @@ function timeBasedGreeting() {
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
+// Best-effort location for the Walk-On Survivor check — resolves to null
+// (never rejects) on missing geolocation support, a denied/dismissed
+// permission prompt, or a timeout, so a booking never waits on or fails
+// because of this. A short timeout on purpose: this only matters for
+// someone's very first booking, so it's fine to just skip the patch
+// rather than make them wait on a slow GPS fix.
+function getQuickLocation(timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: timeoutMs, maximumAge: 60000 }
+    );
+  });
+}
 // Native <input type="time"> (owner app) stores/emits 24-hour "HH:MM".
 // Older events may still carry a free-text value like "9:00 AM (gates)"
 // from before that field was a time picker — that won't match the
@@ -1137,7 +1153,14 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                   className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block" }}
+                  // iOS Safari lays out a native date control's segments
+                  // using its own intrinsic sizing that can beat a plain
+                  // width:100%, regardless of box-sizing/min-width —
+                  // appearance:none is what actually makes it respect the
+                  // box (same fix as the owner app's event editor). That
+                  // native appearance also enforces a touch-friendly
+                  // minimum height, so an explicit height compensates.
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
                 />
               </div>
               <div>
@@ -1147,7 +1170,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block" }}
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
                 />
               </div>
             </div>
@@ -1429,9 +1452,16 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     // not here. A free event (no real price set) keeps the original,
     // instant flow, since there's no payment to wait on at all.
     const isPaidEvent = entryPriceCents > 0;
+    // Grabbed once, up front, for either path — best-effort only (resolves
+    // to null rather than blocking or failing booking if location isn't
+    // available or granted). The server decides whether it's actually
+    // close enough and whether this is even a first-ever booking; this is
+    // just the one thing only the client can supply, and it applies to a
+    // walk-on paying at the gate in cash just as much as one booking free.
+    const location = await getQuickLocation();
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location);
         // Opens in a genuinely separate tab rather than navigating this
         // app's own window away — a real, confirmed WebKit bug can
         // corrupt this PWA's own rendering after returning from an
@@ -1444,7 +1474,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
-        await bookEvent(user.uid, profile, ev, selectedChoice);
+        await bookEvent(user.uid, profile, ev, selectedChoice, location);
         setBookingBusy(false);
       }
     } catch (err) {
