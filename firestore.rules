@@ -299,6 +299,21 @@ service cloud.firestore {
       }
     }
 
+    // Collection-group read for the admin portal's "patches received"
+    // stat. Confirmed by testing (2026-09-06) that the nested rule right
+    // above this one — users/{userId}/patches/{patchId}, allow read: true
+    // — does NOT cover a collectionGroup("patches") query; Firestore only
+    // grants collection-group access through a rule declared with this
+    // {path=**} wildcard form, regardless of whether an existing nested
+    // rule's path pattern would technically match the same documents.
+    // Same public-read policy as the nested rule, just in the form
+    // collection-group queries actually require. Safe to declare broadly
+    // like this because "patches" only ever exists at users/{uid}/patches
+    // — no other subcollection anywhere in this schema shares that name.
+    match /{path=**}/patches/{patchId} {
+      allow read: if true;
+    }
+
     // The public-facing mirror of a player's profile — deliberately narrow.
     // Only ever contains callsign, avatarUrl, featuredPatch, teamId/Name,
     // createdAt, and verified — never email, phone, or real name. Kept in
