@@ -851,14 +851,42 @@ const teams = [
 ];
 
 async function seed() {
+  // A claimed field is a real owner's live listing now, not seed data
+  // anymore. `merge: true` only protects keys this script's own object
+  // never mentions — any key it DOES set (imageUrl, about, etc.) still
+  // overwrites whatever's live, seed or not. That's exactly what erased
+  // The Compound's own banner image on 2026-09-08 (Michael had set a real
+  // one; re-running this script silently put the old seeded one back).
+  // Fix: read each field's current `claimed` flag first, and skip both
+  // the field doc AND its events entirely once claimed — from that point
+  // on, the owner is the source of truth, not this script. (Note: this
+  // only prevents future clobbers. It doesn't restore anything this
+  // script already overwrote before today — that has to be re-entered by
+  // whoever owns the field, same as any other edit via FieldManageScreen.)
+  const fieldRefs = fields.map((f) => db.collection("fields").doc(f.id));
+  const fieldSnaps = await db.getAll(...fieldRefs);
+  const claimedFieldIds = new Set(
+    fieldSnaps.filter((snap) => snap.exists && snap.data().claimed === true).map((snap) => snap.id)
+  );
+
   const batch = db.batch();
+  let skippedFields = 0;
+  let skippedEvents = 0;
 
   for (const field of fields) {
+    if (claimedFieldIds.has(field.id)) {
+      skippedFields++;
+      continue;
+    }
     const { id, ...data } = field;
     batch.set(db.collection("fields").doc(id), data, { merge: true });
   }
 
   for (const ev of events) {
+    if (claimedFieldIds.has(ev.fieldId)) {
+      skippedEvents++;
+      continue;
+    }
     const { id, ...data } = ev;
     batch.set(db.collection("events").doc(id), data, { merge: true });
   }
@@ -869,7 +897,11 @@ async function seed() {
   }
 
   await batch.commit();
-  console.log(`Seeded ${fields.length} fields, ${events.length} events, and ${teams.length} team(s).`);
+  console.log(
+    `Seeded ${fields.length - skippedFields}/${fields.length} fields and ` +
+    `${events.length - skippedEvents}/${events.length} events (plus ${teams.length} team(s)). ` +
+    `Skipped ${skippedFields} already-claimed field(s) and ${skippedEvents} of their event(s) to avoid overwriting owner edits.`
+  );
 }
 
 seed().catch((err) => {
