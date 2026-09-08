@@ -2415,7 +2415,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
         {tab === "past" && (
           past.length === 0 ? (
             <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
-              Events you've favorited will move here once they're over — this tracks what you were interested in, not confirmed attendance. That distinction changes once booking exists.
+              Events you've favorited will move here once they're over. Looking for a game you actually reserved? That lives in the Reserved tab instead, past or upcoming.
             </p>
           ) : renderList(past, true)
         )}
