@@ -264,10 +264,15 @@ function resizeImageFile(file, maxSize = 400, quality = 0.85) {
 const STATUS_LABEL = {
   active: null,
   closing: "FIELD CLOSING",
+  closed: "FIELD CLOSED",
   relocated: "RELOCATED",
   rebranded: "REBRANDED",
   unscrapable: null,
   facebook_only: null,
+  "no-airsoft": "NOT AN AIRSOFT FIELD",
+  // Deliberately NOT in this map — private-booking isn't a problem worth an
+  // alert-red banner, just a different (and fully legitimate) business
+  // model. It gets its own neutral tag + copy below instead.
 };
 
 /* ---------- primitives ---------- */
@@ -2078,6 +2083,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
               {field.indoorOutdoor && <Tag>{field.indoorOutdoor.toUpperCase()}</Tag>}
               {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
               {!statusLabel && field.status === "active" && <Tag tone="good">ACTIVE</Tag>}
+              {!statusLabel && field.status === "private-booking" && <Tag tone="accent">PRIVATE BOOKING</Tag>}
             </div>
             <div
               className="text-[24px] font-semibold"
@@ -2136,7 +2142,27 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
           <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
             <Eyebrow>Scheduled Events</Eyebrow>
             {fieldEvents.length === 0 ? (
-              <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>No upcoming events loaded for this field yet.</p>
+              field.status === "private-booking" ? (
+                <div>
+                  <p className="text-[12px] leading-relaxed mb-2" style={{ ...body, color: T.ashFaint }}>
+                    This field runs private group bookings rather than public open-play events — reserve directly with them.
+                  </p>
+                  {field.website && (
+                    <a
+                      href={field.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between w-full mt-1 px-3 py-2"
+                      style={{ background: T.panelAlt, borderRadius: 4 }}
+                    >
+                      <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>Book on their website</span>
+                      <ArrowRight size={14} color={T.ashDim} />
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>No upcoming events loaded for this field yet.</p>
+              )
             ) : (
               <div className="flex flex-col">
                 {fieldEvents.map((s, i) => (

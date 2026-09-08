@@ -412,11 +412,11 @@ const fields = [
     about:
       "Private-booking venue — exclusive 4-hour tactical sessions for groups of up to 20 players, Friday through Sunday. No public drop-in event calendar; sessions are booked directly through their site rather than browsed/joined the way a typical field's open events are.",
     imageUrl: "https://greatlakesairsoft.com/wp-content/uploads/2026/04/GLAS-1-scaled.png",
-    status: "active",
+    status: "private-booking",
     dataSource: "website",
     lastScraped: "2026-08-28",
     notes:
-      "Private-session model only, no public dated events found to seed — inventing fake dates for their rotating session-type menu (Friday Night Battle, Saturday Strike, etc.) would be fabricated data, not real scraped info. indoorOutdoor and admission price also weren't stated anywhere on the site, so left unset rather than guessed. If they ever start running real public open-play events, revisit and add those as real events separately.",
+      "Private-session model only, no public dated events found to seed — inventing fake dates for their rotating session-type menu (Friday Night Battle, Saturday Strike, etc.) would be fabricated data, not real scraped info. indoorOutdoor and admission price also weren't stated anywhere on the site, so left unset rather than guessed. If they ever start running real public open-play events, revisit and add those as real events separately. Per Michael (2026-09-08): stays visible on the map/browse list even though there's nothing to book through Atlas — a real, active business, just not one that fits Atlas's open-event model. See the 'Private-Booking Venues' scope in atlas-status.md for the full plan if they ever want real Atlas bookings.",
   },
 ];
 
