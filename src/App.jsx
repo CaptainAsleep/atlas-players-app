@@ -990,7 +990,11 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       // place that no longer runs games. It's still reachable directly
       // (e.g. from a favorite or old link) where the relocation notice
       // and redirect to its new home actually shows.
-      if (f.status === "relocated") return false;
+      // "closed" (confirmed shut down / sold, per a 2026-09-08 pass) and
+      // "no-airsoft" (an operating business that just doesn't run airsoft,
+      // e.g. a paintball-only field) get the same treatment — nothing
+      // bookable to send a player toward either way.
+      if (["relocated", "closed", "no-airsoft"].includes(f.status)) return false;
       const cat = cats.find((c) => c.key === activeCat);
       if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
       if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
@@ -3104,7 +3108,10 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
               style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
             />
             <div style={{ maxHeight: 200, overflowY: "auto" }}>
-              {fields.filter((f) => f.name.toLowerCase().includes(fieldSearch.toLowerCase())).map((f) => (
+              {fields
+                .filter((f) => !["relocated", "closed", "no-airsoft"].includes(f.status))
+                .filter((f) => f.name.toLowerCase().includes(fieldSearch.toLowerCase()))
+                .map((f) => (
                 <button
                   key={f.id}
                   onClick={async () => { await setHomeField(team.id, f.id, f.name); setShowFieldPicker(false); setFieldSearch(""); }}
