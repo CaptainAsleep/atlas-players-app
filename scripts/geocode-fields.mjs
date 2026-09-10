@@ -94,6 +94,24 @@ async function censusSearch(address) {
 //      precision for a real result: a pin centered on the town instead of
 //      the exact building. Marked so the app/seed data can flag it as
 //      approximate rather than pretending it's the exact front door.
+// Full US state list, purely for turning the 2-letter abbreviation in a
+// field's address into the state name Nominatim's structured query wants
+// (its "state" param works best with the full name, same as it always did
+// for Michigan before this map existed).
+const US_STATE_NAMES = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "District of Columbia",
+};
+
 async function geocode(address) {
   // Try the Census geocoder first — real address-range data, most likely
   // to nail a rural address on the first try.
@@ -110,17 +128,25 @@ async function geocode(address) {
   result = await nominatimSearch(freeform);
   if (result) return { ...result, precision: "exact" };
 
-  const match = address.match(/^(.*?),\s*([^,]+?),\s*MI\s*(\d{5})/i);
+  // Structured + city-only fallbacks — matches any US state, not just
+  // Michigan. This regex used to hardcode "MI" from back when every Atlas
+  // field was in Michigan, which silently skipped this entire fallback
+  // chain for any out-of-state field once Census and both freeform
+  // attempts came up empty (confirmed 2026-09-10: this is exactly what
+  // left Bing Field, IL with no coordinates at all — its address never
+  // even reached the approximate-fallback step).
+  const match = address.match(/^(.*?),\s*([^,]+?),\s*([A-Z]{2})\s*(\d{5})/i);
   if (match) {
-    const [, street, city, zip] = match;
-    const structured = `street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}&state=Michigan&postalcode=${zip}&country=USA`;
+    const [, street, city, stateAbbr, zip] = match;
+    const stateName = US_STATE_NAMES[stateAbbr.toUpperCase()] || stateAbbr;
+    const structured = `street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(stateName)}&postalcode=${zip}&country=USA`;
     await sleep(1100);
     result = await nominatimSearch(structured);
     if (result) return { ...result, precision: "exact" };
 
     // Last resort: city/state/zip only, no street. Approximate, but a
     // pin near the right town beats no pin on the map at all.
-    const cityOnly = `city=${encodeURIComponent(city)}&state=Michigan&postalcode=${zip}&country=USA`;
+    const cityOnly = `city=${encodeURIComponent(city)}&state=${encodeURIComponent(stateName)}&postalcode=${zip}&country=USA`;
     await sleep(1100);
     result = await nominatimSearch(cityOnly);
     if (result) return { ...result, precision: "approximate" };
