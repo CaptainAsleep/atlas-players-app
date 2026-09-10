@@ -1,12 +1,19 @@
 // Run locally with: node scripts/geocode-fields.mjs
 //
 // Backfills lat/lng onto every field document that has a street address but
-// no coordinates yet. Uses OpenStreetMap's free Nominatim geocoder — no API
-// key, but their usage policy requires: max 1 request/second, and a real
-// identifying User-Agent (not spoofed as a browser). This is a manual,
-// occasional maintenance script — it is intentionally NOT part of the
-// automated deploy pipeline, both to respect that rate limit and because
-// addresses rarely change once seeded.
+// no coordinates yet, and re-attempts any field previously flagged
+// `precision: "approximate"`. Tries the US Census Bureau's free geocoder
+// first (no API key, no published rate limit, and — confirmed 2026-09-10 —
+// meaningfully more accurate than Nominatim on rural Michigan addresses:
+// it found 1154 W Seidlers Rd, Auburn exactly, where Nominatim had
+// silently fallen back to a city-center match on "Main St," miles from
+// the real field). Falls back to OpenStreetMap's free Nominatim geocoder
+// (no API key, but their usage policy requires: max 1 request/second, and
+// a real identifying User-Agent — not spoofed as a browser) only if Census
+// has no match at all. This is a manual, occasional maintenance script —
+// it is intentionally NOT part of the automated deploy pipeline, both to
+// respect Nominatim's rate limit and because addresses rarely change once
+// seeded.
 //
 // Requires scripts/serviceAccountKey.json (same file the seed script uses).
 
@@ -53,6 +60,27 @@ async function nominatimSearch(params) {
   }
 }
 
+// US Census Bureau's free geocoder — matches against real TIGER/Line
+// address-range data rather than OSM's crowdsourced road data, which is
+// why it succeeds on rural addresses Nominatim can't place precisely.
+// US-only (fine — every Atlas field is in the US), no published rate
+// limit, no API key.
+async function censusSearch(address) {
+  const url = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(address)}&benchmark=Public_AR_Current&format=json`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Census geocoder request failed: ${res.status}`);
+    const data = await res.json();
+    const match = data?.result?.addressMatches?.[0];
+    if (!match) return null;
+    return { lat: parseFloat(match.coordinates.y), lng: parseFloat(match.coordinates.x) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Nominatim's free instance is occasionally flaky, and a single freeform
 // query sometimes comes back empty even for a perfectly normal address that
 // works fine seconds later. Four attempts, in increasingly loose forms,
@@ -67,9 +95,15 @@ async function nominatimSearch(params) {
 //      the exact building. Marked so the app/seed data can flag it as
 //      approximate rather than pretending it's the exact front door.
 async function geocode(address) {
+  // Try the Census geocoder first — real address-range data, most likely
+  // to nail a rural address on the first try.
+  let result = await censusSearch(address);
+  if (result) return { ...result, precision: "exact" };
+
+  // Census had nothing at all — fall back to the original Nominatim chain.
   const freeform = `q=${encodeURIComponent(address)}`;
 
-  let result = await nominatimSearch(freeform);
+  result = await nominatimSearch(freeform);
   if (result) return { ...result, precision: "exact" };
 
   await sleep(1100);
@@ -105,10 +139,13 @@ async function run() {
   for (const doc of snap.docs) {
     const field = doc.data();
 
-    if (field.lat && field.lng) {
+    if (field.lat && field.lng && field.precision !== "approximate") {
       console.log(`- ${field.name}: already has coordinates, skipping`);
       skipped++;
       continue;
+    }
+    if (field.lat && field.lng && field.precision === "approximate") {
+      console.log(`~ ${field.name}: currently approximate, re-attempting a precise match…`);
     }
     if (!field.address) {
       console.log(`- ${field.name}: no street address on file, skipping`);
