@@ -542,6 +542,167 @@ const fields = [
     notes:
       "Specific admission pricing lives on a separate Plans & Pricing page not fetched; omitted rather than estimated.",
   },
+
+  // ---- Ohio (added 2026-09-10, from seed-data-draft-OH-TX.mjs) -----------
+  {
+    id: "g2-tactical",
+    name: "G2 Tactical",
+    city: "Springfield, OH",
+    address: "4624 Dayton Springfield Rd, Springfield, OH 45502",
+    phone: "(937) 638-6781",
+    website: "https://www.g2tact.com",
+    ownerEmailDomain: "g2tact.com",
+    facebook: "https://www.facebook.com/g2tact/",
+    instagram: "https://www.instagram.com/g2tact/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Large outdoor field in Springfield billed on its own site as the largest airsoft/paintball field in Ohio, running airsoft, paintball, and gel blaster play alongside an on-site pro shop and cerakote/tech services.",
+    imageUrl:
+      "https://137011431.cdn6.editmysite.com/uploads/1/3/7/0/137011431/VL4TU7K5Y745HYGS5MIIS55K.jpeg",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-02",
+    notes:
+      "g2tact.com is JS-rendered and didn't expose address/phone to automated fetch; address and phone were corroborated by two independent business directories (ohiobiz.com and airsoftc3.com) that agree exactly. Recommend a human confirm by phone before publishing.",
+  },
+  {
+    id: "patriots-ridge-airsoft",
+    name: "Patriots Ridge Airsoft",
+    city: "Bellefontaine, OH",
+    address: "2056 US-68, Bellefontaine, OH 43311",
+    phone: "(937) 210-6078",
+    website: "https://patriotsridgeairso.wixsite.com/my-site",
+    ownerEmailDomain: "gmail.com",
+    discord: "https://discord.gg/JkTWtUKQc2",
+    indoorOutdoor: "outdoor",
+    admission: "$20/player/day (rentals also $20)",
+    about:
+      "Non-profit, volunteer-run outdoor airsoft field at the Logan County Fish and Game property, open to the public Saturdays 10am-3pm and Sundays 12pm-5pm, with proceeds reinvested into field upkeep.",
+    imageUrl:
+      "https://static.wixstatic.com/media/1208e4_8923763e07734a95942ec98af05421c0~mv2.jpg",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-02",
+    notes:
+      "Business only publishes a free Gmail address and a Wix subdomain (no custom domain), so ownerEmailDomain (gmail.com) will NOT uniquely match the website host — standard domain-match claim verification won't work here; flag for manual owner verification.",
+  },
+  {
+    id: "lvl-up-sports",
+    name: "LVL UP Sports",
+    city: "Grove City, OH",
+    address: "5390 Harrisburg Pike, Grove City, OH 43123",
+    phone: "(614) 313-1382",
+    website: "https://lvlupsports.com",
+    ownerEmailDomain: "lvlupsports.com",
+    facebook: "https://www.facebook.com/LVLUPSPORTS",
+    instagram: "https://www.instagram.com/lvlupsports/",
+    youtube: "https://www.youtube.com/lvlupsports",
+    indoorOutdoor: "outdoor",
+    admission: "$35/player self-equipped, $55/player rental package",
+    about:
+      "36-acre outdoor paintball-and-airsoft complex near Columbus with 10+ themed battlefields; hosts private airsoft parties year-round and public airsoft games on the last Sunday of every month.",
+    imageUrl: "https://lvlupsports.com/wp-content/uploads/2024/08/airsoft-lvlup.jpg",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-02",
+  },
+  {
+    id: "i70-paintball-airsoft",
+    name: "i70 Paintball & Airsoft",
+    city: "Huber Heights, OH",
+    address: "7750 Wildcat Rd, Huber Heights, OH 45424",
+    phone: "(937) 237-7070",
+    website: "https://www.i70paintball.com",
+    ownerEmailDomain: "i70paintball.com",
+    facebook: "http://www.facebook.com/i70paintball",
+    instagram: "https://www.instagram.com/i70airsoftofficial/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Combined paintball-and-airsoft park in the Dayton area with a full pro shop; runs outdoor open play most weekends year-round plus weekday private events by appointment (10+ people).",
+    imageUrl: "https://static.wixstatic.com/media/397e23_be3dc3d1e3ee42caaee77b6f1e3470b1.png",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-02",
+    notes:
+      "Primarily a paintball park that also runs a dedicated airsoft program under a separate Instagram handle (i70airsoftofficial); shares site, address, and staff with the paintball side.",
+  },
+  {
+    id: "splatterpark",
+    name: "SplatterPark",
+    city: "Mount Gilead, OH",
+    address: "5560 County Road 109, Mount Gilead, OH 43338",
+    phone: "(419) 946-4964",
+    website: "https://www.splatterpark.com",
+    ownerEmailDomain: "splatterpark.com",
+    facebook: "http://www.facebook.com/SplatterPark",
+    instagram: "http://www.instagram.com/splatterparkohio/",
+    youtube: "https://www.youtube.com/@Splatterparkpaintball",
+    indoorOutdoor: "outdoor",
+    admission:
+      "$30/player/day airsoft open play; $45.99/$69.99 all-inclusive rental packages",
+    about:
+      "Outdoor paintball-and-airsoft park operating since 1983 (at its current Mount Gilead site since 2000) with 13 themed battle zones; runs dedicated airsoft open play on Sundays, 10am-5pm.",
+    imageUrl: "https://www.splatterpark.com/uploads/5/0/4/7/50471065/img-3531.jpg",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-02",
+  },
+  {
+    id: "parkers-airsoft-field",
+    name: "Parker's Airsoft Field",
+    city: "Bethel, OH",
+    address: "3450 Clover Rd, Bethel, OH 45106",
+    phone: "(859) 308-7255",
+    website: "https://parkersairsoft.com",
+    ownerEmailDomain: "parkersairsoft.com",
+    indoorOutdoor: "outdoor",
+    admission:
+      "No flat entry fee published; gun rentals $25/day (membership may be required — see notes)",
+    about:
+      "25-acre outdoor field in Bethel, OH running MILSIM, Live Action Novel, Modern Conquest, and Open Play game modes on alternating Saturdays, 11am-5pm, with a class-based fps system (AEG 400/LMG-SMG 400+25ft MED/DMR 450+75ft MED/Sniper 500+100ft MED) and an on-site pro shop for rentals, BBs, and gear. Sister field to Action Acres (below).",
+    imageUrl:
+      "https://img1.wsimg.com/isteam/ip/7da5bb7f-8bfc-4af5-a87b-1443a9307bfd/PARKERS%20AIRSOFT%20FIELD.png/:/cr=t:0%25,l:0%25,w:100%25,h:100%25/rs=w:600,cg:true",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-02",
+    notes:
+      "Previously excluded from this list as 'no owned website' — that was wrong; parkersairsoft.com is their own GoDaddy-built site with a live schedule and shop. No public email or social links found on-site (only a call/text number), so claim verification will need the phone number or a human check rather than an email-domain match. Admission/membership terms aren't fully spelled out on the site — confirm before publishing pricing.",
+  },
+  {
+    id: "action-acres",
+    name: "Action Acres",
+    city: "New Richmond, OH",
+    address: "1757 State Route 232, New Richmond, OH 45157",
+    phone: "(859) 308-7255",
+    website: "https://parkersairsoft.com/action-acres",
+    ownerEmailDomain: "parkersairsoft.com",
+    indoorOutdoor: "outdoor",
+    admission: "Membership required to play; gun rentals $25/day",
+    about:
+      "1.5-acre sister field to Parker's Airsoft Field, in New Richmond, OH. Smaller CQB-style farm layout with dug-in fighting positions, overhead cover, and a barn staging area; the site says the layout changes rapidly through the year. Parking is limited — advance sign-up required for events.",
+    imageUrl:
+      "https://img1.wsimg.com/isteam/ip/7da5bb7f-8bfc-4af5-a87b-1443a9307bfd/ACTION%20ACRES.png/:/cr=t:0%25,l:0%25,w:100%25,h:100%25/rs=w:600,cg:true",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-02",
+    notes:
+      "Shares phone number, owner, and parent website (parkersairsoft.com) with Parker's Airsoft Field above — same claim-verification caveat applies (no public email/social links found).",
+  },
+  {
+    id: "sektor7",
+    name: "Sektor7",
+    city: "Cleveland, OH",
+    website: "https://www.sektor7airsoft.com",
+    indoorOutdoor: "outdoor",
+    status: "closed",
+    relocatedTo: "darkfire-airsoft",
+    about:
+      "Formerly served the North East Ohio airsoft community. Its own site confirms it's currently closed (\"We are currently closed as we search for our next adventure\"); per Darkfire Airsoft's Michigan profile, Sektor7 lost its property in 2026 and now runs its events out of Darkfire's Hillsdale, MI field.",
+    dataSource: "sektor7airsoft.com + darkfireairsoft.com",
+    lastScraped: "2026-09-02",
+    notes:
+      "No precise street address or phone confirmed — site's /about page 404s and Facebook blocks automated fetch; Facebook page title (\"SEKTOR7 | Cleveland OH\") and the site's 216 area-code phone number both point to Cleveland specifically. Kept status: closed (matches the relocated/waste pattern already in this file) rather than active, since the field itself no longer operates at this location.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
