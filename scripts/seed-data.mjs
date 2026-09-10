@@ -703,6 +703,25 @@ const fields = [
     notes:
       "No precise street address or phone confirmed — site's /about page 404s and Facebook blocks automated fetch; Facebook page title (\"SEKTOR7 | Cleveland OH\") and the site's 216 area-code phone number both point to Cleveland specifically. Kept status: closed (matches the relocated/waste pattern already in this file) rather than active, since the field itself no longer operates at this location.",
   },
+  {
+    id: "the-den-airsoft",
+    name: "The Den Airsoft",
+    city: "New Philadelphia, OH",
+    address: "2699 Pleasant Valley Rd NE, New Philadelphia, OH 44663",
+    phone: "(330) 556-0121",
+    website: "https://www.thedenairsoft.com",
+    ownerEmailDomain: "thedenairsoft.com",
+    facebook: "https://www.facebook.com/theairsoftden",
+    indoorOutdoor: "outdoor",
+    admission: "2026 season pass $449 (covers all open play events, plus discounts on DenOps); per-event pricing on the site's own booking system",
+    about:
+      "Self-described \"Ohio's Premier Airsoft-only Field,\" a 35-40+ acre outdoor facility with 30+ structures across urban CQB, open mid-range, and wooded zones. Runs regular \"DenPlay\" open-play Saturdays plus story-driven \"DenOp\" MilSim events.",
+    status: "active",
+    dataSource: "boisegunclub.com + airsoftc3.com directories + confirmed Facebook page (own site is a JS-rendered Square Online storefront that couldn't be scraped directly for text content)",
+    lastScraped: "2026-09-10",
+    notes:
+      "Own domain (thedenairsoft.com) is confirmed real and active with live event/product listings, but is built on Square Online and renders its contact/about text client-side, so address/phone were corroborated instead from two independent directories that agree on the address; one gave a different phone number ((330) 440-5471) than the other ((330) 556-0121) — went with the airsoftc3.com number since it came paired with a matching contact email, but this should be double-checked directly with the field if it ever needs to be contacted. Site branding says \"Strasburg, Ohio\" in its title tag, but every corroborating source gives the actual mailing address as New Philadelphia, OH — the two towns are a few miles apart in Tuscarawas County, so used the address's city.",
+  },
 
   // ---- Illinois (added 2026-09-10, from seed-data-draft-IL.mjs) ----------
   // Note: kinetic-training-complex-kankakee was deliberately left out of
@@ -1019,6 +1038,68 @@ const fields = [
     lastScraped: "2026-09-10",
     notes:
       "No dedicated business website was found, only social media and directories — but it's independently confirmed as a real, currently-registered Missouri LLC via OpenCorporates, and listed in the official Visit Joplin tourism directory, which is why it's included at all. Treated as status: facebook_only (same as Airsoft Arena Milwaukee in the Wisconsin batch) rather than active, since claim verification and current hours/pricing can't be confirmed from a primary source.",
+  },
+
+  // ---- Minnesota (added 2026-09-10, from seed-data-draft-MN.mjs) --------
+  {
+    id: "crossfire-airsoft",
+    name: "Crossfire Airsoft",
+    city: "Clearwater, MN",
+    address: "1601 195th St E, Clearwater, MN 55320",
+    phone: "(320) 253-5630",
+    website: "https://crossfire-airsoft.com",
+    facebook: "https://facebook.com/CrossfireAirsoftMN",
+    instagram: "https://instagram.com/CrossfireAirsoftMN",
+    indoorOutdoor: "outdoor",
+    about:
+      "Self-described \"oldest & best Airsoft Field in Minnesota,\" with over 10 years running open plays, private parties, and team training; on-site equipment rental, HPA air fills, and battery charging. Open weekends, 10am-4:30pm.",
+    imageUrl:
+      "https://static.wixstatic.com/media/f52958_9ad729c42217461f901e3374116e8daf~mv2_d_2000_1333_s_2.jpg",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "Site is next to AJ Acres Campground. Also runs a sister location in Sioux Falls, SD (605-361-5200, facebook.com/AirsoftSiouxFalls) — not seeded here since it's out of state. Admission pricing sold through an online ticket shop rather than published flat rates; omitted rather than estimated.",
+  },
+  {
+    id: "champion-valley-park",
+    name: "Champion Valley Park",
+    city: "Lakeville, MN",
+    address: "22554 Texas Ave, Lakeville, MN 55044",
+    phone: "(952) 892-1540",
+    website: "https://championvalleypark.com",
+    ownerEmailDomain: "championvalleypark.com",
+    facebook: "https://facebook.com/championvalley",
+    instagram: "https://instagram.com/championvalley",
+    indoorOutdoor: "outdoor",
+    admission: "$29/person, 2-hour sessions, 2-80 participants",
+    about:
+      "Multi-activity outdoor entertainment park (formerly/also marketed as \"MN Pro Paintball\") whose airsoft offering is billed as \"Hunt your competition... This is your BATTLE GROUND\" on their largest outdoor field. Open 9am-8pm.",
+    imageUrl:
+      "https://championvalleypark.com/wp-content/uploads/2019/10/Copy-of-TINY8272-2.jpg",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "mnpropaintball.com now redirects to championvalleypark.com — the business appears to have rebranded/consolidated under the Champion Valley Park name, which is used here.",
+  },
+  {
+    id: "big-lake-tactical",
+    name: "Big Lake Tactical Wargames",
+    city: "Big Lake, MN",
+    address: "22615 County Rd 75 NW, Big Lake, MN 55309",
+    phone: "(763) 257-5792",
+    facebook: "https://www.facebook.com/p/Big-Lake-Tactical-Wargames-100057697440391/",
+    indoorOutdoor: "outdoor",
+    admission: "$30 standard play; $40 monthly competition series; $50 special events; $40 rental package",
+    about:
+      "Billed as \"Minnesota's largest airsoft field,\" a 100-acre outdoor venue with capacity for 150+ players, running regular weekend open play plus themed monthly games. Open weekends, March-December, 10am-4:30pm.",
+    status: "facebook_only",
+    dataSource:
+      "Facebook + Yelp + Airsoft Society forum showcase + independent business directories (own website, a Zoho-hosted site, is currently broken — see notes)",
+    lastScraped: "2026-09-10",
+    notes:
+      "Own website (biglaketactical.zohosites.com) is unreachable — every attempt to load it redirects back to itself rather than returning content, suggesting the Zoho site is dead or misconfigured. Address, phone, hours, and pricing above are corroborated instead across multiple independent third-party sources that all agree (Yelp listing at the same address, an Airsoft Society forum showcase page, and general business directories). Treated as status: facebook_only, same as Airsoft Arena Milwaukee (WI) and KDK Airsoft (MO), since current details can't be confirmed from a primary source.",
   },
 ];
 
