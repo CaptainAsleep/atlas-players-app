@@ -1039,7 +1039,12 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         const q = search.toLowerCase();
         if (!`${f.name} ${f.city || ""}`.toLowerCase().includes(q)) return false;
       }
-      if (selectedState && stateNameFromCity(f.city) !== selectedState) return false;
+      // The state filter only applies to the list view — the Map tab always
+      // shows every matching pin nationwide, regardless of which state is
+      // selected in the (hidden-while-on-map) dropdown. Every other filter
+      // above (category, search, nearby, date/price) still applies to the
+      // map exactly as before.
+      if (viewMode !== "map" && selectedState && stateNameFromCity(f.city) !== selectedState) return false;
       return true;
     })
     .sort((a, b) =>
