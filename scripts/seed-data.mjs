@@ -834,6 +834,103 @@ const fields = [
     notes:
       "Site is a free Weebly subdomain, not a custom business domain — no ownerEmailDomain set, since there's nothing for a claiming email to match; claim verification here will need a phone or manual check, same situation as Patriots Ridge Airsoft in the Ohio batch. No specific airsoft hours published on the homepage — real schedule lives on the club's calendar/Facebook instead. No usable hero image found on the Weebly site, so imageUrl is left unset.",
   },
+
+  // ---- Wisconsin (added 2026-09-10, from seed-data-draft-WI.mjs) ---------
+  {
+    id: "action-sports-wisconsin",
+    name: "Action Sports Wisconsin",
+    city: "Mauston, WI",
+    address: "N6089 County Road G, Mauston, WI 53948",
+    phone: "(608) 234-8323",
+    website: "https://www.actionsportswisconsin.com",
+    ownerEmailDomain: "actionsportswisconsin.com",
+    facebook: "https://www.facebook.com/ActionSportsWisconsin",
+    instagram: "https://www.instagram.com/ActionSportsWisconsin",
+    indoorOutdoor: "outdoor",
+    admission: "Walk-on admission $25; rental/admission package $50",
+    about:
+      "86-acre outdoor complex billed as the largest multi-story outdoor urban combat field in the Midwest, with a mock city built from 40 shipping containers. Open play weekends year-round (closed in severe weather or below 30°F), private groups by appointment on weekdays.",
+    imageUrl:
+      "https://static.wixstatic.com/media/0fec9d_657d456be3d74da8ba254e3b74e3e43d~mv2.png/v1/fill/w_1535,h_983,al_c/0fec9d_657d456be3d74da8ba254e3b74e3e43d~mv2.png",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+  },
+  {
+    id: "black-ops-airsoft",
+    name: "Black Ops Airsoft",
+    city: "Bristol, WI",
+    address: "8025 128th Ave, Bristol, WI 53104",
+    phone: "(847) 913-5216",
+    website: "https://www.blackops-airsoft.com",
+    ownerEmailDomain: "blackops-airsoft.com",
+    discord: "https://discord.gg/xq4xNmrEWp",
+    indoorOutdoor: "outdoor",
+    about:
+      "Billed on its own site as the Midwest's largest pay-to-play airsoft-only field (not a paintball crossover venue), near the Kenosha/Chicago border. Open Friday through Sunday, with an events calendar running through 2026.",
+    imageUrl: "https://media.rainpos.com/8768/ss_8768_5464411_1.jpg",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "No public admission pricing found on the homepage (rentals/pricing live in a separate shop section not fetched) — omitted rather than estimated.",
+  },
+  {
+    id: "commando-paintball",
+    name: "Commando Paintball Sports",
+    city: "Little Suamico, WI",
+    address: "2055 W Frontier Rd, Little Suamico, WI 54141",
+    phone: "(920) 826-5554",
+    website: "https://www.commandopaintballsports.com",
+    ownerEmailDomain: "commandopaintballsports.com",
+    facebook: "https://www.facebook.com/commandopaintballsports",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-and-airsoft park about 20 miles north of Green Bay; airsoft is explicitly listed in its own pricing menu alongside named seasonal airsoft scenario events (Memorial Day, Labor Day). Open year-round: summer weekends 9am-5pm/4pm, weekdays by reservation.",
+    imageUrl:
+      "https://irp.cdn-website.com/090f05aa/dms3rep/multi/opt/wd-commando-paintball-9344-1920w.webp",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "Specific admission pricing lives on separate activity pages not fetched; omitted rather than estimated.",
+  },
+  {
+    id: "edge-paintball-airsoft",
+    name: "Edge Paintball and Airsoft",
+    city: "Janesville, WI",
+    address: "5946 US-51, Janesville, WI 53546",
+    phone: "(608) 931-3517",
+    website: "https://www.608pb.com",
+    ownerEmailDomain: "608pb.com",
+    facebook: "https://www.facebook.com/608PB",
+    instagram: "https://www.instagram.com/edge_paintball_airsoft",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-and-airsoft field serving the Janesville/Beloit area, with airsoft named directly in the business's own name and a dedicated \"AirSoft Info\" section on its site. Open Saturday and Sunday 9am-4pm; weekdays are private-booking only.",
+    imageUrl: "https://static.wixstatic.com/media/a0b6e9_b4f74a1f2ed24084ae9d5238ac1bc9cb~mv2.png",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "No pricing published on the homepage — bookings and pricing both live through a third-party reservation system (vantora.com) not fetched; omitted rather than estimated.",
+  },
+  {
+    id: "airsoft-arena-milwaukee",
+    name: "Airsoft Arena",
+    city: "Milwaukee, WI",
+    address: "1020 W Historic Mitchell St, Milwaukee, WI 53204",
+    facebook: "https://www.facebook.com/AirsoftArenaWi/",
+    instagram: "https://www.instagram.com/airsoftarenamilwaukee/",
+    indoorOutdoor: "indoor",
+    about:
+      "Described by third-party directories as Wisconsin's largest indoor airsoft facility at 40,000 sq ft, running year-round CQB gameplay in Milwaukee's Walker's Point neighborhood.",
+    status: "facebook_only",
+    dataSource: "Facebook + Yelp + Groupon + AirsoftC3 (no owned business website found)",
+    lastScraped: "2026-09-10",
+    notes:
+      "No dedicated business website was found for this facility, only social media and third-party directories. The exact same name, address, and description ('40,000 sq ft', 'largest indoor') appear consistently across Yelp, Groupon, and two separate AirsoftC3 listings, which is why it's included at all — but treated as status: facebook_only (same as several existing Michigan entries in this file) rather than active, since claim verification and up-to-date hours/pricing can't be confirmed from a primary source. A human should confirm this is still operating before publishing.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
