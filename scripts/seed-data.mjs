@@ -1101,6 +1101,65 @@ const fields = [
     notes:
       "Own website (biglaketactical.zohosites.com) is unreachable — every attempt to load it redirects back to itself rather than returning content, suggesting the Zoho site is dead or misconfigured. Address, phone, hours, and pricing above are corroborated instead across multiple independent third-party sources that all agree (Yelp listing at the same address, an Airsoft Society forum showcase page, and general business directories). Treated as status: facebook_only, same as Airsoft Arena Milwaukee (WI) and KDK Airsoft (MO), since current details can't be confirmed from a primary source.",
   },
+
+  // Iowa (added 2026-09-10)
+  {
+    id: "doa-paintball-airsoft",
+    name: "DOA Paintball and Airsoft Field",
+    city: "Saint Charles, IA",
+    address: "2444 Quail Ridge Ave, Saint Charles, IA 50240",
+    phone: "515-901-9988",
+    website: "https://www.doapaintballfield.com",
+    ownerEmailDomain: "doapaintballfield.com",
+    facebook: "https://www.facebook.com/p/DOA-Paintball-and-Airsoft-Field-100057377322843/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Paintball: $60/person (field fee + marker + mask + 500 rounds), $25 field-fee-only; Airsoft: $50/person (field fee + marker + mask + 1000 BBs), $25 field-fee-only",
+    about:
+      "Paintball-and-airsoft field south of Des Moines near Indianola, with airsoft explicitly offered alongside paintball at its own dedicated pricing tier. Open to walk-ins Saturday and Sunday 10am-5pm; weekdays by reservation only. Cash only.",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "The business's own site doesn't explicitly say indoor vs. outdoor — marked outdoor based on the rural acreage address and weekend-walk-in/weekday-reservation pattern shared with every other outdoor field seeded so far; flagging the inference rather than treating it as confirmed.",
+  },
+  {
+    id: "rapid-fire-airsoft",
+    name: "Rapid Fire Airsoft",
+    city: "Le Mars, IA",
+    address: "35508 200th St, Le Mars, IA 51031",
+    phone: "712-318-2213",
+    website: "https://rapidfireairsoft.us",
+    ownerEmailDomain: "rapidfireairsoft.com",
+    facebook: "https://www.facebook.com/profile.php?id=61573296947263",
+    instagram: "https://www.instagram.com/rapidfireairsoft.us",
+    youtube: "https://www.youtube.com/@Rapidfireairsoftus",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Bring your own gear: $25; Standard package (field rifle, thermal gear, 500 BBs): $45; Full package (custom rifle, vest, helmet, gloves, 2 mags, 1,500 BBs): $60",
+    about:
+      "CQB-style airsoft field on a rural property near Le Mars (northwest Iowa), built around a modified hog barn and a grid of IBC-tote bastions plus a custom \"Gulag\" arena. Open-play skirmishes every Saturday 10am-2:30pm (gates 9:30am), with private weekday bookings available for groups.",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "Site calls this a \"60,000 sq ft CQB Field\" built inside/around a converted barn and tote structures — treated as outdoor given the rural farm address and total absence of any climate-controlled/indoor-facility language, but noting it in case the layout turns out to be more enclosed than a typical open field.",
+  },
+  {
+    id: "central-city-airsoft",
+    name: "Central City Airsoft",
+    city: "Central City, IA",
+    address: "5117 Hill's Mill Rd, Central City, IA 52214",
+    indoorOutdoor: "outdoor",
+    about:
+      "Airsoft field near Cedar Rapids/Marion running a recurring seasonal schedule (a \"2025 Season Schedule\" post is its most recent confirmed activity found). No owned business website found.",
+    status: "facebook_only",
+    dataSource:
+      "Facebook (Centralcityairsoft) + Instagram (@centralcityairsoft) + X/Twitter (@CCA_Events_LLC) + AirsoftSociety forum showcase + AirsoftC3 directory (no owned website found)",
+    lastScraped: "2026-09-10",
+    notes:
+      "Same treatment as Airsoft Arena Milwaukee (WI batch) and KDK Airsoft (MO batch): no dedicated business website, but independently corroborated across enough separate sources — including an active-looking 2025 season-schedule post — to be worth including as facebook_only rather than excluding outright. Claim verification and current hours/pricing can't be confirmed from a primary source.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
