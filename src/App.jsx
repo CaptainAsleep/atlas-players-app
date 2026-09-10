@@ -484,7 +484,7 @@ function LoginScreen({ signIn, signUp, referralCode }) {
             key={label}
             disabled
             className="w-full py-3 font-medium text-[13px] flex items-center justify-center gap-2"
-            style={{ ...body, border: `1px solid ${T.line}`, color: T.ashFaint, borderRadius: 4, opacity: 0.5, cursor: "not-allowed" }}
+            style={{ ...body, border: `1px solid ${T.line}`, color: T.ashFaint, borderRadius: T.rPill, opacity: 0.5, cursor: "not-allowed" }}
           >
             {label}
             <span className="text-[10px]" style={{ ...mono }}>(soon)</span>
@@ -1084,7 +1084,8 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       </div>
 
       {nextGame ? (
-        <div className="mx-6 p-4 mb-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+        <div className="mx-6 p-4 mb-4" style={{ background: "linear-gradient(155deg, #FFFFFF 0%, #EEF2F8 100%)", borderRadius: T.rHero, boxShadow: T.shadowLg, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -30, right: -30, width: 110, height: 110, borderRadius: "50%", background: "rgba(21,84,184,0.08)" }} />
           <div className="flex items-center justify-between mb-3">
             {nextGameIsToday ? <Tag tone="good">LIVE EVENT</Tag> : <Tag tone="live">UPCOMING EVENT</Tag>}
             {nextGameIsToday && (
@@ -1144,7 +1145,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             <button
               onClick={() => onOpenEvent(nextGame)}
               className="w-full py-2.5 text-[12px] font-semibold"
-              style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}
+              style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}
             >
               View Details
             </button>
@@ -1229,7 +1230,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                     border: `1px solid ${maxPrice === opt.value ? T.accent : T.line}`,
                     background: maxPrice === opt.value ? T.accent : "transparent",
                     color: maxPrice === opt.value ? "#fff" : T.ashDim,
-                    borderRadius: 4,
+                    borderRadius: T.rPill,
                   }}
                 >
                   {opt.label}
@@ -1255,7 +1256,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                     border: `1px solid ${sortBy === opt.key ? T.accent : T.line}`,
                     background: sortBy === opt.key ? T.accent : "transparent",
                     color: opt.disabled ? T.ashFaint : sortBy === opt.key ? "#fff" : T.ashDim,
-                    borderRadius: 4,
+                    borderRadius: T.rPill,
                     opacity: opt.disabled ? 0.5 : 1,
                   }}
                 >
@@ -1275,7 +1276,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             <button
               onClick={() => setShowFilters(false)}
               className="flex-1 py-2.5 text-[13px] font-medium"
-              style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}
+              style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}
             >
               Close
             </button>
@@ -1701,7 +1702,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           )}
 
           {priceOptions?.choices?.length > 0 && !myBooking && !isPast && !ev.canceled && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${choiceMissing ? T.accent : T.line}` }}>
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: choiceMissing ? `1.5px solid ${T.accent}` : "none", outlineOffset: -1 }}>
               <Eyebrow>{priceOptions.label}{priceOptions.required ? "" : " (optional)"}</Eyebrow>
               <div className="flex flex-wrap gap-2">
                 {priceOptions.choices.map((c) => {
@@ -1755,7 +1756,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
           {ev.checkInPatch?.imageUrl && (
             <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-              <button onClick={() => setShowPatchViewer(true)} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+              <button onClick={() => setShowPatchViewer(true)} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: T.rPill }}>
                 <img src={ev.checkInPatch.imageUrl} alt={ev.checkInPatch.name} className="w-full h-full" style={{ objectFit: "contain", padding: 4 }} />
               </button>
               <div className="flex-1">
@@ -1799,11 +1800,11 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           )}
         </div>
         {ev.canceled ? (
-          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.alert, border: `1px solid ${T.alert}`, borderRadius: 4 }}>
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.alert, border: `1px solid ${T.alert}`, borderRadius: T.rPill }}>
             Event Canceled
           </span>
         ) : isPast ? (
-          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
             Event Ended
           </span>
         ) : myBooking ? (
@@ -1827,7 +1828,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               </div>
             ) : (
               <div className="flex gap-2">
-                <button onClick={() => setConfirmCancel(false)} disabled={bookingBusy} className="px-3 py-3 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+                <button onClick={() => setConfirmCancel(false)} disabled={bookingBusy} className="px-3 py-3 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                   Never mind
                 </button>
                 <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: bookingBusy ? 0.6 : 1 }}>
@@ -1841,7 +1842,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             </button>
           )
         ) : isFull ? (
-          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
             Event Full
           </span>
         ) : checkoutOpenedInfo ? (
@@ -1854,7 +1855,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           // this is the UI half, so it doesn't even look tappable in the
           // meantime. "Didn't finish, try again?" below is the escape
           // hatch for someone who genuinely canceled on Stripe's page.
-          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
             Confirming Payment…
           </span>
         ) : (
@@ -2129,7 +2130,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
                 <button
                   onClick={() => onOpenField(relocatedField)}
                   className="flex items-center justify-between w-full mt-1 px-3 py-2"
-                  style={{ background: T.panelAlt, borderRadius: 4 }}
+                  style={{ background: T.panelAlt, borderRadius: T.rPill }}
                 >
                   <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>
                     View events at {relocatedField.name}
@@ -2180,7 +2181,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between w-full mt-1 px-3 py-2"
-                      style={{ background: T.panelAlt, borderRadius: 4 }}
+                      style={{ background: T.panelAlt, borderRadius: T.rPill }}
                     >
                       <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>Book on their website</span>
                       <ArrowRight size={14} color={T.ashDim} />
@@ -2267,7 +2268,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
                   target="_blank"
                   rel="noreferrer"
                   className="w-full py-3 font-medium text-[13px] text-center"
-                  style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: 4 }}
+                  style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}
                 >
                   {l.label}
                 </a>
@@ -2553,7 +2554,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
                   ) : rel === "pending" ? (
                     <span className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>Request Sent</span>
                   ) : (
-                    <button onClick={() => handleAdd(p)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: 4 }}>
+                    <button onClick={() => handleAdd(p)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
                       Add Friend
                     </button>
                   )}
@@ -2580,7 +2581,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
                       )}
                       <span className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.fromCallsign}</span>
                     </button>
-                    <button onClick={() => declineRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+                    <button onClick={() => declineRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                       Decline
                     </button>
                     <button onClick={() => acceptRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.good, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
@@ -2697,16 +2698,16 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
             {isFriend ? (
               confirmUnfriend ? (
                 <div className="flex gap-2 mb-4" style={{ maxWidth: 280 }}>
-                  <button onClick={() => setConfirmUnfriend(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>Cancel</button>
+                  <button onClick={() => setConfirmUnfriend(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Cancel</button>
                   <button onClick={() => { cancelOrUnfriend(currentUser.uid, uid); setConfirmUnfriend(false); }} className="flex-1 py-2 text-[12px] font-semibold" style={{ ...display, background: T.alert, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>Unfriend</button>
                 </div>
               ) : (
-                <button onClick={() => setConfirmUnfriend(true)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>Friends ✓</button>
+                <button onClick={() => setConfirmUnfriend(true)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Friends ✓</button>
               )
             ) : isPending ? (
               <span className="px-4 py-2 mb-4 text-[13px] font-medium" style={{ ...body, color: T.ashFaint }}>Request Sent</span>
             ) : (
-              <button onClick={() => sendRequest(currentUser.uid, currentProfile, uid, profile)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: 4 }}>
+              <button onClick={() => sendRequest(currentUser.uid, currentProfile, uid, profile)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
                 + Add Friend
               </button>
             )}
@@ -2844,7 +2845,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
             <button
               onClick={() => onOpenTeam(myTeam.id)}
               className="w-full mb-5 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
-              style={{ background: T.panel, borderRadius: 6, border: `1.5px solid ${T.accent}` }}
+              style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: `1.5px solid ${T.accent}`, outlineOffset: -1 }}
             >
               <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 {myTeam.patchUrl ? (
@@ -2873,7 +2874,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
           <div className="mb-4 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
             <div className="flex items-center gap-3 mb-3">
-              <button onClick={handlePick} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+              <button onClick={handlePick} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: T.rPill }}>
                 {pickedPreview ? (
                   <img src={pickedPreview} alt="Preview" className="w-full h-full" style={{ objectFit: "contain" }} />
                 ) : (
@@ -3094,7 +3095,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
               style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, resize: "none" }}
             />
             <div className="flex gap-2">
-              <button onClick={() => setEditing(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
+              <button onClick={() => setEditing(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                 Cancel
               </button>
               <button
@@ -3143,7 +3144,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
           <button
             onClick={() => setShowFieldPicker(true)}
             className="w-full mb-4 p-3 text-left text-[13px] font-medium"
-            style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: 6 }}
+            style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: T.rPill }}
           >
             + Set a home field
           </button>
@@ -3201,14 +3202,14 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
                   <button
                     onClick={() => setMemberRole(team.id, m.uid, m.role === "officer" ? "member" : "officer")}
                     className="px-2 py-1 text-[10px] font-semibold"
-                    style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}
+                    style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}
                   >
                     {m.role === "officer" ? "Demote" : "Promote"}
                   </button>
                   <button
                     onClick={() => removeMember(team.id, m.uid)}
                     className="px-2 py-1 text-[10px] font-semibold"
-                    style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: 4 }}
+                    style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: T.rPill }}
                   >
                     Remove
                   </button>
@@ -3222,7 +3223,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
           <button
             onClick={handleLeave}
             className="w-full py-3 font-medium text-[14px] mb-4"
-            style={{ ...body, border: `1px solid ${T.line}`, color: T.alert, borderRadius: 4 }}
+            style={{ ...body, border: `1px solid ${T.line}`, color: T.alert, borderRadius: T.rPill }}
           >
             Leave Team
           </button>
@@ -3436,7 +3437,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
                   key={patch.id}
                   onClick={() => handleSelectFeatured(patch)}
                   className="relative p-3 flex flex-col items-center text-center transition-transform duration-100 active:scale-[0.98]"
-                  style={{ background: T.panel, borderRadius: 6, border: `1.5px solid ${isFeatured ? T.accent : T.line}` }}
+                  style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: isFeatured ? `1.5px solid ${T.accent}` : "none", outlineOffset: -1 }}
                 >
                   {isFeatured && (
                     <div className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center" style={{ background: T.accent, borderRadius: 999 }}>
@@ -3715,7 +3716,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
                 <button
                   onClick={() => { setShowDelete(false); setDeletePassword(""); setDeleteError(""); }}
                   className="flex-1 py-2.5 text-[12px] font-medium"
-                  style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}
+                  style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}
                 >
                   Cancel
                 </button>
@@ -3907,7 +3908,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
           <button
             onClick={handleCopyReferral}
             className="w-full py-2.5 text-[13px] font-semibold"
-            style={{ ...display, background: copied ? T.good : T.ash, color: "#FFFFFF", borderRadius: 4 }}
+            style={{ ...display, background: copied ? T.good : T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowSm }}
           >
             {copied ? "Copied!" : "Copy Invite Link"}
           </button>
@@ -4016,7 +4017,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
                     border: `1px solid ${(profile?.language || "English") === lang ? T.accent : T.line}`,
                     background: (profile?.language || "English") === lang ? T.accent : "transparent",
                     color: (profile?.language || "English") === lang ? "#fff" : T.ashDim,
-                    borderRadius: 4,
+                    borderRadius: T.rPill,
                   }}
                 >
                   {lang}
@@ -4032,7 +4033,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
         <button
           onClick={onLogout}
           className="w-full py-3 font-medium text-[14px] flex items-center justify-center gap-2"
-          style={{ ...body, border: `1px solid ${T.line}`, color: T.alert, borderRadius: 4 }}
+          style={{ ...body, border: `1px solid ${T.line}`, color: T.alert, borderRadius: T.rPill }}
         >
           <LogOut size={15} /> Log out
         </button>
@@ -4317,7 +4318,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
                   key={f}
                   onClick={() => setFrequency(f)}
                   className="p-3.5 text-left text-[13px] font-medium transition-transform duration-100 active:scale-[0.98]"
-                  style={{ ...body, background: frequency === f ? T.ash : T.panel, color: frequency === f ? "#FFFFFF" : T.ash, borderRadius: 6, border: `1px solid ${frequency === f ? T.ash : T.line}` }}
+                  style={{ ...body, background: frequency === f ? T.ash : T.panel, color: frequency === f ? "#FFFFFF" : T.ash, borderRadius: T.rPill, border: `1px solid ${frequency === f ? T.ash : T.line}` }}
                 >
                   {f}
                 </button>
