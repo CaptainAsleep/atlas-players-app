@@ -1213,6 +1213,66 @@ const fields = [
     notes:
       "This is the same 'Center Mass Airsoft' flagged as excluded from both the Indiana and Missouri batches over a Kansas-vs-Missouri location conflict — its street address (921 N 55th St, ZIP 66102) definitively places it in Kansas City, KANSAS, not Missouri, so it belongs here instead. One directory listed an 816 (Missouri) phone number, but 66102 is unambiguously a Wyandotte County, KS ZIP code; used the 913 (Kansas) number found elsewhere for the same business. No owned website found, so treated as facebook_only.",
   },
+
+  // Arkansas (added 2026-09-10)
+  {
+    id: "smt-airsoft",
+    name: "SMT Airsoft",
+    city: "Siloam Springs, AR",
+    address: "16838 Chambers Springs Road, Siloam Springs, AR 72761",
+    phone: "(479) 396-4327",
+    website: "https://smtairsoft.com",
+    ownerEmailDomain: "smtairsoft.com",
+    facebook: "https://www.facebook.com/profile.php?id=100091427100319",
+    instagram: "https://www.instagram.com/survivalmodetacticalnwa",
+    youtube: "https://www.youtube.com/@survivalmodetactical",
+    indoorOutdoor: "outdoor",
+    admission: "Day pass with rental gear: $40; day pass bring-your-own-gear: $20",
+    about:
+      "Family-owned outdoor airsoft field in Northwest Arkansas (rolling hills and thick woodlands terrain) with a warm-up/chronograph shooting range and a mobile field store for rentals and supplies. Day games Saturday-Sunday 12pm-5pm, night games Friday 6pm-10pm. Associated with The Survival Mode tactical gear retailer.",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "Two secondary sources gave slightly different house numbers (17023 / 16931 Chamber Springs Rd) — went with 16838 Chambers Springs Road since that's what the business's own site (smtairsoft.com) states directly.",
+  },
+  {
+    id: "modern-mission-airsoft",
+    name: "Modern Mission",
+    city: "Fayetteville, AR",
+    address: "3484 E. Joyce Blvd., Fayetteville, AR 72703",
+    phone: "479-595-0055",
+    website: "https://www.modernmission.com/airsoft",
+    ownerEmailDomain: "modernmission.com",
+    facebook: "https://facebook.com/ModernMission",
+    instagram: "https://instagram.com/modernmission",
+    youtube: "https://www.youtube.com/user/ModernMission1",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Open session with rental gear: $30.06/player; open session with own gear: $15/player; group events (10+ players): $300.60+; birthday packages $330-$440; corporate events from $380",
+    about:
+      "Outdoor airsoft \"missions\" venue in Fayetteville for ages 10+, running structured 90-minute sessions (minimum 4 missions, 6-player minimum) using plastic-BB scenarios. Also runs group, birthday, and corporate events.",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes: "Sessions run Friday 6pm and Saturday/Sunday 12pm & 2pm per the site's booking schedule.",
+  },
+  {
+    id: "xtreme-paintball-laser-tag-ar",
+    name: "Xtreme Paintball and Laser Tag",
+    city: "Dover, AR",
+    address: "90 Tucker Mountain Road, Dover, AR 72837",
+    phone: "479-280-4009",
+    website: "https://sites.google.com/view/xtreme-paintball-and-laser-tag/home",
+    indoorOutdoor: "outdoor",
+    about:
+      "Private, reservation-only outdoor venue in the Ozarks offering paintball, laser tag, airsoft, and GelBall side by side. Available by reservation seven days a week; no public walk-on hours.",
+    status: "active",
+    dataSource: "website",
+    lastScraped: "2026-09-10",
+    notes:
+      "Site is a Google Sites page rather than a dedicated domain, and lists a personal-looking contact email (twiley411@centurylink.net) rather than a business one — flagging as a smaller/informal operation, but airsoft is explicitly named as one of its offerings and the address/phone are given directly.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
