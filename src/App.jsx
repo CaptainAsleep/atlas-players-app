@@ -45,6 +45,25 @@ const T = {
   accent: "#1554B8", // links/interactive — deep blue for real contrast on white
   good: "#0F7A52", // success/positive
   alert: "#BC3327", // warnings/live badges
+
+  // --- Elevation & shape (added for the aesthetic-upgrade pass) ---
+  // Soft shadows replace the flat 1px border as the primary depth cue on
+  // cards; borders stay only for hairline dividers and secondary/outline
+  // buttons that need a visible edge with no fill.
+  shadowSm: "0 1px 2px rgba(0,44,72,0.05)",
+  shadowMd: "0 1px 2px rgba(0,44,72,0.05), 0 8px 20px -8px rgba(0,44,72,0.16)",
+  shadowLg: "0 1px 2px rgba(0,44,72,0.06), 0 10px 28px -8px rgba(0,44,72,0.22)",
+  shadowNav: "0 -8px 24px -8px rgba(0,44,72,0.14)", // bottom nav / sticky footer bars
+  // A single deliberate radius scale, replacing the mixed 2/4/6/8px values
+  // that had been picked ad hoc per element.
+  rTight: 10, // inputs, small chips
+  rCard: 16, // standard cards
+  rHero: 18, // feature/hero cards
+  rMedia: 14, // images inside cards
+  rPill: 999, // pills, segmented controls, toggle chips, primary buttons
+  // Soft tint washes for icon badges
+  tint: "#EEF2F8",
+  tintGood: "#EAF5EF",
 };
 
 const flatBg = { backgroundColor: T.void };
@@ -52,11 +71,11 @@ const flatBg = { backgroundColor: T.void };
 /* ---------- helpers ---------- */
 // Deterministic placeholder gradient per field/event until real photos exist.
 const GRADIENTS = [
-  "linear-gradient(160deg,#E4E4DD,#CDCDC4)",
-  "linear-gradient(160deg,#E0E0DE,#C8C8C4)",
-  "linear-gradient(160deg,#E2E4DE,#CACDC4)",
-  "linear-gradient(160deg,#E1E0DE,#C9C8C4)",
-  "linear-gradient(160deg,#DFE1E2,#C6C9CA)",
+  "linear-gradient(160deg,#1b3a56,#0a2138 65%,#081a2c)",
+  "linear-gradient(160deg,#3a5170,#1c3550 65%,#122840)",
+  "linear-gradient(160deg,#254768,#0e2c47 65%,#081a2c)",
+  "linear-gradient(160deg,#2c4a6b,#12314f 65%,#0a2138)",
+  "linear-gradient(160deg,#1f3f5e,#0c2740 65%,#081a2c)",
 ];
 function gradFor(seed = "") {
   let h = 0;
@@ -278,7 +297,7 @@ const STATUS_LABEL = {
 /* ---------- primitives ---------- */
 function Tag({ children, tone = "neutral" }) {
   const map = {
-    neutral: { border: "transparent", color: "#FFFFFF", bg: "rgba(10,10,11,0.72)" },
+    neutral: { border: "transparent", color: "#FFFFFF", bg: "rgba(255,255,255,0.16)" },
     accent: { border: "transparent", color: "#FFFFFF", bg: T.ash },
     good: { border: "transparent", color: "#FFFFFF", bg: T.good },
     live: { border: "transparent", color: "#fff", bg: T.alert },
@@ -287,14 +306,14 @@ function Tag({ children, tone = "neutral" }) {
   const s = map[tone];
   return (
     <span
-      className="text-[10px] font-semibold px-2 py-1 inline-flex items-center"
+      className="text-[10px] font-semibold px-2.5 py-1.5 inline-flex items-center"
       style={{
         ...mono,
         letterSpacing: "0.04em",
         border: s.bg ? "none" : `1px solid ${s.border}`,
         background: s.bg || "transparent",
         color: s.color,
-        borderRadius: 2,
+        borderRadius: T.rPill,
       }}
     >
       {children}
@@ -329,14 +348,16 @@ function BottomNav({ active, onNavigate }) {
     { key: "profile", label: "Profile", icon: User },
   ];
   return (
-    <div className="absolute bottom-0 left-0 right-0 border-t" style={{ background: T.panel, borderColor: T.line, zIndex: 1000 }}>
-      <div className="flex justify-between px-5 pt-2.5 pb-5">
+    <div className="absolute bottom-0 left-0 right-0" style={{ background: T.panel, boxShadow: T.shadowNav, zIndex: 1000 }}>
+      <div className="flex justify-between px-4 pt-2.5 pb-5">
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = active === t.key;
           return (
             <button key={t.key} onClick={() => onNavigate(t.key)} className="flex flex-col items-center gap-1 flex-1 transition-transform duration-100 active:scale-90">
-              <Icon size={19} strokeWidth={isActive ? 2.1 : 1.6} color={isActive ? T.ash : T.ashFaint} />
+              <div className="flex items-center justify-center" style={{ width: 38, height: 26, borderRadius: T.rPill, background: isActive ? "rgba(0,44,72,0.08)" : "transparent" }}>
+                <Icon size={18} strokeWidth={isActive ? 2.1 : 1.6} color={isActive ? T.ash : T.ashFaint} />
+              </div>
               <span className="text-[9px] font-medium" style={{ ...body, color: isActive ? T.ash : T.ashFaint }}>
                 {t.label}
               </span>
@@ -437,7 +458,7 @@ function LoginScreen({ signIn, signUp, referralCode }) {
           type="submit"
           disabled={busy}
           className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mt-2 transition-transform duration-100 active:scale-[0.98]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: busy ? 0.6 : 1 }}
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: busy ? 0.6 : 1 }}
         >
           {busy ? "Please wait…" : mode === "signup" ? "Create Account" : "Sign In"} <ArrowRight size={16} />
         </button>
@@ -479,14 +500,22 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="text-left w-full mb-4 p-3 transition-transform duration-100 active:scale-[0.98]"
-      style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+      className="text-left w-full mb-4 p-2.5 transition-transform duration-100 active:scale-[0.98]"
+      style={{ background: T.panel, borderRadius: T.rHero, boxShadow: T.shadowMd }}
     >
-      <div className="h-36 relative mb-2" style={{ ...heroStyle(ev.imageUrl || fallbackImageUrl, ev.id || ev.title), borderRadius: 4 }}>
+      <div className="h-40 relative mb-2.5" style={{ ...heroStyle(ev.imageUrl || fallbackImageUrl, ev.id || ev.title), borderRadius: T.rMedia, overflow: "hidden" }}>
         <div className="absolute top-3 left-3 flex gap-2">
           {ev.type && <Tag>{ev.type}</Tag>}
           {isToday && <Tag tone="live">TODAY</Tag>}
         </div>
+        {ev.price && (
+          <div
+            className="absolute bottom-2.5 left-3 text-[13px] font-semibold px-2.5 py-1.5"
+            style={{ ...mono, background: "rgba(21,84,184,0.85)", color: "#fff", borderRadius: T.rPill }}
+          >
+            {displayPrice(ev.price)}
+          </div>
+        )}
       </div>
       <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
       <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
@@ -501,9 +530,6 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
             <Heart size={11} /> {ev.interestCount} interested
           </div>
         ) : <div />}
-        {ev.price && (
-          <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{displayPrice(ev.price)}</div>
-        )}
       </div>
     </button>
   );
@@ -552,7 +578,7 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
 
   if (pins.length === 0) {
     return (
-      <div className="mx-6 mb-4 h-72 flex items-center justify-center" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+      <div className="mx-6 mb-4 h-72 flex items-center justify-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
         <p className="text-[12px] text-center px-6" style={{ ...body, color: T.ashFaint }}>
           None of the fields matching your current filter have map coordinates yet.
         </p>
@@ -607,11 +633,11 @@ function FieldFacts({ field }) {
 
   return (
     <>
-      <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+      <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
         <div className="flex items-center justify-between mb-2">
           <Eyebrow>Amenities</Eyebrow>
           {!hasRealAmenities && (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>DEMO DATA</span>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -627,11 +653,11 @@ function FieldFacts({ field }) {
         </div>
       </div>
 
-      <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+      <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
         <div className="flex items-center justify-between mb-2">
           <Eyebrow>Field Rules</Eyebrow>
           {!hasRealRules && (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>DEMO DATA</span>
           )}
         </div>
         <ul className="text-[12px] leading-relaxed pl-4" style={{ ...body, color: T.ashDim, listStyle: "disc" }}>
@@ -639,11 +665,11 @@ function FieldFacts({ field }) {
         </ul>
       </div>
 
-      <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+      <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
         <div className="flex items-center justify-between mb-2">
           <Eyebrow>Chrono Limits</Eyebrow>
           {!hasRealChrono && (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+            <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>DEMO DATA</span>
           )}
         </div>
         <div className="grid grid-cols-2 gap-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
@@ -665,7 +691,7 @@ function FieldFacts({ field }) {
       </div>
 
       {Array.isArray(field?.rentals) && field.rentals.length > 0 && (
-        <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+        <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <Eyebrow>Rental Gear</Eyebrow>
           <div className="flex flex-col gap-3 mt-2">
             {field.rentals.map((r) => (
@@ -704,7 +730,7 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
       target="_blank"
       rel="noreferrer"
       className="block overflow-hidden"
-      style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+      style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
     >
       <div className="p-4 pb-3">
         <Eyebrow>{label}</Eyebrow>
@@ -1058,7 +1084,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       </div>
 
       {nextGame ? (
-        <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+        <div className="mx-6 p-4 mb-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <div className="flex items-center justify-between mb-3">
             {nextGameIsToday ? <Tag tone="good">LIVE EVENT</Tag> : <Tag tone="live">UPCOMING EVENT</Tag>}
             {nextGameIsToday && (
@@ -1108,7 +1134,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                 <button
                   onClick={handleCheckIn}
                   className="px-4 py-2 text-[11px] font-semibold transition-transform duration-100 active:scale-95"
-                  style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
+                  style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
                 >
                   Check In Now
                 </button>
@@ -1125,7 +1151,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           )}
         </div>
       ) : (
-        <div className="mx-6 p-4 mb-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+        <div className="mx-6 p-4 mb-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>No upcoming games reserved</div>
           <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
             Reserve a spot at an event and it'll show up here as your next game.
@@ -1151,7 +1177,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       </div>
 
       {showFilters && (
-        <div className="mx-6 mb-4 p-4 flex flex-col gap-4 overflow-hidden" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 6 }}>
+        <div className="mx-6 mb-4 p-4 flex flex-col gap-4 overflow-hidden" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <div>
             <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Date Range</div>
             <div className="flex flex-col gap-2">
@@ -1256,7 +1282,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             <button
               onClick={() => setShowFilters(false)}
               className="flex-1 py-2.5 text-[13px] font-semibold"
-              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
+              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
             >
               Run Search
             </button>
@@ -1267,37 +1293,38 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       <div className="mx-6 mb-2 flex items-center gap-2">
         <button
           onClick={() => setActiveTodayOnly(!activeTodayOnly)}
-          className="px-3 py-1.5 text-[12px] font-medium"
+          className="px-3.5 py-2 text-[12px] font-semibold transition-transform duration-100 active:scale-95"
           style={{
             ...body,
-            border: `1px solid ${activeTodayOnly ? T.alert : T.line}`,
-            background: activeTodayOnly ? T.alert : "transparent",
+            border: activeTodayOnly ? "none" : `1px solid ${T.line}`,
+            background: activeTodayOnly ? T.alert : T.panel,
             color: activeTodayOnly ? "#fff" : T.ashDim,
-            borderRadius: 4,
+            borderRadius: T.rPill,
+            boxShadow: activeTodayOnly ? "0 3px 10px -3px rgba(188,51,39,0.4)" : T.shadowSm,
           }}
         >
           Active Today
         </button>
         <div className="flex-1" />
-        <div className="flex" style={{ border: `1px solid ${T.line}`, borderRadius: 4, overflow: "hidden" }}>
+        <div className="flex" style={{ background: T.panelAlt, borderRadius: T.rPill, padding: 3 }}>
           <button
             onClick={() => setViewMode("list")}
-            className="px-3 py-1.5 text-[12px] font-semibold transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#FFFFFF" : T.ashDim }}
+            className="px-3.5 py-1.5 text-[12px] font-semibold transition-transform duration-100 active:scale-95"
+            style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#FFFFFF" : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "list" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
           >
             Events
           </button>
           <button
             onClick={() => setViewMode("fields")}
-            className="px-3 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "fields" ? T.ash : "transparent", color: viewMode === "fields" ? "#FFFFFF" : T.ashDim }}
+            className="px-3.5 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
+            style={{ ...body, background: viewMode === "fields" ? T.ash : "transparent", color: viewMode === "fields" ? "#FFFFFF" : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "fields" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
           >
             Fields
           </button>
           <button
             onClick={() => setViewMode("map")}
-            className="px-3 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "map" ? T.ash : "transparent", color: viewMode === "map" ? "#FFFFFF" : T.ashDim }}
+            className="px-3.5 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
+            style={{ ...body, background: viewMode === "map" ? T.ash : "transparent", color: viewMode === "map" ? "#FFFFFF" : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "map" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
           >
             Map
           </button>
@@ -1312,19 +1339,19 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         </div>
       )}
 
-      <div className="flex gap-3 px-6 mb-5 overflow-x-auto">
+      <div className="flex gap-2 px-6 mb-5 overflow-x-auto">
         {cats.map((cat) => {
           const Icon = cat.icon;
           const active = activeCat === cat.key;
           return (
-            <button key={cat.key} onClick={() => setActiveCat(cat.key)} className="flex flex-col items-center gap-1.5 transition-transform duration-100 active:scale-90">
-              <div
-                className="w-14 h-14 flex items-center justify-center"
-                style={{ background: active ? T.ash : T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}
-              >
-                <Icon size={19} color={active ? "#FFFFFF" : T.ashDim} strokeWidth={1.7} />
-              </div>
-              <span className="text-[11px] font-medium" style={{ ...body, color: active ? T.ash : T.ashDim }}>{cat.key}</span>
+            <button
+              key={cat.key}
+              onClick={() => setActiveCat(cat.key)}
+              className="flex items-center gap-1.5 flex-shrink-0 px-3.5 py-2.5 transition-transform duration-100 active:scale-95"
+              style={{ background: active ? T.ash : T.panel, borderRadius: T.rPill, boxShadow: active ? "0 3px 10px -3px rgba(0,44,72,0.35)" : T.shadowSm }}
+            >
+              <Icon size={15} color={active ? "#FFFFFF" : T.ashDim} strokeWidth={1.9} />
+              <span className="text-[12px] font-medium" style={{ ...body, color: active ? "#FFFFFF" : T.ashDim }}>{cat.key}</span>
             </button>
           );
         })}
@@ -1369,7 +1396,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                   key={f.id}
                   onClick={() => onOpenField(f)}
                   className="w-full mb-3 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
-                  style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+                  style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
                 >
                   <div className="w-14 h-14 flex-shrink-0" style={{ ...heroStyle(f.imageUrl, f.id), borderRadius: 4 }} />
                   <div className="flex-1">
@@ -1569,14 +1596,14 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(ev.imageUrl || field?.imageUrl, ev.id || ev.title)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
-            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
             <div className="flex gap-2">
-              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
               </button>
-              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 {shareState === "copied" ? <Check size={17} color={T.good} /> : <Share2 size={16} color={T.ash} />}
               </button>
             </div>
@@ -1609,7 +1636,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             </div>
           )}
 
-          <div className="p-4 flex flex-col gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="p-4 flex flex-col gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="flex gap-3 items-start">
               <Calendar size={17} color={T.ashDim} className="mt-0.5" />
               <div>
@@ -1652,7 +1679,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           />
 
           {!whosGoingLoading && whosGoing.length > 0 && (
-            <button onClick={() => setShowAttendees(true)} className="p-4 text-left w-full" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <button onClick={() => setShowAttendees(true)} className="p-4 text-left w-full" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>Who's Going ({whosGoing.length})</Eyebrow>
               <div className="flex flex-wrap gap-2 mt-1">
                 {whosGoing.slice(0, 12).map((b) => (
@@ -1705,7 +1732,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                 <div className="text-[12px] font-medium" style={{ ...body, color: T.ash }}>Waiver signed as {signature.signedName}</div>
               </div>
             ) : !isPast && (
-              <div className="p-3 flex items-center gap-2" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <div className="p-3 flex items-center gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                 <FileSignature size={15} color={T.ashDim} />
                 <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>This event requires a signed waiver — you'll sign it when you reserve.</div>
               </div>
@@ -1713,21 +1740,21 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           )}
 
           {ev.description && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>Event Details</Eyebrow>
               <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>{ev.description}</p>
             </div>
           )}
 
           {field?.about && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>About {field.name}</Eyebrow>
               <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>{field.about}</p>
             </div>
           )}
 
           {ev.checkInPatch?.imageUrl && (
-            <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <button onClick={() => setShowPatchViewer(true)} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 <img src={ev.checkInPatch.imageUrl} alt={ev.checkInPatch.name} className="w-full h-full" style={{ objectFit: "contain", padding: 4 }} />
               </button>
@@ -1750,7 +1777,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               target="_blank"
               rel="noreferrer"
               className="p-4 flex items-center justify-between"
-              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+              style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
             >
               <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>View original listing</span>
               <ArrowRight size={16} color={T.ashDim} />
@@ -1759,7 +1786,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 border-t px-5 py-3 flex items-center justify-between" style={{ background: T.panel, borderColor: T.line, zIndex: 1000 }}>
+      <div className="absolute bottom-0 left-0 right-0 px-5 py-3 flex items-center justify-between" style={{ background: T.panel, boxShadow: T.shadowNav, zIndex: 1000 }}>
         <div>
           <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
           <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>
@@ -1790,7 +1817,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               // side that anything needed attention. Blocking this
               // outright until the real voucher/refund design exists is
               // safer than quietly letting that happen.
-              <div className="px-4 py-3 max-w-xs" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}>
+              <div className="px-4 py-3 max-w-xs" style={{ background: T.panel, borderRadius: T.rTight, boxShadow: T.shadowSm }}>
                 <p className="text-[12px] mb-2" style={{ ...body, color: T.ashDim }}>
                   Canceling a paid booking isn't self-serve yet. Reach out on Discord and we'll take care of it directly.
                 </p>
@@ -1803,13 +1830,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                 <button onClick={() => setConfirmCancel(false)} disabled={bookingBusy} className="px-3 py-3 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
                   Never mind
                 </button>
-                <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: 4, opacity: bookingBusy ? 0.6 : 1 }}>
+                <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: bookingBusy ? 0.6 : 1 }}>
                   {bookingBusy ? "…" : "Cancel Reservation"}
                 </button>
               </div>
             )
           ) : (
-            <button onClick={() => setConfirmCancel(true)} className="px-6 py-3 font-semibold text-[13px] flex items-center gap-2" style={{ ...display, background: T.good, color: "#FFFFFF", borderRadius: 4 }}>
+            <button onClick={() => setConfirmCancel(true)} className="px-6 py-3 font-semibold text-[13px] flex items-center gap-2" style={{ ...display, background: T.good, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
               <Check size={15} /> Reserved
             </button>
           )
@@ -1835,7 +1862,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             onClick={handleBook}
             disabled={bookingBusy || choiceMissing}
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
-            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
+            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
           >
             {bookingBusy ? "…" : choiceMissing ? `Choose ${priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : "Reserve This Event"}
           </button>
@@ -1883,7 +1910,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             </div>
             <div className="px-5 py-4">
               {ev.waiver.isDemo !== false && (
-                <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 mb-3" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: 2 }}>DEMO DATA</span>
+                <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 mb-3" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>DEMO DATA</span>
               )}
               <div
                 onScroll={handleWaiverScroll}
@@ -1918,7 +1945,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                     onClick={handleSign}
                     disabled={!agreed || !legalName.trim() || signing}
                     className="w-full py-3 text-[13px] font-semibold"
-                    style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
+                    style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
                   >
                     {signing ? "Signing & Reserving…" : "Sign & Reserve"}
                   </button>
@@ -2066,14 +2093,14 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
-            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
             <div className="flex gap-2">
-              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
               </button>
-              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.85)", borderRadius: 4 }}>
+              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 {shareState === "copied" ? <Check size={17} color={T.good} /> : <Share2 size={16} color={T.ash} />}
               </button>
             </div>
@@ -2114,7 +2141,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
           )}
 
           {field.homeTeam && (
-            <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 <img
                   src={field.homeTeam.patchUrl}
@@ -2131,7 +2158,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
           )}
 
           {field.about && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>About the Field</Eyebrow>
               <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>{field.about}</p>
             </div>
@@ -2139,7 +2166,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
 
           <FieldFacts field={field} />
 
-          <div className="p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <Eyebrow>Scheduled Events</Eyebrow>
             {fieldEvents.length === 0 ? (
               field.status === "private-booking" ? (
@@ -2185,7 +2212,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
           </div>
 
           {pastFieldEvents.length > 0 && (
-            <div style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, overflow: "hidden" }}>
+            <div style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, overflow: "hidden" }}>
               <button
                 onClick={() => setShowPastEvents(!showPastEvents)}
                 className="w-full p-4 flex items-center justify-between transition-transform duration-100 active:scale-[0.99]"
@@ -2222,7 +2249,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
             <a
               href={`tel:${field.phone.replace(/[^\d+]/g, "")}`}
               className="p-4 flex items-center justify-between"
-              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+              style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
             >
               <span className="flex items-center gap-2 text-[13px] font-medium" style={{ ...mono, color: T.ash }}>
                 <Phone size={14} color={T.ashFaint} /> {field.phone}
@@ -2281,7 +2308,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOp
                     key={f.id}
                     onClick={() => onOpenField(f)}
                     className="p-3 flex items-center gap-3 text-left"
-                    style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+                    style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
                   >
                     <div className="w-14 h-14" style={{ ...heroStyle(f.imageUrl, f.id), borderRadius: 4 }} />
                     <div className="flex-1">
@@ -2342,7 +2369,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
             key={ev.id}
             onClick={() => onOpenEvent(ev)}
             className="p-3 flex items-center gap-3 text-left w-full"
-            style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: isPastEv ? 0.65 : 1 }}
+            style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, opacity: isPastEv ? 0.65 : 1 }}
           >
             <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
             <div className="flex-1">
@@ -2379,7 +2406,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
           myBookingsLoading ? (
             <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
           ) : booked.length === 0 ? (
-            <div className="p-6 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="p-6 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 <Calendar size={22} color={T.ashDim} strokeWidth={1.7} />
               </div>
@@ -2393,7 +2420,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
 
         {tab === "interested" && (
           interested.length === 0 ? (
-            <div className="p-6 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div className="p-6 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <div className="w-14 h-14 flex items-center justify-center mb-3" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 <Calendar size={22} color={T.ashDim} strokeWidth={1.7} />
               </div>
@@ -2404,7 +2431,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
               <button
                 onClick={() => onNavigate("home")}
                 className="w-full py-3 font-semibold text-[13px]"
-                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
+                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
               >
                 Start your search
               </button>
@@ -2510,7 +2537,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
             searchResults.map((p) => {
               const rel = relationshipBadge(p.uid);
               return (
-                <div key={p.uid} className="mb-2 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+                <div key={p.uid} className="mb-2 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                   <button onClick={() => onOpenPlayer(p.uid)} className="flex-1 flex items-center gap-3 text-left">
                     {p.avatarUrl ? (
                       <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${p.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
@@ -2542,7 +2569,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
               <Eyebrow>Friend Requests</Eyebrow>
               <div className="mb-5 flex flex-col gap-2">
                 {incomingRequests.map((r) => (
-                  <div key={r.id} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.accent}` }}>
+                  <div key={r.id} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: `1.5px solid ${T.accent}`, outlineOffset: -1 }}>
                     <button onClick={() => onOpenPlayer(r.fromUid)} className="flex-1 flex items-center gap-3 text-left">
                       {r.fromAvatarUrl ? (
                         <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${r.fromAvatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
@@ -2556,7 +2583,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
                     <button onClick={() => declineRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>
                       Decline
                     </button>
-                    <button onClick={() => acceptRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.good, color: "#fff", borderRadius: 4 }}>
+                    <button onClick={() => acceptRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.good, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
                       Accept
                     </button>
                   </div>
@@ -2578,7 +2605,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
                 key={f.uid}
                 onClick={() => onOpenPlayer(f.uid)}
                 className="w-full mb-2 p-3 flex items-center gap-3 text-left"
-                style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+                style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
               >
                 {f.avatarUrl ? (
                   <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${f.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
@@ -2671,7 +2698,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
               confirmUnfriend ? (
                 <div className="flex gap-2 mb-4" style={{ maxWidth: 280 }}>
                   <button onClick={() => setConfirmUnfriend(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>Cancel</button>
-                  <button onClick={() => { cancelOrUnfriend(currentUser.uid, uid); setConfirmUnfriend(false); }} className="flex-1 py-2 text-[12px] font-semibold" style={{ ...display, background: T.alert, color: "#fff", borderRadius: 4 }}>Unfriend</button>
+                  <button onClick={() => { cancelOrUnfriend(currentUser.uid, uid); setConfirmUnfriend(false); }} className="flex-1 py-2 text-[12px] font-semibold" style={{ ...display, background: T.alert, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>Unfriend</button>
                 </div>
               ) : (
                 <button onClick={() => setConfirmUnfriend(true)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: 4 }}>Friends ✓</button>
@@ -2689,13 +2716,13 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
 
       <div className="px-6">
         <div className="grid grid-cols-2 gap-2 mb-5">
-          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>
               {profile.createdAt?.toDate ? profile.createdAt.toDate().getFullYear() : "—"}
             </div>
             <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Member Since</div>
           </div>
-          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{theirPatches.length}</div>
             <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Patches</div>
           </div>
@@ -2706,7 +2733,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
             <Eyebrow>Patches</Eyebrow>
             <div className="grid grid-cols-4 gap-2 mb-5">
               {theirPatches.map((p) => (
-                <div key={p.id} className="aspect-square flex items-center justify-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+                <div key={p.id} className="aspect-square flex items-center justify-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                   <img src={p.imageUrl} alt={p.name} className="w-full h-full" style={{ objectFit: "contain", padding: 6 }} />
                 </div>
               ))}
@@ -2736,7 +2763,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
             <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No reserved games.</p>
           ) : (
             booked.map((ev) => (
-              <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+              <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                 <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
                 <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
               </button>
@@ -2746,7 +2773,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
         {tab === "interested" && (
           interested.length === 0 ? <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>Nothing upcoming.</p> :
           interested.map((ev) => (
-            <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
               <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
             </button>
@@ -2755,7 +2782,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
         {tab === "past" && (
           past.length === 0 ? <p className="text-[12px] py-4 text-center" style={{ ...body, color: T.ashFaint }}>No past events.</p> :
           past.map((ev) => (
-            <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, opacity: 0.7 }}>
+            <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, opacity: 0.7 }}>
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
               <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
             </button>
@@ -2843,7 +2870,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
         </div>
 
         {showCreate && (
-          <div className="mb-4 p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="mb-4 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
             <div className="flex items-center gap-3 mb-3">
               <button onClick={handlePick} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
@@ -2874,7 +2901,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
               onClick={handleCreate}
               disabled={!teamName.trim() || creating}
               className="w-full py-2.5 text-[13px] font-semibold"
-              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !teamName.trim() || creating ? 0.5 : 1 }}
+              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !teamName.trim() || creating ? 0.5 : 1 }}
             >
               {creating ? "Creating…" : "Create Team"}
             </button>
@@ -2904,7 +2931,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
               key={t.id}
               onClick={() => onOpenTeam(t.id)}
               className="w-full mb-3 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
-              style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+              style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
             >
               <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
                 {t.patchUrl ? (
@@ -3074,7 +3101,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
                 onClick={handleSaveInfo}
                 disabled={saving}
                 className="flex-1 py-2 text-[12px] font-semibold"
-                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: saving ? 0.6 : 1 }}
+                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}
               >
                 {saving ? "Saving…" : "Save"}
               </button>
@@ -3090,7 +3117,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
           <button
             onClick={handleJoin}
             className="w-full py-3 font-semibold text-[14px] mb-5"
-            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4 }}
+            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
           >
             Join Team
           </button>
@@ -3103,7 +3130,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
 
         <Eyebrow>Home Field</Eyebrow>
         {team.homeFieldName ? (
-          <div className="mb-4 p-3 flex items-center justify-between" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="mb-4 p-3 flex items-center justify-between" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="flex items-center gap-2">
               <MapPin size={14} color={T.ashFaint} />
               <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{team.homeFieldName}</span>
@@ -3125,7 +3152,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
         )}
 
         {showFieldPicker && (
-          <div className="mb-4 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="mb-4 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <input
               value={fieldSearch}
               onChange={(e) => setFieldSearch(e.target.value)}
@@ -3155,7 +3182,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
         <Eyebrow>Roster ({members.length})</Eyebrow>
         <div className="flex flex-col gap-2 mb-5">
           {members.map((m) => (
-            <div key={m.uid} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+            <div key={m.uid} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 flex items-center gap-3 text-left">
                 {m.avatarUrl ? (
                   <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
@@ -3265,7 +3292,7 @@ function SecretPatchScreen({ onBack }) {
       {qrDataUrl ? (
         <img src={qrDataUrl} alt="Secret Agent redemption code" className="w-64 h-64" style={{ borderRadius: 8, border: `1px solid ${T.line}` }} />
       ) : (
-        <div className="w-64 h-64 flex items-center justify-center" style={{ background: T.panel, borderRadius: 8, border: `1px solid ${T.line}` }}>
+        <div className="w-64 h-64 flex items-center justify-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <span className="text-[13px]" style={{ ...body, color: T.ashFaint }}>Generating…</span>
         </div>
       )}
@@ -3658,7 +3685,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
           onClick={handleSave}
           disabled={saving}
           className="w-full py-3 font-semibold text-[14px] mt-1"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: saving ? 0.6 : 1 }}
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}
         >
           {saving ? "Saving…" : "Save Changes"}
         </button>
@@ -3696,7 +3723,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
                   onClick={handleDelete}
                   disabled={!deletePassword || deleting}
                   className="flex-1 py-2.5 text-[12px] font-semibold"
-                  style={{ ...display, background: T.alert, color: "#FFFFFF", borderRadius: 4, opacity: !deletePassword || deleting ? 0.5 : 1 }}
+                  style={{ ...display, background: T.alert, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: !deletePassword || deleting ? 0.5 : 1 }}
                 >
                   {deleting ? "Deleting…" : "Permanently Delete"}
                 </button>
@@ -3807,7 +3834,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
     <div className="h-full overflow-y-auto pb-24" style={flatBg}>
       <ScreenHeader title="Profile" />
       <div className="px-6 pt-4">
-        <div className="p-4 flex items-center gap-3 mb-2" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+        <div className="p-4 flex items-center gap-3 mb-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
           <button onClick={handleAvatarPick} className="relative w-14 h-14 flex-shrink-0" disabled={avatarUploading}>
             {profile?.avatarUrl ? (
@@ -3855,24 +3882,24 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
 
         <Eyebrow>Your Stats</Eyebrow>
         <div className="grid grid-cols-3 gap-2 mb-5">
-          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>
               {profile?.createdAt?.toDate ? profile.createdAt.toDate().getFullYear() : "—"}
             </div>
             <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Member Since</div>
           </div>
-          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{pastEventsCount}</div>
             <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Past Events</div>
           </div>
-          <button onClick={onOpenPatches} className="p-3 text-center transition-transform duration-100 active:scale-[0.97]" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <button onClick={onOpenPatches} className="p-3 text-center transition-transform duration-100 active:scale-[0.97]" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{patches?.length || 0}</div>
             <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Patches</div>
           </button>
         </div>
 
         <Eyebrow>Invite Friends</Eyebrow>
-        <div className="p-4 mb-5 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+        <div className="p-4 mb-5 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           {referralQr && <img src={referralQr} alt="Referral QR code" className="mb-3" style={{ width: 140, height: 140 }} />}
           <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
             Share this code or let someone scan it to invite them to Atlas.
@@ -3887,7 +3914,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
         </div>
 
         <Eyebrow>Account Settings</Eyebrow>
-        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
+        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <ProfileRow label="Email" value={user?.email} static />
           <button onClick={onOpenAccount} className="w-full flex items-center justify-between py-3.5">
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>My Account</span>
@@ -3915,7 +3942,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
         <button
           onClick={() => { setShowPasswordForm(!showPasswordForm); setPasswordError(""); setPasswordSuccess(false); }}
           className="w-full flex items-center justify-between py-3 px-4 mb-6"
-          style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}
+          style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
         >
           <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Change Password</span>
           <ChevronRight size={15} color={T.ashFaint} style={{ transform: showPasswordForm ? "rotate(90deg)" : "none" }} />
@@ -3956,7 +3983,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
               type="submit"
               disabled={passwordSaving}
               className="w-full py-3 font-semibold text-[13px]"
-              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: passwordSaving ? 0.6 : 1 }}
+              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: passwordSaving ? 0.6 : 1 }}
             >
               {passwordSaving ? "Updating…" : "Update Password"}
             </button>
@@ -3964,7 +3991,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
         )}
 
         <Eyebrow>Support & Preferences</Eyebrow>
-        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}`, borderColor: T.line }}>
+        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <button onClick={() => setShowLanguagePicker(!showLanguagePicker)} className="w-full flex items-center justify-between py-3.5">
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Language</span>
             <div className="flex items-center gap-2">
@@ -3977,7 +4004,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
         </div>
 
         {showLanguagePicker && (
-          <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="flex gap-2 mb-2">
               {LANGUAGES.map((lang) => (
                 <button
@@ -4045,11 +4072,11 @@ function InstallGateScreen({ platform, deferredPrompt }) {
 
       {platform === "ios" ? (
         <div className="w-full text-left" style={{ maxWidth: 320 }}>
-          <div className="flex items-center gap-3 mb-3 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="flex items-center gap-3 mb-3 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <span className="text-[16px] font-semibold" style={{ ...display, color: T.accent }}>1</span>
             <span className="text-[13px]" style={{ ...body, color: T.ash }}>Tap the Share button <Share2 size={14} style={{ display: "inline", verticalAlign: "middle" }} /> in Safari's toolbar</span>
           </div>
-          <div className="flex items-center gap-3 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="flex items-center gap-3 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <span className="text-[16px] font-semibold" style={{ ...display, color: T.accent }}>2</span>
             <span className="text-[13px]" style={{ ...body, color: T.ash }}>Scroll down and tap "Add to Home Screen"</span>
           </div>
@@ -4059,13 +4086,13 @@ function InstallGateScreen({ platform, deferredPrompt }) {
           onClick={handleInstallClick}
           disabled={installing}
           className="w-full py-3.5 font-semibold text-[14px]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, maxWidth: 320, opacity: installing ? 0.6 : 1 }}
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, maxWidth: 320, opacity: installing ? 0.6 : 1 }}
         >
           {installing ? "Opening…" : "Install Atlas"}
         </button>
       ) : (
         <div className="w-full text-left" style={{ maxWidth: 320 }}>
-          <div className="flex items-center gap-3 p-3" style={{ background: T.panel, borderRadius: 6, border: `1px solid ${T.line}` }}>
+          <div className="flex items-center gap-3 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <span className="text-[16px] font-semibold" style={{ ...display, color: T.accent }}>1</span>
             <span className="text-[13px]" style={{ ...body, color: T.ash }}>Open your browser's menu and tap "Add to Home Screen" or "Install App"</span>
           </div>
@@ -4308,7 +4335,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
           onClick={handleNext}
           disabled={!canContinue || saving}
           className="w-full py-3.5 font-semibold text-[14px]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !canContinue || saving ? 0.5 : 1 }}
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !canContinue || saving ? 0.5 : 1 }}
         >
           {saving ? "Saving…" : step < STEPS.length - 1 ? "Continue" : "Finish"}
         </button>
@@ -4368,7 +4395,7 @@ function LegalAgreementScreen({ onAccept }) {
           onClick={handleAccept}
           disabled={!checked || saving}
           className="w-full py-3.5 font-semibold text-[14px]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: 4, opacity: !checked || saving ? 0.5 : 1 }}
+          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !checked || saving ? 0.5 : 1 }}
         >
           {saving ? "Continuing…" : "Agree & Continue"}
         </button>
