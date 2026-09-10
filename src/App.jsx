@@ -1160,7 +1160,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
         </div>
       )}
 
-      <div className="mx-6 mb-4 flex items-center gap-2 px-3 py-3" style={{ border: `1px solid ${T.line}`, background: T.panel, borderRadius: 4 }}>
+      <div className="mx-6 mb-4 flex items-center gap-2 px-4 py-3" style={{ background: T.panel, borderRadius: T.rPill, boxShadow: T.shadowMd }}>
         <Search size={16} color={T.ashFaint} />
         <input
           value={search}
@@ -1169,10 +1169,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           className="flex-1 text-[13px] bg-transparent outline-none"
           style={{ ...body, color: T.ash }}
         />
-        <button onClick={() => setShowFilters(!showFilters)} className="relative">
-          <SlidersHorizontal size={16} color={advancedFiltersActive ? T.accent : T.ashDim} />
+        <button onClick={() => setShowFilters(!showFilters)} className="relative flex items-center justify-center flex-shrink-0" style={{ width: 26, height: 26, borderRadius: T.rPill, background: T.tint }}>
+          <SlidersHorizontal size={14} color={advancedFiltersActive ? T.accent : T.ashDim} />
           {advancedFiltersActive && (
-            <span style={{ position: "absolute", top: -3, right: -3, width: 6, height: 6, borderRadius: "50%", background: T.accent }} />
+            <span style={{ position: "absolute", top: -2, right: -2, width: 6, height: 6, borderRadius: "50%", background: T.accent }} />
           )}
         </button>
       </div>
@@ -2519,7 +2519,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
 
   return (
     <div className="px-6 pt-4">
-      <div className="mb-4 flex items-center gap-2 px-3 py-2.5" style={{ border: `1px solid ${T.line}`, background: T.panel, borderRadius: 4 }}>
+      <div className="mb-4 flex items-center gap-2 px-4 py-2.5" style={{ background: T.panel, borderRadius: T.rPill, boxShadow: T.shadowMd }}>
         <Search size={15} color={T.ashFaint} />
         <input
           value={search}
@@ -2909,7 +2909,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
           </div>
         )}
 
-        <div className="mb-4 flex items-center gap-2 px-3 py-2.5" style={{ border: `1px solid ${T.line}`, background: T.panel, borderRadius: 4 }}>
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5" style={{ background: T.panel, borderRadius: T.rPill, boxShadow: T.shadowMd }}>
           <Users size={15} color={T.ashFaint} />
           <input
             value={search}
