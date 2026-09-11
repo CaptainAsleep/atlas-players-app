@@ -1830,6 +1830,201 @@ const fields = [
       "Weakest-verified entry in this batch — include with caution. No phone number, no independent website, and no matching North Dakota business registry entry were found (may operate as a sole proprietorship/DBA rather than a registered LLC). AirsoftC3 lists two slightly different addresses for the field vs. the business (27600 vs 27550 ND-1804) and Facebook's page title says 'Baldwin, ND' rather than Wilton — Wilton and Baldwin are neighboring small communities on the same highway, so this is likely one property near the boundary rather than two locations, but it could not be fully resolved. AirsoftC3's own listing was last updated 08/30/2023 — worth a phone/Facebook-Messenger check before relying on this as fully current. A same-name-different-state business, 'Legacy Paintball & Airsoft Park' in New York/Vermont, is unrelated — do not confuse its info with this ND field.",
   },
   {
+    id: "command-decisions-wargames-center",
+    name: "Command Decisions Wargames Center",
+    city: "Taylorsville, NC",
+    address: "84 Reaganswood Dr, Taylorsville, NC 28681",
+    website: "https://cdwargames.com",
+    facebook: "https://www.facebook.com/CommandDecisions",
+    indoorOutdoor: "outdoor",
+    about:
+      "Long-running combined paintball/airsoft wargames park in the NC foothills (70+ acres, 15+ bases), hosting large-scale scenario events such as 'Fulda Gap' and 'Carolina Outposts.'",
+    status: "active",
+    dataSource:
+      "website (cdwargames.com) + Yelp + Facebook + paintballevents.net (Fulda Gap, Nov 2025) + AllEvents (Carolina Outposts, Nov 2025)",
+    lastScraped: "2026-09-11",
+    notes: "No public phone number found; contact appears to run through the website.",
+  },
+  {
+    id: "gunnys-warfare-center",
+    name: "Gunny's Warfare Center",
+    city: "Marshville, NC",
+    address: "2407 Ansonville Rd, Marshville, NC 28103",
+    phone: "(704) 352-5656",
+    website: "https://gunnyswarfarecenter.com",
+    facebook: "https://www.facebook.com/GunnysWarfareCenter",
+    indoorOutdoor: "outdoor",
+    about:
+      "Self-described 'Charlotte's First Dedicated Airsoft Field' — a 30+ acre outdoor site about 30 minutes southeast of Charlotte with rental equipment and weekend open play.",
+    status: "active",
+    dataSource: "website + Yelp + Tripadvisor + Nextdoor + Facebook",
+    lastScraped: "2026-09-11",
+    notes:
+      "Some directories cross-reference nearby Waxhaw addressing for this rural Union County site — same location, not a second field.",
+  },
+  {
+    id: "battle-on-bell-airsoft",
+    name: "Battle on Bell Airsoft",
+    city: "Otto, NC",
+    address: "1688 Bell Rd, Otto, NC 28763",
+    website: "https://battleonbellairsoft.com",
+    facebook: "https://www.facebook.com/battleonbellairsoft",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft field in far-western NC (Macon County) with wooded terrain and a dedicated speedball area.",
+    status: "active",
+    dataSource:
+      "website + Yelp (92 photos, updated Nov 2024) + YouTube + Nextdoor + Yahoo Local",
+    lastScraped: "2026-09-11",
+    notes:
+      "A phone number is listed on a local Chamber of Commerce directory, but the full digits couldn't be independently confirmed — omitted rather than guessed.",
+  },
+  {
+    id: "southfield-airsoft",
+    name: "Southfield Airsoft",
+    city: "Jacksonville, NC",
+    address: "2586 Wilmington Hwy, Jacksonville, NC 28540",
+    website: "https://southfieldairsoft.com",
+    facebook: "https://www.facebook.com/southfieldairsoft",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor field near Jacksonville/Camp Lejeune offering weekend day play, night games with tracers and flashlights, and private scenario building.",
+    status: "active",
+    dataSource: "website + Facebook + Superpages (address) + Nextdoor",
+    lastScraped: "2026-09-11",
+    notes: "No phone number found published.",
+  },
+  {
+    id: "jacksonville-paintball-airsoft-park",
+    name: "Jacksonville Paintball & Airsoft Park",
+    city: "Jacksonville, NC",
+    address: "130 Imperial Lane, Jacksonville, NC 28540",
+    phone: "(910) 353-7529",
+    website: "https://jacksonvillepaintballpark.com",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-and-airsoft park with Woods, Urban Combat, Action Town, and Speedball courses plus a dedicated airsoft page; Sat/Sun walk-in hours with weekday reservations.",
+    status: "active",
+    dataSource: "website + Yelp + Nextdoor + Onlyinonslow.com + Kidvoyage",
+    lastScraped: "2026-09-11",
+  },
+  {
+    id: "xtreme-park-adventures",
+    name: "Xtreme Park Adventures",
+    city: "Durham, NC",
+    address: "7460 NC Highway 98, Durham, NC 27703",
+    phone: "(919) 596-6100",
+    website: "https://xtremeparkadventures.com",
+    indoorOutdoor: "outdoor",
+    about:
+      "50-acre multi-activity outdoor park including 'Xtreme Airsoft' alongside paintball, laser tag, and ziplines; current hours Mon-Fri 10am-4pm, Sat-Sun 10am-6pm.",
+    status: "active",
+    dataSource:
+      "website + Nextdoor + old Facebook page (xtremekombatpark) + YouTube + AirsoftC3",
+    lastScraped: "2026-09-11",
+    notes:
+      "Rebrand: AirsoftC3 and some directories still list this under its old name 'Xtreme Kombat' — same physical location, now operating as Xtreme Park Adventures.",
+  },
+  {
+    id: "rats-airsoft",
+    name: "RATS Airsoft",
+    city: "Reidsville, NC",
+    address: "1404 Mizpah Ch. Rd, Reidsville, NC 27320",
+    phone: "(336) 520-7079",
+    website: "https://ratsairsoft.com",
+    youtube: "https://www.youtube.com/@ratsairsoft3944",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft field ('Rockingham Airsoft & Tactical Support') open Saturdays 9am-5pm, serving the Rockingham County/Piedmont area.",
+    status: "active",
+    dataSource:
+      "website contact page + Facebook + YouTube (video dated March 2025) + Eventbrite + AirsoftC3",
+    lastScraped: "2026-09-11",
+  },
+  {
+    id: "airsoft-battle-park",
+    name: "Airsoft Battle Park",
+    city: "Graham, NC",
+    address: "4031 Mineral Springs Rd, Graham, NC 27253",
+    facebook: "https://www.facebook.com/airsoftbattlepark",
+    instagram: "https://www.instagram.com/airsoftbattlepark",
+    indoorOutdoor: "outdoor",
+    admission: "$15 all-day play; $40 with rental gear; group rates available",
+    about:
+      "34-acre outdoor field with open play games every Saturday of the year.",
+    status: "active",
+    dataSource:
+      "Macaroni Kid Burlington-Hillsborough directory + Facebook + Instagram + Nextdoor + AirsoftC3",
+    lastScraped: "2026-09-11",
+  },
+  {
+    id: "chickens-tactical",
+    name: "Chicken's Tactical",
+    city: "Newland, NC",
+    address: "2930 Cow Camp Rd, Newland, NC 28657",
+    phone: "(828) 260-3177",
+    website: "https://jeffthom83.wixsite.com/chickens",
+    indoorOutdoor: "outdoor",
+    about:
+      "Small, owner-operated 'High Country' (Avery County, near Boone) airsoft field and pro-shop offering field rental, repairs, and organized events; open Saturdays 10:30am-5pm.",
+    status: "active",
+    dataSource: "own Wix site + AirsoftC3",
+    lastScraped: "2026-09-11",
+    notes:
+      "Smallest/lowest-traffic operator in this batch — day-to-day activity is referenced on Facebook, but independently corroborating reviews were limited. Worth a confirmation call before treating as fully verified.",
+  },
+  {
+    id: "paintball-central-greensboro",
+    name: "Paintball Central - Greensboro",
+    city: "Gibsonville, NC",
+    address: "6106 Burlington Road, Gibsonville, NC 27249",
+    phone: "(336) 449-4406",
+    website: "https://pballcentral.com/greensboro",
+    indoorOutdoor: "outdoor",
+    admission:
+      "$25/player (self-equipped) plus tax; ages 10+ (13+ recommended); weekdays private groups only, Sat-Sun 10am-6pm",
+    about:
+      "Paintball facility near Greensboro with a dedicated 'Play Airsoft' program alongside its core paintball offering.",
+    status: "active",
+    dataSource: "website (dedicated 'Play Airsoft' page) + Eventseeker + Airsoft Nut + AirsoftC3",
+    lastScraped: "2026-09-11",
+    notes:
+      "AirsoftC3 lists this under 'PBC Sports Park - Greensboro'; the operating business's actual current branding is 'Paintball Central' (Greensboro location) — same facility, used current branding here.",
+  },
+  {
+    id: "black-ops-paintball-airsoft",
+    name: "Black Ops Paintball & Airsoft",
+    city: "Fayetteville, NC",
+    address: "2112 River Rd, Fayetteville, NC",
+    website: "https://blackopspaintball.org/fayetteville",
+    facebook: "https://www.facebook.com/BlackOpsAir",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-and-airsoft facility serving the Fayetteville/Fort Liberty area, in the unincorporated Eastover community within Cumberland County.",
+    status: "active",
+    dataSource:
+      "Yelp (updated July 2026) + Tripadvisor + Trip.com + Fayetteville Chamber of Commerce + Facebook + YouTube",
+    lastScraped: "2026-09-11",
+    notes:
+      "Zip code not independently confirmed and omitted rather than guessed; some directories reference 'Eastover, NC' as the community name for this Fayetteville-mailing-address location.",
+  },
+  {
+    id: "adventure-beach-paintball-airsoft",
+    name: "Adventure Beach Paintball and Airsoft",
+    city: "Tabor City, NC",
+    address: "305 Lays Lake Dr, Tabor City, NC 28463",
+    facebook: "https://www.facebook.com/abpaintballsc",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball facility near the NC/SC coastal border (close to Myrtle Beach) with historical evidence of airsoft offerings via AirsoftC3's listing and a YouTube video, though branded primarily around paintball today.",
+    status: "active",
+    dataSource:
+      "Tripadvisor + Yelp + YouTube + AirsoftC3 + Columbus County Chamber of Commerce",
+    lastScraped: "2026-09-11",
+    notes:
+      "Include-with-caution: could not confirm airsoft is still a currently-offered activity versus paintball-only today — branding is primarily paintball, with airsoft evidenced historically (AirsoftC3's listing name and an older YouTube gameplay video). Worth confirming by phone before relying on this as an active airsoft option.",
+  },
+  {
     id: "acs-airsoft",
     name: "ACS Airsoft",
     city: "West Paducah, KY",
