@@ -1754,6 +1754,48 @@ const fields = [
       "Address has moved: older directories (Groupon, Manta, Yahoo Local, airsoftboard.com) still list a prior Kearney/Amherst-area address (e.g. '15728 Odessa Road, Amherst, NE' or 'Kearney, NE 68847'); the address here is the current one per the business's own site. A separate, unrelated business also called 'Warped Sportz' (a skate/paintball shop in Crown Point, Indiana) shows up in searches — do not confuse its reviews/socials with this Nebraska field. Worth confirming current pricing by phone since it isn't itemized online.",
   },
   {
+    id: "airsoft-sioux-falls",
+    name: "Airsoft Sioux Falls",
+    city: "Sioux Falls, SD",
+    address: "201 N Harlem Ave, Sioux Falls, SD 57104",
+    phone: "(605) 361-5200",
+    website: "https://www.crossfire-airsoft.com",
+    facebook: "https://www.facebook.com/AirsoftSiouxFalls/",
+    instagram: "https://www.instagram.com/AirsoftSiouxFalls",
+    indoorOutdoor: "outdoor",
+    admission:
+      "$25/player bring-your-own-gear; $55/player full rental (gear + unlimited BBs); barrel bag $8, dead rag $4. Bio-BBs required. Ages 10+ (10-13 requires a parent present; under-18 needs an annual digital waiver).",
+    about:
+      "Outdoor, woods-only airsoft field (~8 acres) run by Crossfire Paintball behind their Sioux Falls building, hosting organized walk-on games on the 2nd and 4th Sunday of the month during a May-October season. The only dedicated airsoft field listed for South Dakota on AirsoftC3.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 + website (crossfire-airsoft.com: home, /airsoft-sioux-falls, /schedule, /rates) + crossfire-paintball.com + Tripadvisor + Experience Sioux Falls tourism listing + CommunityVotes Sioux Falls 2025 (Gold, Paintball) + YouTube gameplay videos",
+    lastScraped: "2026-09-11",
+    notes:
+      "Caution: as of this research (Sept 2026), the operator's own site still said it was 'hoping to open in July' for the 2026 season and needed volunteers to rebuild field bunkers first — no 2026-dated post/review/schedule entry was found confirming games actually ran this year. Not confirmed closed, but worth a phone/Facebook check before treating as fully active this season. Same corporate operator (Crossfire) also runs a paintball+airsoft field under the Crossfire brand in Clearwater, MN.",
+  },
+  {
+    id: "black-hills-paintball",
+    name: "Black Hills Paintball",
+    city: "Rapid City, SD",
+    address: "2472 Forest Place, Rapid City, SD 57701",
+    phone: "(605) 484-0777",
+    website: "https://blackhillspaintball.com",
+    facebook: "https://www.facebook.com/blackhillspaintball/",
+    instagram: "https://www.instagram.com/blackhillspaintball.1/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Airsoft group rental party (8 players): $250 base, +$31.25/extra player, includes 8 masks, 8 guns, 4,000 BBs, a referee, all-day entry. Walk-on individual: $37 full rental, or $30 BBs+entry if bringing own gun. Hours Sat-Sun 9am-5pm, other times by appointment (reservation by phone only); $100 non-refundable no-show fee.",
+    about:
+      "Long-running Rapid City paintball facility with four game fields (woodsball/speedball/scenario), which also explicitly rents and runs semi/full-auto-selectable airsoft rifles as a parallel activity to its core paintball business.",
+    status: "active",
+    dataSource:
+      "website (blackhillspaintball.com: home, /airsoft, /contact) + Facebook + Instagram + Threads + YouTube + local directories (paintballfieldfinder.com, localblackhills.com, Roadtrippers) + blackhillsstore.com gift-certificate listing",
+    lastScraped: "2026-09-11",
+    notes:
+      "A directory (paintballfieldfinder.com) tacks 'and Airsoft' onto the business's name, but every independent source (own site, Facebook, Instagram) uses just 'Black Hills Paintball' — used that as the name here. Airsoft is a secondary product line to paintball and could be de-emphasized without a website update, so worth confirming current availability by phone before relying on the pricing above.",
+  },
+  {
     id: "acs-airsoft",
     name: "ACS Airsoft",
     city: "West Paducah, KY",
