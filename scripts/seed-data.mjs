@@ -1709,6 +1709,48 @@ const fields = [
       "Airsoft is a once-a-week (Sunday only) sub-offering here, not a daily activity — flagging so expectations are set correctly, same pattern as other paintball-primary venues in this dataset (Louisiana's Paintball Command, Virginia's Bethel Battlefield).",
   },
   {
+    id: "cjs-paintball-airsoft-park",
+    name: "CJ's Paintball & Airsoft Park",
+    city: "Martell, NE",
+    address: "16500 SW 14th Street, Martell, NE 68404",
+    phone: "(402) 464-2769",
+    website: "https://cjspaintballpark.com",
+    facebook: "https://www.facebook.com/CJSPAINTBALLPARK/",
+    instagram: "https://www.instagram.com/cjspaintball/",
+    twitter: "https://x.com/cjspaintballprk",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Airsoft open play held every 1st and 3rd Sunday of the month, 11am-4pm: $25 entry with own gear, $45 rental package (gun, mask, vest, dead rag, 2 mags); mid-cap mag refills $2, high-cap $5. No private airsoft parties — airsoft is scheduled open-play days only.",
+    about:
+      "Long-running outdoor paintball park near Lincoln, NE with wooded/fortified terrain across multiple fields, running dedicated recurring airsoft open-play days twice a month with rental gear available. Documented airsoft posts going back to at least 2019.",
+    status: "active",
+    dataSource:
+      "website (cjspaintballpark.com, including dedicated /airsoft/ page) + Facebook + Instagram + X + YouTube (third-party gameplay video) + Tripadvisor",
+    lastScraped: "2026-09-11",
+    notes:
+      "Facebook auto-tags the location as 'Centerville NE,' an unincorporated place adjacent to Martell — same business, not a second location. A 2025 Instagram post about a price increase confirms current, active operation.",
+  },
+  {
+    id: "warped-sportz",
+    name: "Warped Sportz",
+    city: "Wood River, NE",
+    address: "19387 W. Rainforth Road, Wood River, NE 68883",
+    phone: "(308) 440-5102",
+    website: "https://warpedsportz.com",
+    facebook: "https://www.facebook.com/Warpedsportzadventurepark/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Annual membership listed at $150; day-pass/rental pricing not itemized on the public site (call to ask). Hours: Mon-Fri reservation-only, Sat 10am-5pm, Sun 11am-5pm.",
+    about:
+      "Paintball business founded in 1994 that expanded into central Nebraska around 2010, offering multiple field types (woods, airball, hyperball, a custom scenario field). Its own site and contact page explicitly advertise 'paintball and airsoft action,' though airsoft is secondary to its core paintball business.",
+    status: "active",
+    dataSource:
+      "website (warpedsportz.com: home, contact, events, about-us) + local news (theindependent.com, 2017) + Facebook + Groupon + Nextdoor",
+    lastScraped: "2026-09-11",
+    notes:
+      "Address has moved: older directories (Groupon, Manta, Yahoo Local, airsoftboard.com) still list a prior Kearney/Amherst-area address (e.g. '15728 Odessa Road, Amherst, NE' or 'Kearney, NE 68847'); the address here is the current one per the business's own site. A separate, unrelated business also called 'Warped Sportz' (a skate/paintball shop in Crown Point, Indiana) shows up in searches — do not confuse its reviews/socials with this Nebraska field. Worth confirming current pricing by phone since it isn't itemized online.",
+  },
+  {
     id: "acs-airsoft",
     name: "ACS Airsoft",
     city: "West Paducah, KY",
