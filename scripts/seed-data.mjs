@@ -1796,6 +1796,40 @@ const fields = [
       "A directory (paintballfieldfinder.com) tacks 'and Airsoft' onto the business's name, but every independent source (own site, Facebook, Instagram) uses just 'Black Hills Paintball' — used that as the name here. Airsoft is a secondary product line to paintball and could be de-emphasized without a website update, so worth confirming current availability by phone before relying on the pricing above.",
   },
   {
+    id: "black-rhino-airsoft",
+    name: "Black Rhino Airsoft",
+    city: "Baldwin, ND",
+    address: "15819 Cattle Drive, Baldwin, ND 58521",
+    phone: "(701) 404-9690",
+    website: "https://blackrhinoairsoft.square.site/home",
+    facebook: "https://www.facebook.com/BlackRhinoAirsoftLLC/",
+    youtube: "https://www.youtube.com/@blackrhinoairsoft93",
+    indoorOutdoor: "indoor + outdoor",
+    about:
+      "Locally owned airsoft company just north of Bismarck offering public open play and private events, founded by Taylor Kindseth in 2017 under a special-use permit. Expanded after a 2021 Bismarck city ordinance change explicitly legalized recreational airsoft/paintball arenas within city limits.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 + Bismarck Tribune ('Airsoft field to open Saturday', 2017) + KFYR-TV (2021-07-15, ordinance-change story naming the business and owner) + North Dakota business registry (Entity #158912, domestic LLC, registered 2017-02-07, active/good standing) + Boise Gun Club directory (secondary)",
+    lastScraped: "2026-09-11",
+    notes:
+      "Strongest-verified of the two ND entries: active/good-standing LLC registration plus two independent local news stories naming the business and owner directly. Gap: no independently confirmed 2024-2026 activity (reviews/posts) turned up in search — Facebook itself is robots-blocked from direct fetch, so recent activity may simply not be search-indexed rather than the field being inactive. A secondary phone number, (701) 255-5757, appears on one third-party directory; treated the AirsoftC3-listed number as primary.",
+  },
+  {
+    id: "legacy-field",
+    name: "Legacy Field",
+    city: "Wilton, ND",
+    address: "27600 ND-1804, Wilton, ND 58579",
+    facebook: "https://www.facebook.com/Legacyfield/",
+    indoorOutdoor: "outdoor",
+    about:
+      "13-acre outdoor paintball/airsoft venue north of Bismarck with three distinct play zones (open, wooded, and urban/trench terrain near a large airstrip), run by mobile paintball-supply operator 'Legacy Paintball.'",
+    status: "active",
+    dataSource: "AirsoftC3 (field + business listings) + Facebook (title/metadata only — page blocked from direct fetch by robots.txt)",
+    lastScraped: "2026-09-11",
+    notes:
+      "Weakest-verified entry in this batch — include with caution. No phone number, no independent website, and no matching North Dakota business registry entry were found (may operate as a sole proprietorship/DBA rather than a registered LLC). AirsoftC3 lists two slightly different addresses for the field vs. the business (27600 vs 27550 ND-1804) and Facebook's page title says 'Baldwin, ND' rather than Wilton — Wilton and Baldwin are neighboring small communities on the same highway, so this is likely one property near the boundary rather than two locations, but it could not be fully resolved. AirsoftC3's own listing was last updated 08/30/2023 — worth a phone/Facebook-Messenger check before relying on this as fully current. A same-name-different-state business, 'Legacy Paintball & Airsoft Park' in New York/Vermont, is unrelated — do not confuse its info with this ND field.",
+  },
+  {
     id: "acs-airsoft",
     name: "ACS Airsoft",
     city: "West Paducah, KY",
