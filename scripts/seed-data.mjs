@@ -527,20 +527,23 @@ const fields = [
     id: "paintball-airsoft-indiana",
     name: "Paintball & Airsoft Indiana",
     city: "Franklin, IN",
-    address: "6109 S US Hwy 31, Franklin, IN 46143",
+    address: "6109 S US Hwy 31, Ste 100, Franklin, IN 46131",
     phone: "(317) 743-7251",
     website: "https://paintballindianapolis.com",
     ownerEmailDomain: "paintballindianapolis.com",
     facebook: "https://www.facebook.com/PaintballIndiana",
+    instagram: "https://www.instagram.com/paintballairsoftindiana/",
     indoorOutdoor: "outdoor",
+    admission:
+      "Open play $25/day ($35 with rental gear, ammo not included); 10-person party bundles: Airsoft $350 (2,000 BBs included) / Paintball $400 (2,500 paintballs included); additional players $30 each; private play with referee +$50 (24-hr advance booking, $50 non-refundable deposit); ammo a la carte: 2,000 airsoft BBs $20, paintballs $20-60 depending on quantity.",
     about:
-      "Outdoor paintball-and-airsoft facility about 20 minutes south of Indianapolis, open Fri-Sun (Mon-Thu by reservation only) with open play, party bundles, and scenario events; site confirms current airsoft offering.",
+      "Outdoor paintball-and-airsoft facility about 20 minutes south of Indianapolis with 15+ game fields (including a Call of Duty-inspired 'kill house'), open Fri-Sun (Mon-Thu by reservation only) with open play, party bundles, corporate events, a youth Little League program, and competitive 'Immortals' airsoft/paintball teams with periodic public tryouts.",
     imageUrl: "https://assets.cdn.filesafe.space/xFt74CxUQcgC8K4HXUHa/media/698d250a7f6dcf4f652fe812.webp",
     status: "active",
-    dataSource: "website",
-    lastScraped: "2026-09-10",
+    dataSource: "website (paintballindianapolis.com: home, /plan-price, /about, /news-updates) + Facebook + Instagram + Yelp (Franklin listing updated May 2026)",
+    lastScraped: "2026-09-11",
     notes:
-      "Specific admission pricing lives on a separate Plans & Pricing page not fetched; omitted rather than estimated.",
+      "Re-verified and enriched 2026-09-11 at Michael's request. Business has a documented name/location history: operated previously as 'Spec Ops Group' and 'Paintball Indianapolis' at two different Martinsville, IN addresses (both now confirmed CLOSED on Yelp) before relocating to the current Franklin address. Corrected zip from 46143 to 46131 (46143 is Greenwood, IN's zip, not Franklin's) and added the Ste 100 suite number, per Yahoo Local, Redfin, and Boise Gun Club directory cross-checks. Phone number has conflicting reports across directories ((317) 743-7251 per the site itself, used here; (317) 480-4139 per two regional directories; (765) 516-4854 per Yahoo Local) -- worth confirming by phone if it ever goes stale. Not currently listed on AirsoftC3 under any of its names.",
   },
 
   // ---- Ohio (added 2026-09-10, from seed-data-draft-OH-TX.mjs) -----------
