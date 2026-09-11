@@ -2025,6 +2025,146 @@ const fields = [
       "Include-with-caution: could not confirm airsoft is still a currently-offered activity versus paintball-only today — branding is primarily paintball, with airsoft evidenced historically (AirsoftC3's listing name and an older YouTube gameplay video). Worth confirming by phone before relying on this as an active airsoft option.",
   },
   {
+    id: "airsoft-charleston",
+    name: "Airsoft Charleston",
+    city: "North Charleston, SC",
+    address: "6658 Dorchester Rd, North Charleston, SC 29418",
+    phone: "(843) 952-9384",
+    website: "https://airsoftcharleston.com",
+    facebook: "https://www.facebook.com/airsoftCHS/",
+    indoorOutdoor: "outdoor",
+    about:
+      "A 7-8.5 acre outdoor airsoft field 'by enthusiasts, for enthusiasts,' with a formal waiver/safety-briefing process for newcomers and experienced players alike.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 + Chamber of Commerce business directory + own site (home, directions, FAQ) + Battleonix directory",
+    lastScraped: "2026-09-11",
+    notes:
+      "Confirmed hosting 'Operation Shadowlands' milsim events with Team Shadow Airsoft in both 2024 and 2025 — strong recent evidence of continuous operation. One automated extraction of the homepage showed '6714 Dorchester Rd' instead of 6658 — used 6658 since it's cross-referenced by AirsoftC3 and the Chamber of Commerce directory.",
+  },
+  {
+    id: "black-ops-airsoft-south",
+    name: "Black Ops Airsoft South",
+    city: "Ravenel, SC",
+    address: "SC-165 & Hyde Park Rd, Ravenel, SC 29470",
+    phone: "315-871-8697",
+    website: "https://boa-s.com",
+    facebook: "https://www.facebook.com/BOASouth",
+    instagram: "https://www.instagram.com/blackopssouth",
+    indoorOutdoor: "outdoor",
+    about:
+      "Family-oriented airsoft and gel-blaster field established 2012, emphasizing sportsmanship and safety.",
+    status: "active",
+    dataSource:
+      "own site (home, contact-us, game-play-rules) + Yelp + Nextdoor + YellowPages + Facebook (title only) + 843area.com + Wheree.com",
+    lastScraped: "2026-09-11",
+    notes:
+      "Recently relocated: older directories (Yelp, Nextdoor, YellowPages, localgymsandfitness, 843area.com) still list a stale prior address, 1040 W Richardson Ave, Summerville, SC — the business's own site says it 'recently relocated' with new-field info posted to Facebook. Used the current Ravenel location per the operator's own site and Facebook page title; recommend confirming the exact street address/hours directly since the move appeared still being finalized. A separate, unrelated business, 'Black Ops Paintball & Airsoft' (Conway/Myrtle Beach, seeded separately below), has a similar name but is a different company.",
+  },
+  {
+    id: "black-ops-paintball-airsoft-myrtle-beach",
+    name: "Black Ops Paintball & Airsoft",
+    city: "Conway, SC",
+    address: "4324 US-501 W, Conway, SC 29526",
+    phone: "(843) 489-2174",
+    website: "https://blackopspaintball.org/myrtle-beach",
+    facebook: "https://www.facebook.com/BlackOpsPaintballConway",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Offers an 'Airsoft Birthday Party Package' and 'Airsoft Entry & Rental Packages' on Saturdays and Sundays (exact pricing not published on site).",
+    about:
+      "Multi-state paintball/airsoft chain (also operating in Fayetteville, NC and Lacey, WA) running airsoft alongside paintball on weekends and for private events near Myrtle Beach.",
+    status: "active",
+    dataSource:
+      "own site (contact, myrtle-beach, myrtle-beach/airsoft) + Apple Maps + Yelp + Nextdoor + Conway SC Chamber of Commerce + Tripadvisor",
+    lastScraped: "2026-09-11",
+    notes:
+      "A related retail location, 'Black Ops Paintball and Airsoft Store' at 6650 SC-707, Myrtle Beach, SC, appears to be a satellite pro-shop rather than a second field. Not to be confused with the unrelated, similarly-named 'Black Ops Airsoft South' in Ravenel, SC (seeded separately above) — verified via separate websites, phone numbers, and addresses.",
+  },
+  {
+    id: "sqairsoft",
+    name: "SQAirsoft",
+    city: "Lexington, SC",
+    address: "1205 Founders Road, Lexington, SC 29073",
+    website: "https://www.sqairsoft.com",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Standard skirmish games $20-25; half-day events $20; multi-day $35; $5 military/first-responder discount; field rental gun $25, mask rental $5.",
+    about:
+      "Active outdoor field/pro-shop (legally Escue Airsoft, LLC) in the Columbia/Lexington Midlands area hosting monthly public skirmishes plus named large-scale events.",
+    status: "active",
+    dataSource: "own site (game-information page, live event calendar) + AirsoftC3 + Airsoft Nut + localgymsandfitness",
+    lastScraped: "2026-09-11",
+    notes:
+      "Best-documented field in the state: its own site lists a full 2026 event calendar (monthly skirmishes Jan-Sept, 'Wasteland V' in May, 'Patch Wars' in Aug, and 'AOSC's 17th Anniversary Game' Sept 19-20, 2026) — a long-running, 17-year community anchor. AirsoftC3 double-lists this business under two name variants ('SQA (Escue Airsoft)' and 'Escue Airsoft (SQA)') — same business, not two fields. No phone number found published.",
+  },
+  {
+    id: "battlecat-sports",
+    name: "BattleCat Sports",
+    city: "Anderson, SC",
+    address: "102 N Manning St, Anderson, SC 29621",
+    phone: "(864) 964-0167",
+    website: "https://battlecatsports.com",
+    facebook: "https://www.facebook.com/p/BattleCat-Sports-61581259475889/",
+    indoorOutdoor: "indoor",
+    about:
+      "Described as the first fully dedicated military/law-enforcement/public tactical training center in South Carolina, offering urban airsoft combat plus a retail gun shop, Youth Night, birthday parties, and 'Bazooka Ball' foam-ball games.",
+    status: "active",
+    dataSource:
+      "own site (home, contact-us) + Yelp (updated August 2026) + YellowPages + Chamber of Commerce directory + Nextdoor + AirsoftC3 + Airsoft Nut",
+    lastScraped: "2026-09-11",
+    notes:
+      "Hours: store Wed-Fri 10am-6pm, Sat 10am-10pm, Sun 12pm-6pm (closed Mon/Tue); public arena Sat 2pm-6pm, Sun 1pm-6pm; Youth Night Sat 6pm-10pm.",
+  },
+  {
+    id: "red-fox-games",
+    name: "Red Fox Games",
+    city: "Woodruff, SC",
+    address: "Fowler Road, Woodruff, SC 29388",
+    phone: "(864) 386-7304",
+    website: "https://redfoxgames.com",
+    facebook: "https://www.facebook.com/RedFoxGamesPaintball/",
+    indoorOutdoor: "outdoor",
+    about:
+      "One of the largest paintball/airsoft complexes in the country by acreage (160+ acres, 13 distinct playing fields) — Tripadvisor calls it the '10th largest paintball and airsoft facility in the world.' Woman-owned, offers paintball, airsoft, gel-blaster play, night games, and birthday parties on a conservation-designated property.",
+    status: "active",
+    dataSource:
+      "Tripadvisor + Yelp + Chamber of Commerce directory + YellowPages + Manta + visitgreenvillesc.com (Greenville tourism board) + The Woodruff Times (Aug 9, 2025 news article)",
+    lastScraped: "2026-09-11",
+    notes:
+      "Strongly reaffirmed by local news: The Woodruff Times reported (Aug 9, 2025) that new operator Bethany Hauf took over under a long-term lease from 96-year-old original owner Vaughn Smith, explicitly 'leveling up' the paintball/airsoft/family offerings. Exact street number not published in any source found; Manta lists the city as 'Spartanburg, SC 29388,' but Woodruff is the consistently-used town name across Tripadvisor, Yelp, and news coverage. Requires a 25-player minimum for organized public game days per a partner-booking service (Airsoft X Greenville) that exclusively books this field — that service is not a separate venue.",
+  },
+  {
+    id: "westminster-airsoft",
+    name: "Westminster Airsoft",
+    city: "Rock Hill, SC",
+    address: "4000 India Hook Rd, Rock Hill, SC 29732",
+    phone: "(803) 325-6771",
+    indoorOutdoor: "outdoor",
+    about:
+      "A small, community-run airsoft field/league in Rock Hill, SC operating via the BlueSombrero youth/adult sports-league platform rather than its own commercial website.",
+    status: "active",
+    dataSource: "Google Maps + AirsoftC3 + eListing.us business directory + BlueSombrero + X/Twitter (@WestminsterAir1) + YouTube",
+    lastScraped: "2026-09-11",
+    notes:
+      "Include with caution — moderate confidence. Both its BlueSombrero page and X profile returned access-blocked errors on direct fetch, so recent (2024-2026) activity could not be independently confirmed, though no closure signal was found either. Has real, consistent contact info across multiple sources. Recommend a direct phone call before treating as fully confirmed-active.",
+  },
+  {
+    id: "airsoft-columbia",
+    name: "Airsoft Columbia",
+    city: "Columbia, SC",
+    address: "7216 Middle St, Columbia, SC 29223",
+    website: "http://www.airsoftcolumbia.net",
+    indoorOutdoor: "outdoor",
+    about:
+      "A small, apparently informally-run Columbia-area airsoft field/community, likely operated more as a hobbyist club than a commercial venue.",
+    status: "active",
+    dataSource: "AirsoftC3 + Yelp + Nextdoor + LinkedIn + X + n49.com business directory",
+    lastScraped: "2026-09-11",
+    notes:
+      "Lower confidence — include with caution. The listed website domain does not currently resolve (DNS failure), suggesting it may be dead even if the group still runs informally via social media. No phone number found. The street address also independently appears in real-estate/MLS listings, suggesting this may be a private residential property used as a field (not unusual for small rural fields, but worth a direct confidence check) rather than a commercial venue. Yelp shows no 'CLOSED' banner (unlike a confirmed-closed comparison field found during this research), which is a mild positive signal. Recommend direct outreach via LinkedIn or social handles before treating as a fully bookable venue.",
+  },
+  {
     id: "acs-airsoft",
     name: "ACS Airsoft",
     city: "West Paducah, KY",
