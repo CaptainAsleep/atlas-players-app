@@ -80,6 +80,12 @@ service cloud.firestore {
         ||
         // Editing a field you already own.
         resource.data.get('ownerId', null) == request.auth.uid
+        ||
+        // Admin (Michael) can always update a field directly — used to
+        // approve/reject a pending claim from the admin portal, or to fix any
+        // other field data by hand. Same isAdmin() already used for
+        // fields/{fieldId}/private/{docId} and owners/{ownerId} reads above.
+        isAdmin()
       );
       allow delete: if false;
 
