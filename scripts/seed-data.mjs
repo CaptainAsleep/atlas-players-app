@@ -1756,6 +1756,44 @@ const fields = [
     notes:
       "Hours per AirsoftC3: Mon-Fri 9am-5pm, Sat-Sun 9am-4pm. Also known informally as 'Mr. & Mrs. Splat' on its Facebook page. Airsoft Board lists this field as 'unclaimed' (operator hasn't set up an account there) and recommends confirming directly before visiting — noting that caveat rather than treating pricing/hours as fully current.",
   },
+  {
+    id: "mk-airsoft-clarksburg",
+    name: "MK Airsoft Clarksburg",
+    city: "Clarksburg, WV",
+    address: "624 Armory Rd, Clarksburg, WV 26301",
+    phone: "(304) 566-7055",
+    website: "https://mkairsoft.com",
+    ownerEmailDomain: "mkairsoft.com",
+    facebook: "https://www.facebook.com/p/MK-Airsoft-Clarksburg-61568826869416/",
+    instagram: "https://www.instagram.com/mkairsoftclarksburg/",
+    indoorOutdoor: "indoor",
+    admission:
+      "Memberships start at $99/month chain-wide; single-visit tickets are sold online via mkairsoft.com with per-visit pricing not itemized on the public site",
+    about:
+      "72,000-sq-ft indoor airsoft arena built into a former National Guard armory just off US-19, opened February 1, 2025 as MKAirsoft's first out-of-state location alongside its two Ohio arenas (Brunswick/Medina and Middletown). Local news (WBOY, WDTV) billed it as the second-largest airsoft facility in the US at opening.",
+    status: "active",
+    dataSource: "website (mkairsoft.com) + Facebook + Instagram + local news (WBOY, WDTV, Connect-Bridgeport)",
+    lastScraped: "2026-09-11",
+    notes:
+      "Hours: Tue-Fri 5pm-10pm, Sat-Sun 10am-6pm per the chain site (may shift seasonally). Runs under the same MKAirsoft brand/YouTube/Discord as the Ohio locations.",
+  },
+  {
+    id: "tri-state-airsoft-club",
+    name: "Tri-State Airsoft Club",
+    city: "Martinsburg, WV",
+    address: "2259 Butlers Chapel Rd, Martinsburg, WV 25403",
+    phone: "(304) 240-7581",
+    website: "https://www.tristateasc.com",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft club in the Eastern Panhandle billing itself as a family-friendly, affordable recreational alternative to paintball. Has a multi-year presence on AirsoftC3, an Airsoft Society forum thread, and a couple of YouTube videos from the field.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 + Airsoft Society forum thread + YouTube videos — the club's own site (tristateasc.com) exists but could not be independently fetched/verified (robots.txt error)",
+    lastScraped: "2026-09-11",
+    notes:
+      "AirsoftC3's listing was last updated in 2023 and no more recent independent confirmation of hours/pricing was found — the weakest-verified of the two WV entries; worth confirming directly before treating hours/pricing as current. Contact email on file is a personal gmail (tristateasc@gmail.com), not a domain-matched address, so no ownerEmailDomain is set.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
