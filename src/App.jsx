@@ -5,6 +5,7 @@ import {
   ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import QRCode from "qrcode";
 import { useFields } from "./hooks/useFields";
@@ -588,20 +589,22 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
 
   return (
     <div className="mx-6 mb-4 h-72 overflow-hidden" style={{ borderRadius: 6, border: `1px solid ${T.line}` }}>
-      <MapContainer center={center} zoom={9} style={{ width: "100%", height: "100%", background: T.void }} zoomControl={false}>
+      <MapContainer center={center} zoom={9} style={{ width: "100%", height: "100%", background: T.void }} zoomControl={false} markerZoomAnimation={false}>
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
         />
         <FitToPins points={pins} />
-        {pins.map((f) => (
-          <Marker key={f.id} position={[f.lat, f.lng]} icon={fieldPinIcon} eventHandlers={{ click: () => onOpenField(f) }}>
-            <Popup>
-              <div style={{ ...body, fontSize: 12, fontWeight: 600 }}>{f.name}</div>
-              <div style={{ ...body, fontSize: 11, color: "#666" }}>{f.city}</div>
-            </Popup>
-          </Marker>
-        ))}
+        <MarkerClusterGroup chunkedLoading spiderfyOnMaxZoom={false} showCoverageOnHover={false} maxClusterRadius={60}>
+          {pins.map((f) => (
+            <Marker key={f.id} position={[f.lat, f.lng]} icon={fieldPinIcon} eventHandlers={{ click: () => onOpenField(f) }}>
+              <Popup>
+                <div style={{ ...body, fontSize: 12, fontWeight: 600 }}>{f.name}</div>
+                <div style={{ ...body, fontSize: 11, color: "#666" }}>{f.city}</div>
+              </Popup>
+            </Marker>
+          ))}
+        </MarkerClusterGroup>
       </MapContainer>
     </div>
   );
