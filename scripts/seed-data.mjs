@@ -3200,6 +3200,26 @@ const fields = [
       "Low confidence — include with caution. AirsoftC3's own 'last updated' stamp reads August 30, 2023, three years stale, with zero corroboration found anywhere else. This is the only lead found for the Tupelo metro area proper — a separate 'Tupelo Airsoft Club' Facebook group is a player community, not a venue, and was not seeded.",
   },
   {
+    id: "odins-paradise-airsoft",
+    name: "Odin's Paradise",
+    city: "Norwalk, OH",
+    address: "56 St. Marys Street, Norwalk, OH 44857",
+    phone: "(567) 424-6280",
+    website: "https://www.odinsparadise.com",
+    facebook: "https://www.facebook.com/odinsparadise",
+    instagram: "https://www.instagram.com/odins_paradise",
+    indoorOutdoor: "indoor",
+    admission:
+      "Open play $25; speedsoft $20; AEG rental $25; HPA rental $40; $5 discount for military/first responders",
+    about:
+      "42,000-square-foot indoor airsoft facility (~35,000 sq ft of play space) in Norwalk, OH, supporting both long-range and close-quarters battle styles plus dedicated Saturday-night speedsoft events.",
+    status: "active",
+    dataSource: "own site + Yelp (listing updated May 2026) + Facebook + Instagram",
+    lastScraped: "2026-09-12",
+    notes:
+      "Added directly per Michael's request. Airsoft-only — no paintball offering found. Hours per own site: Saturdays 9am-7pm (lunch break 1-2pm) plus 7-11pm for speedsoft events, Sundays 10am-5pm.",
+  },
+  {
     id: "acs-airsoft",
     name: "ACS Airsoft",
     city: "West Paducah, KY",
