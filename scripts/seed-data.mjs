@@ -2845,20 +2845,22 @@ const fields = [
     id: "airsoft-atlanta",
     name: "Airsoft Atlanta",
     city: "Atlanta, GA",
+    address: "3529 Church St Ste G, Atlanta, GA 30021",
     phone: "(470) 605-6186",
     website: "https://airsoftatlanta.com",
     facebook: "https://www.facebook.com/airsoftatlanta",
     instagram: "https://www.instagram.com/airsoftatl",
     youtube: "https://www.youtube.com/@Airsoftatlantatv",
     indoorOutdoor: "indoor",
-    admission: "$15-$65 depending on rental/duration; Fri 4-8pm, Sat 12-6pm, Sun 12-5pm",
+    admission:
+      "1 hour (own gear) $15 / all-day (own gear) $30; 1 hour (rental) $35 / all-day (rental) $65 -- rental package includes M4 AEG rifle, full-face mask, magazine, 1000 BBs; add-ons: tracer unit $10, upgraded M4 $25, air $10, protective gear $5-$20. Fri 4-8pm, Sat 12-6pm, Sun 12-5pm.",
     about:
       "Large airsoft retailer with an attached indoor arena serving the Atlanta metro area.",
     status: "active",
-    dataSource: "Yelp (updated September 2026) + Facebook + Instagram + YouTube",
-    lastScraped: "2026-09-11",
+    dataSource: "website (airsoftatlanta.com/pages/field-1) + Yelp (updated September 2026) + Facebook + Instagram + YouTube",
+    lastScraped: "2026-09-13",
     notes:
-      "Address intentionally omitted — directories show conflicting addresses (a Church St, Atlanta listing and a Peachtree Rd, Doraville listing, roughly 10 miles apart), and the business's own site does not publish one. Recommend confirming the current address by phone before this field is treated as fully bookable.",
+      "Address previously omitted -- directories showed conflicting addresses (a Church St, Atlanta listing and a Peachtree Rd, Doraville listing, roughly 10 miles apart) and the business's own homepage didn't publish one. Resolved 2026-09-13 per Michael's link to the site's own /pages/field-1 page, which gives 3529 Church St Ste G, Atlanta, GA 30021 -- matching the Church St directory listing, not the Doraville one. Pricing detail also expanded from that page (hourly vs. all-day, own-gear vs. rental, specific add-on costs).",
   },
   {
     id: "elite-ops-airsoft",
