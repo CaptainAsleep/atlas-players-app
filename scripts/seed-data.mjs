@@ -546,6 +546,27 @@ const fields = [
       "Re-verified and enriched 2026-09-11 at Michael's request. Business has a documented name/location history: operated previously as 'Spec Ops Group' and 'Paintball Indianapolis' at two different Martinsville, IN addresses (both now confirmed CLOSED on Yelp) before relocating to the current Franklin address. Corrected zip from 46143 to 46131 (46143 is Greenwood, IN's zip, not Franklin's) and added the Ste 100 suite number, per Yahoo Local, Redfin, and Boise Gun Club directory cross-checks. Phone number has conflicting reports across directories ((317) 743-7251 per the site itself, used here; (317) 480-4139 per two regional directories; (765) 516-4854 per Yahoo Local) -- worth confirming by phone if it ever goes stale. Not currently listed on AirsoftC3 under any of its names.",
   },
 
+  {
+    id: "sherwood-paintball",
+    name: "Sherwood Paintball",
+    city: "LaPorte, IN",
+    address: "3497 North US Hwy 35, LaPorte, IN 46350",
+    phone: "(219) 325-8060",
+    website: "https://sherwoodpaintball.com",
+    ownerEmailDomain: "sherwoodpaintball.com",
+    facebook: "https://www.facebook.com/SherwoodPaintball",
+    indoorOutdoor: "outdoor",
+    admission:
+      "All-day rental (marker, mask, field fee) $35; own equipment $25 (includes unlimited air for one tank); paintball case (2,000 rds) $45-75 depending on grade; kids birthday package $40.75/player (ages 10-16); private weekend parties $100 flat fee + per-player cost (10-player minimum, 3-hour sessions); weekday private parties $53.75/player plus $350 deposit and $100 private fee (10-player minimum).",
+    about:
+      "Family-run, 80+ acre outdoor paintball-and-airsoft field operating for over 36 years, built around a large castle-themed play area (marketed as \"the largest castle in the Midwest\") split into five named zones: City of Nottingham, Dreckmore/Dread Valley, Black Tower, Black Oak Keep/Battledale, and a dedicated Speedball/Airball field. Open Saturdays and Sundays 9am-4pm (weather permitting; site states play stops below 30°F).",
+    status: "active",
+    dataSource: "website (sherwoodpaintball.com: home, /prices) + Facebook + Yelp/Tripadvisor/BBB/Yahoo Local (legacy name)",
+    lastScraped: "2026-09-13",
+    notes:
+      "Still listed on Yelp, Tripadvisor, Yahoo Local, and BBB under the legacy name 'Sherwood Forest Paintball' -- the business's own current site brands simply as 'Sherwood Paintball Inc.' Both paintball and airsoft are offered per the site's activities list, but the pricing page is paintball-specific -- no separate BB/airsoft package pricing was found, so admission above reflects paintball pricing only. Minimum age 10.",
+  },
+
   // ---- Ohio (added 2026-09-10, from seed-data-draft-OH-TX.mjs) -----------
   {
     id: "g2-tactical",
