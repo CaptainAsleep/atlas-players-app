@@ -1260,6 +1260,27 @@ const fields = [
       "This is the same 'Center Mass Airsoft' flagged as excluded from both the Indiana and Missouri batches over a Kansas-vs-Missouri location conflict — its street address (921 N 55th St, ZIP 66102) definitively places it in Kansas City, KANSAS, not Missouri, so it belongs here instead. One directory listed an 816 (Missouri) phone number, but 66102 is unambiguously a Wyandotte County, KS ZIP code; used the 913 (Kansas) number found elsewhere for the same business. No owned website found, so treated as facebook_only.",
   },
 
+  {
+    id: "graffiti-paintball",
+    name: "Graffiti Paintball",
+    city: "Belle Plaine, KS",
+    address: "1127 North Seneca Road, Belle Plaine, KS 67013",
+    phone: "(316) 640-5161",
+    website: "https://www.graffitiks.com",
+    ownerEmailDomain: "graffitiks.com",
+    facebook: "https://www.facebook.com/GraffitiPaintballKS/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Paintball: $10 field-fee-only (own equipment) / $15 with rental gear (all-day); Airsoft: $20 all-day; private parties (half-day, 10+ players) $50 plus rental/field fees.",
+    about:
+      "Outdoor paintball-and-airsoft park in Belle Plaine, south of Wichita, open Saturdays and Sundays 9am-5pm (weekdays by reservation for groups of 15+). Airsoft runs on a scheduled basis -- the 2nd Saturday and 1st/4th Sundays of each month -- alongside paintball's more frequent regular schedule.",
+    status: "active",
+    dataSource: "website (graffitiks.com) + Facebook",
+    lastScraped: "2026-09-13",
+    notes:
+      "Legal name per BBB/state records is Graffiti Paintball, LLC; site brands as \"Graffiti Paintball\" (domain graffitiks.com). Airsoft is schedule-restricted (2nd Saturday, 1st/4th Sunday monthly) rather than available every open day -- worth flagging to players expecting airsoft on any regular weekend visit.",
+  },
+
   // Arkansas (added 2026-09-10)
   {
     id: "smt-airsoft",
