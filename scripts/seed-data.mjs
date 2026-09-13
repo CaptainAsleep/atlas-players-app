@@ -3805,6 +3805,36 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     },
   },
   {
+    id: "cedar-airsoft-field-2026-09-13-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-09-13",
+    startTime: "10:00 AM",
+    endTime: "5:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Standard rec day — gates open 10am. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
     id: "cedar-airsoft-field-2026-09-20-gas-blow-back-day",
     fieldId: "cedar-airsoft-field",
     fieldName: "Cedar Airsoft Field",
@@ -3818,6 +3848,213 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     sourceUrl: "https://www.cedarairsoftfield.com/events/gas-blow-back-day",
     imageUrl:
       "https://images.squarespace-cdn.com/content/v1/6262f3f5e4f2770c486b0829/1787081338302-LHSFRN2NPMHH3NNJPAQO/505702524_1195631062357037_6038482170686851167_n.jpg",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-09-27-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-09-27",
+    startTime: "10:00 AM",
+    endTime: "5:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Standard rec day — gates open 10am. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-10-03-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-10-03",
+    startTime: "10:00 AM",
+    endTime: "5:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Standard rec day — gates open 10am. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-10-08-thursday-night-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Thursday Night Game",
+    date: "2026-10-08",
+    startTime: "4:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Weeknight game, gates open at 4pm — earlier than Cedar's usual weekend night games (which typically run 7pm-11:45pm). Exact end time and game modes weren't specified in the announcement.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-10-18-late-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Late Rec Game",
+    date: "2026-10-18",
+    startTime: "1:00 PM",
+    endTime: "8:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Extended-hours rec day — gates open at 1pm with games running until 8pm, later than Cedar's usual 10am-5pm rec day. Standard rec-day game modes (Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.) per the field's usual format.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-10-24-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-10-24",
+    startTime: "10:00 AM",
+    endTime: "5:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Standard rec day — gates open 10am. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-10-31-zombies",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "ZOMBIES!!",
+    date: "2026-10-31",
+    startTime: "5:00 PM",
+    type: "OUTDOOR",
+    description:
+      "Cedar's Halloween-themed zombies big-game event, starting at 5pm. Further details weren't specified in the announcement.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-11-01-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-11-01",
+    startTime: "10:00 AM",
+    endTime: "5:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Standard rec day — gates open 10am. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
     waiver: {
       version: "2026-08-01",
       text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
