@@ -749,25 +749,6 @@ const fields = [
     notes:
       "No precise street address or phone confirmed — site's /about page 404s and Facebook blocks automated fetch; Facebook page title (\"SEKTOR7 | Cleveland OH\") and the site's 216 area-code phone number both point to Cleveland specifically. Kept status: closed (matches the relocated/waste pattern already in this file) rather than active, since the field itself no longer operates at this location.",
   },
-  {
-    id: "the-den-airsoft",
-    name: "The Den Airsoft",
-    city: "New Philadelphia, OH",
-    address: "2699 Pleasant Valley Rd NE, New Philadelphia, OH 44663",
-    phone: "(330) 556-0121",
-    website: "https://www.thedenairsoft.com",
-    ownerEmailDomain: "thedenairsoft.com",
-    facebook: "https://www.facebook.com/theairsoftden",
-    indoorOutdoor: "outdoor",
-    admission: "2026 season pass $449 (covers all open play events, plus discounts on DenOps); per-event pricing on the site's own booking system",
-    about:
-      "Self-described \"Ohio's Premier Airsoft-only Field,\" a 35-40+ acre outdoor facility with 30+ structures across urban CQB, open mid-range, and wooded zones. Runs regular \"DenPlay\" open-play Saturdays plus story-driven \"DenOp\" MilSim events.",
-    status: "active",
-    dataSource: "boisegunclub.com + airsoftc3.com directories + confirmed Facebook page (own site is a JS-rendered Square Online storefront that couldn't be scraped directly for text content)",
-    lastScraped: "2026-09-10",
-    notes:
-      "Own domain (thedenairsoft.com) is confirmed real and active with live event/product listings, but is built on Square Online and renders its contact/about text client-side, so address/phone were corroborated instead from two independent directories that agree on the address; one gave a different phone number ((330) 440-5471) than the other ((330) 556-0121) — went with the airsoftc3.com number since it came paired with a matching contact email, but this should be double-checked directly with the field if it ever needs to be contacted. Site branding says \"Strasburg, Ohio\" in its title tag, but every corroborating source gives the actual mailing address as New Philadelphia, OH — the two towns are a few miles apart in Tuscarawas County, so used the address's city.",
-  },
 
   // ---- Illinois (added 2026-09-10, from seed-data-draft-IL.mjs) ----------
   // Note: kinetic-training-complex-kankakee was deliberately left out of
