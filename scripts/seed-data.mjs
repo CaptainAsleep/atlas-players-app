@@ -1256,9 +1256,9 @@ const fields = [
       "Family-owned outdoor airsoft field in Northwest Arkansas (rolling hills and thick woodlands terrain) with a warm-up/chronograph shooting range and a mobile field store for rentals and supplies. Day games Saturday-Sunday 12pm-5pm, night games Friday 6pm-10pm. Associated with The Survival Mode tactical gear retailer.",
     status: "active",
     dataSource: "website",
-    lastScraped: "2026-09-10",
+    lastScraped: "2026-09-13",
     notes:
-      "Two secondary sources gave slightly different house numbers (17023 / 16931 Chamber Springs Rd) — went with 16838 Chambers Springs Road since that's what the business's own site (smtairsoft.com) states directly.",
+      "Two secondary sources gave slightly different house numbers (17023 / 16931 Chamber Springs Rd) — went with 16838 Chambers Springs Road since that's what the business's own site (smtairsoft.com) states directly. Re-verified 2026-09-13 per Michael's link (tracking params stripped) — no changes to hours/pricing/address since the original 2026-09-10 scrape; site also lists a toll-free number, (888) 731-1763, alongside the local number used above.",
   },
   {
     id: "modern-mission-airsoft",
