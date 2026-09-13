@@ -4150,6 +4150,35 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     },
   },
   {
+    id: "darkfire-airsoft-2026-09-26-open-play",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Open Play",
+    date: "2026-09-26",
+    startTime: "9:00 AM",
+    price: "$25",
+    type: "OUTDOOR",
+    description:
+      "Standard open-play day per the field's usual format: gates at 9am, briefing at 10am, games running 10:30am-5pm.",
+    sourceUrl: "https://www.darkfireairsoft.com",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
     id: "darkfire-airsoft-2026-10-03-operation-cerberus-viii",
     fieldId: "darkfire-airsoft",
     fieldName: "Darkfire Airsoft",
