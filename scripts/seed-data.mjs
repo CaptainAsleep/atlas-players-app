@@ -1341,6 +1341,28 @@ const fields = [
       "Site is a Google Sites page rather than a dedicated domain, and lists a personal-looking contact email (twiley411@centurylink.net) rather than a business one — flagging as a smaller/informal operation, but airsoft is explicitly named as one of its offerings and the address/phone are given directly.",
   },
 
+  {
+    id: "diamond-state-airsoft",
+    name: "Diamond State Airsoft",
+    city: "Malvern, AR",
+    address: "339 S Grant Cutoff, Malvern, AR 72104",
+    phone: "(479) 579-8724",
+    website: "https://diamondstatervpark.com/airsoft",
+    ownerEmailDomain: "diamondstatervpark.com",
+    facebook: "https://www.facebook.com/diamondstateairsoft/",
+    instagram: "https://www.instagram.com/diamondsstateairsoft/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "All-day open play $20/person; monthly membership $39 (unlimited access); private group bookings (10+ players) by custom quote.",
+    about:
+      "101-acre outdoor airsoft field in Malvern built on a former professional motocross complex, run alongside the property's Diamond State RV & Recreation Park. Terrain includes a 4.5-mile motocross track with natural berms and elevation changes, dense forest, creeks, ponds, and wetlands. Open Saturday-Sunday 9am-5pm public open play (walk-ins welcome); Monday-Friday by reservation only for private groups (10+ minimum). MilSim events planned for 2026.",
+    status: "active",
+    dataSource: "website (diamondstatervpark.com/airsoft) + Facebook + Instagram",
+    lastScraped: "2026-09-13",
+    notes:
+      "Airsoft is one offering at a larger RV/camping resort (Diamond State RV & Recreation Park) rather than a standalone dedicated field -- the property also runs 60 powered RV sites ($25-30/night), tent camping ($15/night), and private suites ($80/night), useful context for players planning to camp on a game weekend. Site is a subpage of the RV park's own domain (diamondstatervpark.com/airsoft), not a separate airsoft-specific domain.",
+  },
+
   // Texas (added 2026-09-10, researched 2026-09-02 — see seed-data-draft-OH-TX.mjs)
   {
     id: "878-airsoft",
