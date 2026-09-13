@@ -567,6 +567,28 @@ const fields = [
       "Still listed on Yelp, Tripadvisor, Yahoo Local, and BBB under the legacy name 'Sherwood Forest Paintball' -- the business's own current site brands simply as 'Sherwood Paintball Inc.' Both paintball and airsoft are offered per the site's activities list, but the pricing page is paintball-specific -- no separate BB/airsoft package pricing was found, so admission above reflects paintball pricing only. Minimum age 10.",
   },
 
+  {
+    id: "action-park-paintball",
+    name: "Action Park Paintball",
+    city: "Mishawaka, IN",
+    address: "11951 Harrison Road, Mishawaka, IN 46544",
+    phone: "(574) 674-4263",
+    website: "https://actionparkpaintball.com",
+    ownerEmailDomain: "actionparkpaintball.com",
+    facebook: "https://www.facebook.com/actionparkpbl/",
+    instagram: "https://www.instagram.com/actionparkpaintball/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Airsoft: $20 all-day admission (own equipment) / $40 with rental (marker, air, mask, 3 clips, vest); Paintball: $15 field-fee-only (own equipment) / $40 standard rental package (mask, marker, 500 paintballs) / $50 upgraded package; group rate (10+ players) $35/player with 24-hr advance reservation; annual memberships $50-$250.",
+    about:
+      "Paintball-primary outdoor park operating 25+ years in the Michiana region (South Bend/Mishawaka), with themed game areas including a castle to storm or defend; also runs Airsoft as a separate, priced open-play admission option. Open Tuesday 4-8pm, Saturday 10am-5pm, Sunday 1-5pm; Monday/Wednesday/Thursday/Friday by appointment only.",
+    status: "active",
+    dataSource: "website (actionparkpaintball.com: home, /pricing, /hours) + Facebook + Instagram + WNIT/PBS Michiana feature",
+    lastScraped: "2026-09-13",
+    notes:
+      "Paintball-primary venue, not airsoft-primary — included because Airsoft is an explicit, separately-priced admission option on the site's own pricing page ($20 BYO / $40 rental), same inclusion logic used for battleground-indy above. Site never explicitly states indoor vs. outdoor; treated as outdoor based on the described game areas (castle, \"state-of-the-art fields\") consistent with typical outdoor paintball parks of this type and scale — worth a call to confirm if it's ever in question.",
+  },
+
   // ---- Ohio (added 2026-09-10, from seed-data-draft-OH-TX.mjs) -----------
   {
     id: "g2-tactical",
