@@ -1066,6 +1066,57 @@ const fields = [
     notes:
       "No dedicated business website was found, only social media and directories — but it's independently confirmed as a real, currently-registered Missouri LLC via OpenCorporates, and listed in the official Visit Joplin tourism directory, which is why it's included at all. Treated as status: facebook_only (same as Airsoft Arena Milwaukee in the Wisconsin batch) rather than active, since claim verification and current hours/pricing can't be confirmed from a primary source.",
   },
+  {
+    id: "semo-airsoft-blodgett-field-sikeston",
+    name: "SEMO Airsoft -- Blodgett Field",
+    city: "Sikeston, MO",
+    address: "59 Cooper Lane, Sikeston, MO 63801",
+    phone: "(573) 382-7761",
+    website: "https://www.semoairsoft.com/airsoft-facilities",
+    indoorOutdoor: "outdoor",
+    about:
+      "Primary 55-acre outdoor venue of SEMO Airsoft (SEMO Airsoft LLC), a Southeast Missouri airsoft club/operator running games across three area facilities. Blodgett Field features woods, open field, forts, buildings, and several bunkers, designed for scenario and mission-based gameplay.",
+    status: "active",
+    dataSource:
+      "own website (semoairsoft.com/airsoft-facilities) + Boise Gun Club directory mirror (independently corroborates address/phone) + Facebook group posts referencing this specific location by name (e.g. a March game-day post) + SEMO Airsoft LLC business registration",
+    lastScraped: "2026-09-17",
+    notes:
+      "Michael flagged this business via a link he sent. The operator's homepage (separate from the /airsoft-facilities page) carries stale content (a 2015 copyright notice, most recent named event from 2017), but the facilities page itself and independent Facebook group activity referencing Blodgett Field by name appear current -- treated as active rather than facebook_only since the own site's facilities page is the primary source and is independently corroborated. Same operator/phone number as the Morley and Benton entries below -- three physical venues run by one business, seeded separately since each is a distinct playable location.",
+  },
+  {
+    id: "semo-airsoft-morley-high-school",
+    name: "SEMO Airsoft -- Old Morley High School",
+    city: "Morley, MO",
+    address: "370 County Highway 430, Morley, MO 63767",
+    phone: "(573) 382-7761",
+    website: "https://www.semoairsoft.com/airsoft-facilities",
+    indoorOutdoor: "indoor",
+    about:
+      "Indoor SEMO Airsoft venue inside a 1940s-era former school building (gymnasium, stage, long hallways, basement, and classrooms), suited to close-quarters breaching play; airsoft grenades permitted.",
+    status: "active",
+    dataSource:
+      "own website (semoairsoft.com/airsoft-facilities) + Boise Gun Club directory mirror + Facebook group posts referencing night games at Morley High School specifically",
+    lastScraped: "2026-09-17",
+    notes:
+      "Same operator (SEMO Airsoft LLC) and phone number as Blodgett Field (Sikeston) and Benton Speedway -- see that entry's notes for the stale-homepage caveat, which applies equally here.",
+  },
+  {
+    id: "semo-airsoft-benton-speedway",
+    name: "SEMO Airsoft -- Benton Speedway",
+    city: "Benton, MO",
+    address: "817 County Highway 505, Benton, MO 63736",
+    phone: "(573) 382-7761",
+    website: "https://www.semoairsoft.com/airsoft-facilities",
+    indoorOutdoor: "outdoor",
+    about:
+      "20-acre outdoor SEMO Airsoft venue with woods, sand dunes, hills, and open play area; hosts occasional night games during summer months.",
+    status: "active",
+    dataSource:
+      "own website (semoairsoft.com/airsoft-facilities) + Boise Gun Club directory mirror",
+    lastScraped: "2026-09-17",
+    notes:
+      "Same operator (SEMO Airsoft LLC) and phone number as Blodgett Field (Sikeston) and Old Morley High School -- see the Blodgett Field entry's notes for the stale-homepage caveat, which applies equally here.",
+  },
 
   // ---- Minnesota (added 2026-09-10, from seed-data-draft-MN.mjs) --------
   {
@@ -4705,6 +4756,340 @@ const fields = [
     dataSource: "own website (strykerpa.com)",
     lastScraped: "2026-09-14",
     notes: "none significant",
+  },
+  // ---- Colorado (added 2026-09-15) -----------------------------------
+  {
+    id: "fox-airsoft-parker",
+    name: "Fox Airsoft (FAF Airsoft Field)",
+    city: "Parker, CO",
+    address: "11321 Dransfeldt Rd, Parker, CO 80134",
+    phone: "1-888-316-7816",
+    website: "https://foxairsoft.com",
+    ownerEmailDomain: "foxairsoft.com",
+    facebook: "https://www.facebook.com/DenverAirsoftField",
+    instagram: "https://www.instagram.com/foxairsoft",
+    indoorOutdoor: "outdoor",
+    admission:
+      "General admission $35; with equipment rental $65; birthday party package $325; annual pass $500.",
+    about:
+      "Colorado's largest branded airsoft operation, marketing itself as \"20 minutes from Denver.\" Runs the FAF (Flat Acres Farm) field -- a CQB area plus the \"Prison Field\" -- with Friday night games under lights and weekend open play, alongside an attached pro shop/retail arm and a gunsmithing brand (Fox Custom).",
+    status: "active",
+    dataSource: "own website (foxairsoft.com) + Tripadvisor 2026 reviews + active Instagram/Facebook accounts",
+    lastScraped: "2026-09-15",
+    notes:
+      "AirsoftC3 still lists an older \"F.A.F. Flat Acres Farm Airsoft Field\" entry -- same venue, not a duplicate. FAF (Flat Acres Farm) is the field name; Fox Airsoft is the parent business/brand.",
+  },
+  {
+    id: "goairheads-erie",
+    name: "GoAirheads",
+    city: "Erie, CO",
+    address: "4471 County Road 7, Erie, CO 80516",
+    phone: "(303) 495-3233",
+    website: "https://www.goairheads.com",
+    ownerEmailDomain: "goairheads.com",
+    facebook: "https://www.facebook.com/GoAirheads",
+    instagram: "https://www.instagram.com/goairheads_co",
+    youtube: "https://www.youtube.com/@goairheads_co",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft field and pro shop over 10 acres serving the Denver metro area (physically in Erie, CO, though marketed in copy as a \"Denver\" field). Features walls, hideouts, barns, sniper positions and tactical terrain; hosts night games, tournaments, birthday parties and themed events.",
+    status: "active",
+    dataSource: "own website (goairheads.com), confirming a live Sept-Oct 2026 event schedule",
+    lastScraped: "2026-09-15",
+    notes: "Markets itself as \"Denver\" in copy though physically located in Erie, CO -- Erie used as the city of record.",
+  },
+  {
+    id: "republic-shooting-range-avondale",
+    name: "Republic Shooting Range",
+    city: "Avondale, CO",
+    address: "4960 44th Ln, Avondale, CO 81022",
+    phone: "(719) 283-2010",
+    website: "https://republicshootingrange.com",
+    ownerEmailDomain: "republicshootingrange.com",
+    facebook: "https://www.facebook.com/RepublicShootingRange",
+    instagram: "https://www.instagram.com/republicshootingrange",
+    indoorOutdoor: "indoor",
+    admission:
+      "All-day and half-day passes; equipment rentals; group/private booking rates available (exact figures not itemized on site).",
+    about:
+      "A large multi-discipline firearms range near Pueblo (pistol/rifle bays, steel range, clay courses) that also operates a dedicated \"Tactical Airsoft Shoothouse\" structure for team-building, training-scenario and recreational airsoft play, with rentals and private bookings.",
+    status: "active",
+    dataSource: "own website (republicshootingrange.com) + Yelp (updated December 2025) + Google/Facebook presence",
+    lastScraped: "2026-09-15",
+    notes:
+      "Stale/mislabeled-directory trap resolved -- AirsoftC3 separately lists a \"Republic Airsoft, Avondale, CO\" entry at the same address/phone pattern; this is the same business as Republic Shooting Range, not a separate venue, so it was not seeded twice.",
+  },
+  {
+    id: "rocky-mountain-combat-parachute",
+    name: "Rocky Mountain Combat",
+    city: "Parachute, CO",
+    address: "68 Cardinal Way, Parachute, CO 81635",
+    phone: "(970) 989-4867",
+    website: "https://rockymountaincombat.com",
+    ownerEmailDomain: "rockymountaincombat.com",
+    facebook: "https://www.facebook.com/1633242820259598",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Event/group-dependent (e.g. roughly $30/team for tournaments); reservation-only, 6-person group minimum.",
+    about:
+      "Multi-activity outdoor combat-sports venue serving the corridor from Grand Junction to Glenwood Springs. Offers airsoft (field guns/bio BBs only), paintball, laser tag and archery battles by reservation Monday-Saturday, catering to military, youth, corporate and private groups.",
+    status: "active",
+    dataSource: "own website (rockymountaincombat.com), confirmed live with a 2026 tournament listing, + Yelp",
+    lastScraped: "2026-09-15",
+    notes:
+      "Sole airsoft field option found in the western Colorado / Grand Junction-Glenwood Springs corridor. Also operates as \"Rocky Mountain Lasertag\" -- dual-branded, not a laser-tag-only venue.",
+  },
+  {
+    id: "dynamic-paintball-airsoft-aurora",
+    name: "Dynamic Paintball and Airsoft",
+    city: "Aurora, CO",
+    address: "29701 E. Jewell Ave, Aurora, CO 80018",
+    phone: "(303) 799-9911",
+    website: "https://www.dynamicpaintball.com/airsoft",
+    facebook: "https://www.facebook.com/DynamicPaintballCO",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Field fee $20/player all-day play; air fills $8; BB bag $15; $5 military discount on entry + BBs.",
+    about:
+      "Primarily a paintball park that runs a dedicated, separately priced airsoft program (own /airsoft page) historically on a monthly recurring schedule. Confirmed still operating via fresh 2026 reviews.",
+    status: "active",
+    dataSource: "own website (dynamicpaintball.com/airsoft) + Yelp (updated August 2026, 36 photos) + Tripadvisor 2026 reviews",
+    lastScraped: "2026-09-15",
+    notes:
+      "The dedicated airsoft page's monthly-schedule text is dated to 2023, so treat the specific cadence as possibly stale even though the business itself is confirmed currently open via fresh 2026 activity -- verify the current airsoft schedule directly before publishing specific dates. Some directories/Facebook still tag the city as \"Watkins, CO\" (a legacy/mailing reference); the field address itself is in Aurora. A separate former \"Dynamic Paintball Pro Shop\" location (323 Airport Blvd, Aurora) is confirmed closed on Yelp -- not to be confused with this still-open field.",
+  },
+  {
+    id: "american-paintball-coliseum-aurora",
+    name: "American Paintball Coliseum",
+    city: "Aurora, CO",
+    address: "27301 E Quincy Ave, Aurora, CO 80018",
+    phone: "(303) 298-8573",
+    website: "https://americanpaintballcoliseum.com/aurora-paintball-airsoft-fields/",
+    ownerEmailDomain: "americanpaintballcoliseum.com",
+    facebook: "https://www.facebook.com/people/American-Paintball-Coliseum/100063620077530/",
+    instagram: "https://www.instagram.com/americanpaintballcoliseum",
+    youtube: "https://www.youtube.com/c/AmericanPaintballColiseum",
+    indoorOutdoor: "outdoor",
+    about:
+      "Large paintball-primary operator on a 10-acre outdoor site with an explicit, separately marketed airsoft offering, plus laser tag and axe throwing. Open 7 days a week. A same-named but unrelated location of this chain also operates in Phoenix, AZ (seeded separately).",
+    status: "active",
+    dataSource: "own website (americanpaintballcoliseum.com), confirmed live, + active Yelp/Instagram",
+    lastScraped: "2026-09-15",
+    notes:
+      "Rebrand/relocation resolved -- the company's original Denver location (5095 Peoria St) is confirmed closed on Yelp (updated August 2026); the business relocated/expanded to this current Aurora address per the operator's own blog post. The old Peoria St Denver address is not listed as a separate active entry.",
+  },
+  {
+    id: "american-paintball-coliseum-colorado-springs",
+    name: "American Paintball Coliseum",
+    city: "Colorado Springs, CO",
+    address: "834 Emory Cir, Colorado Springs, CO 80915",
+    phone: "(719) 597-4796",
+    website: "https://americanpaintballcoliseum.com/colorado-springs-indoor-paintball-airsoft-fields/",
+    ownerEmailDomain: "americanpaintballcoliseum.com",
+    facebook: "https://www.facebook.com/people/American-Paintball-Coliseum/100063620077530/",
+    instagram: "https://www.instagram.com/americanpaintballcoliseum",
+    youtube: "https://www.youtube.com/c/AmericanPaintballColiseum",
+    indoorOutdoor: "indoor",
+    about:
+      "Second Colorado location of American Paintball Coliseum, run as an indoor paintball & airsoft facility distinct from the outdoor Aurora site, also offering axe throwing and laser tag. Open 7 days a week.",
+    status: "active",
+    dataSource: "own website (americanpaintballcoliseum.com), confirmed live, + Yelp",
+    lastScraped: "2026-09-15",
+    notes:
+      "Same parent company/shared social accounts as the Aurora entry above, but a physically distinct indoor facility with its own address and phone -- seeded as a separate venue.",
+  },
+  {
+    id: "blitz-paintball-airsoft-dacono",
+    name: "Blitz Paintball and Airsoft",
+    city: "Dacono, CO",
+    address: "5340 Summit Blvd, Dacono, CO 80514",
+    phone: "(303) 337-7109",
+    website: "https://www.blitzpaintball.net",
+    ownerEmailDomain: "blitzpaintball.net",
+    facebook: "https://www.facebook.com/BLITZPAINTBALL",
+    instagram: "https://www.instagram.com/blitzpaintballdenver",
+    indoorOutdoor: "outdoor",
+    admission:
+      "All-inclusive (field access + rental gear + BBs): walk-on (1-4 players) $49.95; group (5-9) $44.95; group (10+) $42.95.",
+    about:
+      "Paintball-primary park near Denver (physically in Dacono, CO) that added a dedicated, purpose-built airsoft field called \"Fallujah\" (opened 2024) -- a 60,000 sq ft turfed close-urban-combat field with its own all-inclusive pricing tier, separate from paintball pricing.",
+    status: "active",
+    dataSource: "own website (blitzpaintball.net), confirmed live with dedicated airsoft pages, + Yelp (updated August 2026, 47 reviews)",
+    lastScraped: "2026-09-15",
+    notes: "Markets itself as \"Denver\" airsoft, but the physical address is Dacono, CO (Denver-metro adjacent) -- Dacono used as city of record.",
+  },
+  // ---- Connecticut (added 2026-09-16) ---------------------------------
+  {
+    id: "ground-zero-airsoft-usa-terryville",
+    name: "Ground Zero Airsoft USA",
+    city: "Terryville, CT",
+    address: "243 Wolcott Rd, Terryville, CT 06786",
+    phone: "(203) 879-7766",
+    website: "https://groundzeroairsoftusa.com",
+    ownerEmailDomain: "groundzeroairsoftusa.com",
+    facebook: "https://www.facebook.com/Groundzeroairsoftusa",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Tiered player pricing ($19 / $39 / $59 per own site -- tiers appear to share near-identical inclusions, possibly stale copy, verify directly); special event scenario days $35 all day.",
+    about:
+      "Connecticut's largest outdoor airsoft field (roughly 50-65 acres), founded in 2002 with retail roots dating to 1999. Mixed terrain including a Vietnam-era-style firebase with trenches/bunkers and a built village area, plus a separate retail/service storefront in Waterbury. Runs regular open play plus scenario/event days.",
+    status: "active",
+    dataSource:
+      "own website (groundzeroairsoftusa.com, incl. /contact/ and /pricing/) + AirsoftC3 + Tripadvisor + Facebook + connecticutexplorer.com",
+    lastScraped: "2026-09-16",
+    notes:
+      "Address discrepancy resolved: the field's own /contact/ page states 243 Wolcott Rd, Terryville, CT 06786 -- used here as the primary-source address. Third-party directories/Tripadvisor instead show a nearby \"1254 Wolcott Rd, Wolcott, CT\" address; Wolcott Rd runs through both Wolcott and the Terryville section of Plymouth, CT, so this is very likely one field with imprecise directory geocoding, not two separate fields. Pricing tiers on the own site look like unedited template copy -- verify current pricing before relying on it. Do not confuse with an unrelated same-named \"Ground Zero Airsoft\" venue in Ringwood, Hampshire, England.",
+  },
+  {
+    id: "final-shot-paintball-voluntown",
+    name: "Final Shot Paintball (Airsoft Sunday)",
+    city: "Voluntown, CT",
+    address: "96 Ekonk Hill Rd, Voluntown, CT 06384",
+    phone: "(860) 884-1682",
+    website: "https://www.finalshotpaintball.com",
+    ownerEmailDomain: "finalshotpaintball.com",
+    facebook: "https://www.facebook.com/finalshotairsoft/",
+    instagram: "https://www.instagram.com/finalshotpaintball/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Open-play package roughly $58/person (500 paintballs, marker, air, mask, up to 6 hrs) for paintball; airsoft runs as its own scheduled \"Airsoft Sunday,\" 12pm-5pm.",
+    about:
+      "Primarily a paintball park near Foxwoods/Mohegan Sun that explicitly and separately schedules airsoft as its own weekly offering (\"Airsoft Sunday\"), with a dedicated Facebook page distinct from the paintball page. Offers private party/group packages for both sports.",
+    status: "active",
+    dataSource:
+      "own website (finalshotpaintball.com) + Yelp (updated June 2026) + dedicated Facebook (finalshotairsoft) + Instagram",
+    lastScraped: "2026-09-16",
+    notes:
+      "The operator's own site has templated \"Airsoft Paintball Arena\" landing pages for several unrelated states (AR, VT, PA, etc.) -- generic SEO boilerplate, not evidence of other physical locations; the single CT venue at Voluntown is independently corroborated via Yelp/Facebook/Instagram. Re-verify the \"Airsoft Sunday\" schedule is still current before publishing specific hours.",
+  },
+  // ---- Delaware (added 2026-09-17) -------------------------------------
+  {
+    id: "chaos-corps-airsoft-georgetown",
+    name: "Chaos Corps Airsoft",
+    city: "Georgetown, DE",
+    address: "18181 Asketum Branch Rd, Georgetown, DE 19947",
+    phone: "(302) 500-2027",
+    website: "https://www.chaoscorpsairsoft.com",
+    ownerEmailDomain: "chaoscorpsairsoft.com",
+    facebook: "https://www.facebook.com/chaoscorpsairsoft",
+    instagram: "https://www.instagram.com/chaos_corps_airsoft/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "No flat general-admission price published -- runs on a scheduled \"Day of Play\"/walk-on calendar. M4 platform rental $30 (includes 1,000 BBs + full-face eye protection); onsite tech service free for basic fixes, $25+ for advanced gearbox work; concessions $1-$6.50.",
+    about:
+      "Outdoor airsoft operation hosted on the Precision Paintball grounds in Georgetown, running scheduled Day-of-Play and walk-on game dates roughly every two weeks. Publishes a full field rulebook (FPS/MED limits, semi-auto-only defaults, engagement rules), offers rental gear and an onsite weapons technician. Direct successor to Sussex County's longtime field, 911 Airsoft, which closed and pointed its community toward Precision Paintball starting April 12, 2026.",
+    status: "active",
+    dataSource:
+      "own website (chaoscorpsairsoft.com -- home, calendar, services, field-rules, team pages) + corroborating 911airsoft.com closure notice pointing to the same location/date + Facebook/Instagram presence",
+    lastScraped: "2026-09-17",
+    notes:
+      "Delaware's only strongly-verified, currently active dedicated airsoft operation. Minor discrepancy: Facebook page metadata lists \"Greenwood, DE\" while the field's own site gives the Georgetown address used here -- likely inherited branding/location tag from the 911 Airsoft predecessor, not a second location.",
+  },
+  {
+    id: "airsoft-action-field-georgetown",
+    name: "Airsoft Action Field",
+    city: "Georgetown, DE",
+    address: "23735 French Rd, Georgetown, DE 19947",
+    phone: "(626) 698-2246",
+    indoorOutdoor: "outdoor",
+    about:
+      "A roughly 4-acre outdoor airsoft field in Georgetown advertised with reconfigurable field layouts and \"inter-active vehicles,\" plus an on-site supply shop.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 field listing (self-reported, last updated 2023-08-30, still listed on AirsoftC3's current DE fields page) + Chamber of Commerce/Cylex/HighSpeedBBs directory mirrors (appear to derive from the same underlying data, not independent confirmations) + a standalone SBA/PPP business registration record",
+    lastScraped: "2026-09-17",
+    notes:
+      "Low confidence -- include with caution. No fresh (2024-2026) reviews, social activity, or independent corroboration found; the listed phone number carries a California area code, which is unusual/possibly a reused or templated directory number. No evidence of closure either, and it still appears on AirsoftC3's current Delaware fields list. Same town (Georgetown) as the now-active Chaos Corps Airsoft -- possible this field has gone dormant or been effectively superseded. Recommend a direct phone/email confirmation before treating as fully current.",
+  },
+  {
+    id: "consurgent-airsoft-field-laurel",
+    name: "Consurgent Airsoft Field",
+    city: "Laurel, DE",
+    indoorOutdoor: "outdoor",
+    about:
+      "A team-run airsoft field near Laurel maintained by the Consurgent airsoft team, hosting free games roughly every other weekend and coordinating scheduling with other local Delaware fields.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 field listing only -- still listed on AirsoftC3's current Delaware fields page; no independent website, address, phone, or social presence found anywhere else",
+    lastScraped: "2026-09-17",
+    notes:
+      "Low confidence -- single-source, same treatment as other AirsoftC3-only entries elsewhere in this file. No address or phone found; likely a small, informal, team-run field rather than a full commercial venue. No evidence of closure. Recommend a direct contact to verify before treating as fully current.",
+  },
+  // ---- Hawaii (added 2026-09-18) ---------------------------------------
+  {
+    id: "aloha-paintball-airsoft-kapolei",
+    name: "Aloha Paintball & Airsoft",
+    city: "Kapolei, HI",
+    address: "194 Mumba Street, Kapolei, HI 96707",
+    phone: "(808) 855-7388",
+    website: "https://alohapaintball.com",
+    facebook: "https://www.facebook.com/p/Aloha-Paintball-and-Airsoft-61582794597366/",
+    instagram: "https://www.instagram.com/aloha_paintball",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Airsoft: own equipment $35/player; rental package $75/player (all-day play, air, protective gear, rifle, magazines, chest protection). Group minimums roughly $800 for airsoft. Public sessions Sat-Sun 10am-4pm (check-in 9:45am); private events any day by request.",
+    about:
+      "Outdoor multi-field paintball and airsoft park in Kapolei, Oahu, recently rebuilt with an online booking system. Airsoft is explicitly sold as a distinct, separately priced offering from paintball, marketed for tactical-movement/team-coordination games with realistic replica rifles. Also hosts birthday parties, bachelor/bachelorette events, and corporate team-building.",
+    status: "active",
+    dataSource:
+      "own website (alohapaintball.com, live, current pricing/hours) + Yelp under predecessor brand \"Extreme Sports Complex\" (updated July 2026, 58 reviews, not marked closed) + Facebook activity",
+    lastScraped: "2026-09-18",
+    notes:
+      "Rebrand chain: this field has operated under at least two prior names at essentially the same Kapolei location -- \"Hawaii Extreme Paintball and Airsoft LLC\" (older references cite a 91-1041 Midway Rd address, not independently confirmed as the same site) -> \"Extreme Sports Complex\" (194 Mumba Street; Yelp/Facebook still show activity under this name) -> current \"Aloha Paintball & Airsoft\" (same 194 Mumba St address; the old extremesportscomplexhawaii.com domain now redirects to alohapaintball.com). Treated as one continuously-operating field, not multiple entries.",
+  },
+  {
+    id: "k1-airsoft-kailua",
+    name: "K1 Airsoft",
+    city: "Kailua, HI",
+    address: "905 Kalanianaole Hwy, Kailua, HI 96734",
+    phone: "(808) 348-5913",
+    website: "https://k1airsoft.com",
+    ownerEmailDomain: "k1airsoft.com",
+    facebook: "https://www.facebook.com/p/K1-Airsoft-61554745231074/",
+    instagram: "https://www.instagram.com/k1airsoft",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Standard field fee roughly $30; M4 AEG rental $40. Regular play Saturday 10am-4pm; scheduled \"AFTERDARK\" night games Saturday 5pm-10pm.",
+    about:
+      "Self-described \"Hawaii's Premier Urban and Outdoor Airsoft Field\" in Kailua, Oahu, combining a playable outdoor/urban-terrain field with an on-site retail shop and equipment rentals (also sells used airsoft guns). Offers regular Saturday open play plus scheduled after-dark night games.",
+    status: "active",
+    dataSource:
+      "own website (k1airsoft.com, live, current pricing/hours) + Yelp (updated July 2026, not marked closed) + Instagram (active)",
+    lastScraped: "2026-09-18",
+    notes: "The clearest, most straightforwardly \"currently open\" dedicated field found in the state.",
+  },
+  {
+    id: "epowersports-battlezone-honolulu",
+    name: "Epowersports BATTLEZONE",
+    city: "Honolulu, HI",
+    address: "1320 Kalani St, Unit 105, Honolulu, HI 96817",
+    phone: "(808) 369-7700",
+    website: "https://epowersports.square.site",
+    facebook: "https://www.facebook.com/epowersports/",
+    instagram: "https://www.instagram.com/epowersports_battlezone",
+    indoorOutdoor: "indoor",
+    about:
+      "Self-described \"Hawaii's only indoor airsoft CQB arena,\" run by longtime Oahu airsoft/tactical retailer Epowersports Inc. Combines a retail airsoft gun shop with an indoor close-quarters-battle arena offering scheduled matches, beginner-friendly events, and private party bookings. Hours per third-party listing: Tue-Sun 10am-6pm (Wed & Sat until 8pm), closed Monday.",
+    status: "active",
+    dataSource:
+      "own website (epowersports.square.site, reachable) + Yelp (updated August 2026, 32 reviews, current address, not marked closed) + Yahoo Local/Wheree directory corroboration",
+    lastScraped: "2026-09-18",
+    notes:
+      "Distinct from Epowersports' old Aiea retail storefront (99-115 Aiea Heights Dr), which Yelp explicitly marks closed -- that was a separate, now-defunct retail-only location, not this active Honolulu/Kalani St. retail-plus-CQB-arena site.",
+  },
+  {
+    id: "garden-isle-airsoft-kalaheo",
+    name: "Garden Isle Airsoft",
+    city: "Kalaheo, HI",
+    indoorOutdoor: "outdoor",
+    about:
+      "The only airsoft venue identified on Kauai -- a woodland outdoor field reportedly located next to Kekaha Small Boat Harbor. Referenced in the AirsoftC3 field directory and discussed on an Airsoft Society forum thread as Kauai's known field.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 field directory (still listed on the current Hawaii fields page) + Facebook page existence (facebook.com/KauaiAirsoft) + Airsoft Society forum thread",
+    lastScraped: "2026-09-18",
+    notes:
+      "Low confidence -- single-source/directory-corroborated only, same treatment as other thin AirsoftC3-only entries elsewhere in this file. No street address, phone, or recent posting activity could be independently confirmed, but no evidence of closure either. Recommend a direct check before treating as fully current.",
   },
 ];
 

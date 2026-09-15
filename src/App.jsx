@@ -106,7 +106,6 @@ const US_STATES = {
   OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
   SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
   VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
-  DC: "District of Columbia",
 };
 // Fields store city as "City, ST" — pull the state out of that rather than
 // requiring a schema change across every existing record.
