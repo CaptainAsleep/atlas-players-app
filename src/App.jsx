@@ -60,6 +60,7 @@ const T = {
   rTight: 10, // inputs, small chips
   rCard: 16, // standard cards
   rHero: 18, // feature/hero cards
+  rFloat: 24, // floating detached bars (booking bar / sticky footer)
   rMedia: 14, // images inside cards
   rPill: 999, // pills, segmented controls, toggle chips, primary buttons
   // Soft tint washes for icon badges
@@ -348,8 +349,8 @@ function BottomNav({ active, onNavigate }) {
     { key: "profile", label: "Profile", icon: User },
   ];
   return (
-    <div className="absolute bottom-0 left-0 right-0" style={{ background: T.panel, boxShadow: T.shadowNav, zIndex: 1000 }}>
-      <div className="flex justify-between px-4 pt-2.5 pb-5">
+    <div className="absolute bottom-4 left-4 right-4" style={{ background: T.panel, borderRadius: T.rPill, boxShadow: T.shadowFloat, zIndex: 1000 }}>
+      <div className="flex justify-between px-4 pt-2.5 pb-3">
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = active === t.key;
@@ -1819,7 +1820,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 px-5 py-3 flex items-center justify-between" style={{ background: T.panel, boxShadow: T.shadowNav, zIndex: 1000 }}>
+      <div className="absolute bottom-4 left-4 right-4 px-5 py-3 flex items-center justify-between" style={{ background: T.panel, borderRadius: T.rFloat, boxShadow: T.shadowFloat, zIndex: 1000 }}>
         <div>
           <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
           <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>
