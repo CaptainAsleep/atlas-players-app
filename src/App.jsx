@@ -21,58 +21,13 @@ import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCa
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions } from "./hooks/useBookings";
+import { FONTS } from "./theme";
+import { ThemeProvider, useTheme } from "./hooks/useTheme";
 
 /* ---------- design tokens ---------- */
-const FONTS = `
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
-`;
-const display = { fontFamily: "'Space Grotesk', sans-serif" };
-const mono = { fontFamily: "'IBM Plex Mono', monospace" };
-const body = { fontFamily: "'Inter', sans-serif" };
-
-const T = {
-  // Light, high-contrast palette — chosen for outdoor sunlight readability
-  // over aesthetic preference. Text-bearing tokens (ash/ashDim/ashFaint,
-  // accent, good, alert) are deliberately on the darker/more-saturated end
-  // of their range for real contrast against the light backgrounds, not
-  // just "looks fine indoors."
-  void: "#F2F2ED", // page background
-  panel: "#FFFFFF", // card surfaces — clear separation from the page
-  panelAlt: "#E7E7E1", // nested surfaces: chip fills, placeholder thumbnails
-  line: "#D2D2CB", // borders/dividers
-  ash: "#002C48", // primary text AND primary solid-button fill (deep navy ink)
-  ashDim: "#4E5257", // secondary text
-  ashFaint: "#686C72", // tertiary text/labels — still meant to stay legible, not decorative-faint
-  accent: "#1554B8", // links/interactive — deep blue for real contrast on white
-  good: "#0F7A52", // success/positive
-  alert: "#BC3327", // warnings/live badges
-
-  // --- Elevation & shape (added for the aesthetic-upgrade pass) ---
-  // Soft shadows replace the flat 1px border as the primary depth cue on
-  // cards; borders stay only for hairline dividers and secondary/outline
-  // buttons that need a visible edge with no fill.
-  shadowSm: "0 1px 2px rgba(0,44,72,0.05)",
-  shadowMd: "0 1px 2px rgba(0,44,72,0.05), 0 8px 20px -8px rgba(0,44,72,0.16)",
-  shadowLg: "0 1px 2px rgba(0,44,72,0.06), 0 10px 28px -8px rgba(0,44,72,0.22)",
-  shadowNav: "0 -8px 24px -8px rgba(0,44,72,0.14)", // bottom nav / sticky footer bars
-  shadowFloat: "0 6px 14px rgba(0,44,72,0.16), 0 24px 48px -12px rgba(0,44,72,0.40)", // detached/floating bars (nav, booking bar)
-  glassFill: "rgba(255,255,255,0.72)", // translucent fill for floating glass bars
-  glassBlur: "blur(20px)", // backdrop blur amount for floating glass bars
-  glassBorder: "1px solid rgba(255,255,255,0.6)", // edge highlight for floating glass bars
-  // A single deliberate radius scale, replacing the mixed 2/4/6/8px values
-  // that had been picked ad hoc per element.
-  rTight: 10, // inputs, small chips
-  rCard: 16, // standard cards
-  rHero: 18, // feature/hero cards
-  rFloat: 24, // floating detached bars (booking bar / sticky footer)
-  rMedia: 14, // images inside cards
-  rPill: 999, // pills, segmented controls, toggle chips, primary buttons
-  // Soft tint washes for icon badges
-  tint: "#EEF2F8",
-  tintGood: "#EAF5EF",
-};
-
-const flatBg = { backgroundColor: T.void };
+// Theme-aware now — see src/theme.js (LIGHT_T/DARK_T) and
+// src/hooks/useTheme.jsx. Every component that needs T/display/body/mono
+// pulls the active set via useTheme() rather than a module-level constant.
 
 /* ---------- helpers ---------- */
 // Deterministic placeholder gradient per field/event until real photos exist.
@@ -301,12 +256,13 @@ const STATUS_LABEL = {
 
 /* ---------- primitives ---------- */
 function Tag({ children, tone = "neutral" }) {
+  const { T, display, body, mono } = useTheme();
   const map = {
     neutral: { border: "transparent", color: "#FFFFFF", bg: "rgba(255,255,255,0.16)" },
-    accent: { border: "transparent", color: "#FFFFFF", bg: T.ash },
-    good: { border: "transparent", color: "#FFFFFF", bg: T.good },
-    live: { border: "transparent", color: "#fff", bg: T.alert },
-    alert: { border: "transparent", color: "#fff", bg: T.alert },
+    accent: { border: "transparent", color: T.inverse, bg: T.cta },
+    good: { border: "transparent", color: T.inverse, bg: T.good },
+    live: { border: "transparent", color: T.inverse, bg: T.alert },
+    alert: { border: "transparent", color: T.inverse, bg: T.alert },
   };
   const s = map[tone];
   return (
@@ -327,6 +283,7 @@ function Tag({ children, tone = "neutral" }) {
 }
 
 function ScreenHeader({ title }) {
+  const { T, display, body, mono } = useTheme();
   return (
     <div className="px-6 pt-2 pb-4 text-center border-b" style={{ borderColor: T.line }}>
       <h1 className="text-[18px] font-semibold" style={{ ...display, color: T.ash, letterSpacing: "-0.01em" }}>
@@ -337,6 +294,7 @@ function ScreenHeader({ title }) {
 }
 
 function Eyebrow({ children }) {
+  const { T, display, body, mono } = useTheme();
   return (
     <div className="text-[10px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.08em" }}>
       {children}
@@ -345,6 +303,7 @@ function Eyebrow({ children }) {
 }
 
 function BottomNav({ active, onNavigate }) {
+  const { T, display, body, mono } = useTheme();
   const tabs = [
     { key: "home", label: "Explore", icon: Compass },
     { key: "favorites", label: "Favorites", icon: Heart },
@@ -376,6 +335,7 @@ function BottomNav({ active, onNavigate }) {
 
 /* ---------- screens ---------- */
 function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
+  const { T, display, body, mono } = useTheme();
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -428,7 +388,7 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
   };
 
   return (
-    <div className="h-full flex flex-col px-6 overflow-y-auto" style={flatBg}>
+    <div className="h-full flex flex-col px-6 overflow-y-auto" style={{ backgroundColor: T.void }}>
       <div className="flex flex-col items-center mt-12 mb-8">
         <div className="w-14 h-14 flex items-center justify-center mb-3 overflow-hidden" style={{ borderRadius: 8 }}>
           <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Atlas" className="w-full h-full" style={{ objectFit: "cover" }} />
@@ -480,7 +440,7 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
           type="submit"
           disabled={busy}
           className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mt-2 transition-transform duration-100 active:scale-[0.98]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: busy ? 0.6 : 1 }}
+          style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: busy ? 0.6 : 1 }}
         >
           {busy ? "Please wait…" : mode === "signup" ? "Create Account" : "Sign In"} <ArrowRight size={16} />
         </button>
@@ -526,6 +486,7 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
 }
 
 function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
+  const { T, display, body, mono } = useTheme();
   const isToday = ev.date === localDateStr();
   return (
     <button
@@ -580,7 +541,10 @@ function makePinIcon(color) {
     popupAnchor: [0, -32],
   });
 }
-const fieldPinIcon = makePinIcon(T.alert);
+// Fixed regardless of theme — Leaflet icons are plain JS objects
+// outside React's reactivity, and this is a small, low-visibility map
+// marker, not worth wiring up to the theme for. Matches LIGHT_T.alert.
+const fieldPinIcon = makePinIcon("#BC3327");
 
 // Recenters the map whenever the set of visible pins changes (e.g. after a
 // search or category filter), instead of leaving the view stuck wherever it
@@ -599,6 +563,7 @@ function FitToPins({ points }) {
 }
 
 function FieldsMap({ fields, onOpenField, userLocation }) {
+  const { T, display, body, mono, theme } = useTheme();
   const pins = fields.filter((f) => typeof f.lat === "number" && typeof f.lng === "number");
   const center = pins.length
     ? [pins[0].lat, pins[0].lng]
@@ -620,8 +585,8 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
     <div className="mx-6 mb-4 h-72 overflow-hidden" style={{ borderRadius: 6, border: `1px solid ${T.line}` }}>
       <MapContainer center={center} zoom={9} style={{ width: "100%", height: "100%", background: T.void }} zoomControl={false} markerZoomAnimation={false}>
         <TileLayer
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
+          url={theme === "dark" ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://tile.openstreetmap.org/{z}/{x}/{y}.png"}
+          attribution={theme === "dark" ? "&copy; OpenStreetMap contributors &copy; CARTO" : "&copy; OpenStreetMap contributors"}
         />
         <FitToPins points={pins} />
         <MarkerClusterGroup chunkedLoading spiderfyOnMaxZoom={false} showCoverageOnHover={false} maxClusterRadius={60}>
@@ -651,6 +616,7 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
 // rules/chrono) and only falls back to demo placeholder content — with an
 // explicit "DEMO DATA" tag — where a field hasn't provided that section yet.
 function FieldFacts({ field }) {
+  const { T, display, body, mono } = useTheme();
   const hasRealAmenities = Array.isArray(field?.amenities) && field.amenities.length > 0;
   const hasRealRules = Array.isArray(field?.rules) && field.rules.length > 0;
   const hasRealChrono = !!field?.chrono;
@@ -749,6 +715,7 @@ function FieldFacts({ field }) {
 }
 
 function LocationCard({ label, name, address, lat, lng, phone }) {
+  const { T, display, body, mono, theme } = useTheme();
   if (!address) return null;
   const hasCoords = typeof lat === "number" && typeof lng === "number";
   const destination = hasCoords ? `${lat},${lng}` : encodeURIComponent(address);
@@ -791,7 +758,10 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
             doubleClickZoom={false}
             touchZoom={false}
           >
-            <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+            <TileLayer
+              url={theme === "dark" ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://tile.openstreetmap.org/{z}/{x}/{y}.png"}
+              attribution={theme === "dark" ? "&copy; OpenStreetMap contributors &copy; CARTO" : "&copy; OpenStreetMap contributors"}
+            />
             <Marker position={[lat, lng]} icon={fieldPinIcon} />
           </MapContainer>
         </div>
@@ -807,6 +777,7 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
 }
 
 function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings }) {
+  const { T, display, body, mono, theme } = useTheme();
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState("Featured");
   const [viewMode, setViewMode] = useState("list");
@@ -927,7 +898,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       // slow down real-world scanning, since the scanning algorithm needs
       // that clear border to isolate the code from its surroundings.
       margin: 4,
-      color: { dark: T.ash, light: "#FFFFFF" }, // standard dark-on-white — most reliably scannable, and correct for the light theme (this was inverted, a leftover from before the palette flip)
+      color: { dark: "#002C48", light: "#FFFFFF" } /* fixed — always scannable regardless of theme */, // standard dark-on-white — most reliably scannable, and correct for the light theme (this was inverted, a leftover from before the palette flip)
     });
     setQrDataUrl(dataUrl);
     setShowCheckIn(true);
@@ -1090,7 +1061,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       className="h-full overflow-y-auto pb-24"
-      style={flatBg}
+      style={{ backgroundColor: T.void }}
     >
       <div
         className="flex items-center justify-center overflow-hidden"
@@ -1121,8 +1092,29 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
       </div>
 
       {nextGame ? (
-        <div className="mx-6 p-4 mb-4" style={{ background: "linear-gradient(155deg, #FFFFFF 0%, #EEF2F8 100%)", borderRadius: T.rHero, boxShadow: T.shadowLg, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: -30, right: -30, width: 110, height: 110, borderRadius: "50%", background: "rgba(21,84,184,0.08)" }} />
+        <div
+          className="mx-6 p-4 mb-4"
+          style={{
+            background: theme === "dark"
+              ? "linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))"
+              : "linear-gradient(155deg, #FFFFFF 0%, #EEF2F8 100%)",
+            borderRadius: T.rHero,
+            boxShadow: T.shadowLg,
+            border: theme === "dark" ? "1px solid rgba(255,255,255,0.12)" : "none",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ position: "absolute", top: -30, right: -30, width: 110, height: 110, borderRadius: "50%", background: theme === "dark" ? "rgba(182,255,61,0.14)" : "rgba(21,84,184,0.08)" }} />
+          {theme === "dark" && (
+            // Night Ops radar motif — dark mode only, matches the concept
+            // artboard's hero card. Purely decorative, pointer-events off.
+            <svg width="180" height="180" viewBox="0 0 180 180" style={{ position: "absolute", right: -50, top: -30, opacity: 0.4, pointerEvents: "none" }}>
+              <circle cx="90" cy="90" r="82" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 6" fill="none" opacity="0.5" />
+              <circle cx="90" cy="90" r="54" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 6" fill="none" opacity="0.4" />
+              <circle cx="90" cy="90" r="26" stroke="#B6FF3D" strokeWidth="1" fill="none" opacity="0.3" />
+            </svg>
+          )}
           <div className="flex items-center justify-between mb-3">
             {nextGameIsToday ? <Tag tone="good">LIVE EVENT</Tag> : <Tag tone="live">UPCOMING EVENT</Tag>}
             {nextGameIsToday && (
@@ -1153,7 +1145,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 flex items-center justify-center" style={{ background: T.good, borderRadius: 999 }}>
-                    <Check size={14} color="#FFFFFF" strokeWidth={3} />
+                    <Check size={14} color={T.inverse} strokeWidth={3} />
                   </div>
                   <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>Check-In Complete</span>
                 </div>
@@ -1172,7 +1164,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                 <button
                   onClick={handleCheckIn}
                   className="px-4 py-2 text-[11px] font-semibold transition-transform duration-100 active:scale-95"
-                  style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
+                  style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}
                 >
                   Check In Now
                 </button>
@@ -1266,7 +1258,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                     ...body,
                     border: `1px solid ${maxPrice === opt.value ? T.accent : T.line}`,
                     background: maxPrice === opt.value ? T.accent : "transparent",
-                    color: maxPrice === opt.value ? "#fff" : T.ashDim,
+                    color: maxPrice === opt.value ? T.inverse : T.ashDim,
                     borderRadius: T.rPill,
                   }}
                 >
@@ -1292,7 +1284,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
                     ...body,
                     border: `1px solid ${sortBy === opt.key ? T.accent : T.line}`,
                     background: sortBy === opt.key ? T.accent : "transparent",
-                    color: opt.disabled ? T.ashFaint : sortBy === opt.key ? "#fff" : T.ashDim,
+                    color: opt.disabled ? T.ashFaint : sortBy === opt.key ? T.inverse : T.ashDim,
                     borderRadius: T.rPill,
                     opacity: opt.disabled ? 0.5 : 1,
                   }}
@@ -1320,7 +1312,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             <button
               onClick={() => setShowFilters(false)}
               className="flex-1 py-2.5 text-[13px] font-semibold"
-              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}
             >
               Run Search
             </button>
@@ -1336,7 +1328,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
             ...body,
             border: activeTodayOnly ? "none" : `1px solid ${T.line}`,
             background: activeTodayOnly ? T.alert : T.panel,
-            color: activeTodayOnly ? "#fff" : T.ashDim,
+            color: activeTodayOnly ? T.inverse : T.ashDim,
             borderRadius: T.rPill,
             boxShadow: activeTodayOnly ? "0 3px 10px -3px rgba(188,51,39,0.4)" : T.shadowSm,
           }}
@@ -1348,21 +1340,21 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
           <button
             onClick={() => setViewMode("list")}
             className="px-3.5 py-1.5 text-[12px] font-semibold transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "list" ? T.ash : "transparent", color: viewMode === "list" ? "#FFFFFF" : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "list" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
+            style={{ ...body, background: viewMode === "list" ? T.cta : "transparent", color: viewMode === "list" ? T.inverse : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "list" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
           >
             Events
           </button>
           <button
             onClick={() => setViewMode("fields")}
             className="px-3.5 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "fields" ? T.ash : "transparent", color: viewMode === "fields" ? "#FFFFFF" : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "fields" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
+            style={{ ...body, background: viewMode === "fields" ? T.cta : "transparent", color: viewMode === "fields" ? T.inverse : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "fields" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
           >
             Fields
           </button>
           <button
             onClick={() => setViewMode("map")}
             className="px-3.5 py-1.5 text-[12px] font-medium transition-transform duration-100 active:scale-95"
-            style={{ ...body, background: viewMode === "map" ? T.ash : "transparent", color: viewMode === "map" ? "#FFFFFF" : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "map" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
+            style={{ ...body, background: viewMode === "map" ? T.cta : "transparent", color: viewMode === "map" ? T.inverse : T.ashDim, borderRadius: T.rPill, boxShadow: viewMode === "map" ? "0 1px 3px rgba(0,44,72,0.25)" : "none" }}
           >
             Map
           </button>
@@ -1386,10 +1378,10 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
               key={cat.key}
               onClick={() => setActiveCat(cat.key)}
               className="flex items-center gap-1.5 flex-shrink-0 px-3.5 py-2.5 transition-transform duration-100 active:scale-95"
-              style={{ background: active ? T.ash : T.panel, borderRadius: T.rPill, boxShadow: active ? "0 3px 10px -3px rgba(0,44,72,0.35)" : T.shadowSm }}
+              style={{ background: active ? T.cta : T.panel, borderRadius: T.rPill, boxShadow: active ? "0 3px 10px -3px rgba(0,44,72,0.35)" : T.shadowSm }}
             >
-              <Icon size={15} color={active ? "#FFFFFF" : T.ashDim} strokeWidth={1.9} />
-              <span className="text-[12px] font-medium" style={{ ...body, color: active ? "#FFFFFF" : T.ashDim }}>{cat.key}</span>
+              <Icon size={15} color={active ? T.inverse : T.ashDim} strokeWidth={1.9} />
+              <span className="text-[12px] font-medium" style={{ ...body, color: active ? T.inverse : T.ashDim }}>{cat.key}</span>
             </button>
           );
         })}
@@ -1484,6 +1476,7 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 
 function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
   myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout }) {
+  const { T, display, body, mono, theme } = useTheme();
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   const isPast = (ev.endDate || ev.date) < localDateStr();
   // Still needed to determine whether this is a paid event at all (for
@@ -1630,9 +1623,18 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   };
 
   return (
-    <div className="h-full flex flex-col" style={flatBg}>
+    <div className="h-full flex flex-col" style={{ backgroundColor: T.void }}>
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(ev.imageUrl || field?.imageUrl, ev.id || ev.title)}>
+          {theme === "dark" && (
+            // Night Ops radar motif — dark mode only, matches the concept
+            // artboard's Event Detail hero. Purely decorative.
+            <svg width="300" height="300" viewBox="0 0 300 300" style={{ position: "absolute", left: "50%", top: -20, transform: "translateX(-50%)", opacity: 0.3, pointerEvents: "none" }}>
+              <circle cx="150" cy="150" r="140" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 7" fill="none" />
+              <circle cx="150" cy="150" r="98" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 7" fill="none" opacity="0.7" />
+              <circle cx="150" cy="150" r="56" stroke="#B6FF3D" strokeWidth="1" fill="none" opacity="0.5" />
+            </svg>
+          )}
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
               <ChevronLeft color={T.ash} size={19} />
@@ -1750,7 +1752,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                       key={c.id}
                       onClick={() => setSelectedChoiceId(picked ? (priceOptions.required ? c.id : null) : c.id)}
                       className="px-3 py-2 text-[12px] font-semibold"
-                      style={{ ...body, color: picked ? "#FFFFFF" : T.ashDim, background: picked ? T.ash : T.panelAlt, borderRadius: 999 }}
+                      style={{ ...body, color: picked ? T.inverse : T.ashDim, background: picked ? T.cta : T.panelAlt, borderRadius: 999 }}
                     >
                       {c.label} — {priceLabel}
                     </button>
@@ -1868,13 +1870,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                 <button onClick={() => setConfirmCancel(false)} disabled={bookingBusy} className="px-3 py-3 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                   Never mind
                 </button>
-                <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: bookingBusy ? 0.6 : 1 }}>
+                <button onClick={handleCancel} disabled={bookingBusy} className="px-4 py-3 font-semibold text-[13px]" style={{ ...display, background: T.alert, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: bookingBusy ? 0.6 : 1 }}>
                   {bookingBusy ? "…" : "Cancel Reservation"}
                 </button>
               </div>
             )
           ) : (
-            <button onClick={() => setConfirmCancel(true)} className="px-6 py-3 font-semibold text-[13px] flex items-center gap-2" style={{ ...display, background: T.good, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
+            <button onClick={() => setConfirmCancel(true)} className="px-6 py-3 font-semibold text-[13px] flex items-center gap-2" style={{ ...display, background: T.good, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}>
               <Check size={15} /> Reserved
             </button>
           )
@@ -1900,7 +1902,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
             onClick={handleBook}
             disabled={bookingBusy || choiceMissing}
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
-            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
+            style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
           >
             {bookingBusy ? "…" : choiceMissing ? `Choose ${priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : "Reserve This Event"}
           </button>
@@ -1983,7 +1985,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
                     onClick={handleSign}
                     disabled={!agreed || !legalName.trim() || signing}
                     className="w-full py-3 text-[13px] font-semibold"
-                    style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
+                    style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !agreed || !legalName.trim() || signing ? 0.5 : 1 }}
                   >
                     {signing ? "Signing & Reserving…" : "Sign & Reserve"}
                   </button>
@@ -2093,6 +2095,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 }
 
 function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite, fieldsLoading }) {
+  const { T, display, body, mono } = useTheme();
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [shareState, setShareState] = useState(null);
   const handleShare = async () => {
@@ -2108,7 +2111,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
     // real-time listener has resolved its first snapshot — don't flash
     // "not found" while that's still in flight.
     return (
-      <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
+      <div className="h-full flex flex-col items-center justify-center" style={{ backgroundColor: T.void }}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>
           {fieldsLoading ? "Loading field…" : "Field not found."}
         </p>
@@ -2127,7 +2130,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
   ].filter((l) => l.url);
 
   return (
-    <div className="h-full flex flex-col" style={flatBg}>
+    <div className="h-full flex flex-col" style={{ backgroundColor: T.void }}>
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
@@ -2320,11 +2323,12 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
 }
 
 function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOpenField }) {
+  const { T, display, body, mono } = useTheme();
   const savedFieldIds = favorites.filter((f) => f.type === "field").map((f) => f.refId);
   const savedFields = fields.filter((f) => savedFieldIds.includes(f.id));
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <ScreenHeader title="Favorites" />
       <div className="px-6 pt-5">
         {favoritesLoading ? (
@@ -2367,6 +2371,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOp
 }
 
 function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings, myBookingsLoading }) {
+  const { T, display, body, mono } = useTheme();
   const [tab, setTab] = useState("interested"); // booked | interested | past
   const today = localDateStr();
   const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
@@ -2423,7 +2428,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
   );
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <ScreenHeader title="Schedule" />
 
       <div className="px-6 pt-3 pb-1 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
@@ -2469,7 +2474,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
               <button
                 onClick={() => onNavigate("home")}
                 className="w-full py-3 font-semibold text-[13px]"
-                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
+                style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}
               >
                 Start your search
               </button>
@@ -2493,10 +2498,11 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
 
 function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, teams, teamsLoading, createTeam,
   allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend }) {
+  const { T, display, body, mono } = useTheme();
   const [tab, setTab] = useState("friends"); // friends | teams
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <ScreenHeader title="Social" />
       <div className="px-6 pt-3 pb-1 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
         {[["friends", "Friends"], ["teams", "Teams"]].map(([key, label]) => (
@@ -2537,6 +2543,7 @@ function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, tea
 
 function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids,
   sendRequest, acceptRequest, declineRequest, cancelOrUnfriend, profile }) {
+  const { T, display, body, mono } = useTheme();
   const [search, setSearch] = useState("");
   const friendUids = new Set(friends.map((f) => f.uid));
 
@@ -2591,7 +2598,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
                   ) : rel === "pending" ? (
                     <span className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>Request Sent</span>
                   ) : (
-                    <button onClick={() => handleAdd(p)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
+                    <button onClick={() => handleAdd(p)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}>
                       Add Friend
                     </button>
                   )}
@@ -2621,7 +2628,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
                     <button onClick={() => declineRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                       Decline
                     </button>
-                    <button onClick={() => acceptRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.good, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
+                    <button onClick={() => acceptRequest(r.id)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.good, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}>
                       Accept
                     </button>
                   </div>
@@ -2665,6 +2672,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
 
 function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, currentUserFriendUids, outgoingRequestUids,
   sendRequest, cancelOrUnfriend, events, onOpenEvent }) {
+  const { T, display, body, mono } = useTheme();
   const { profile, profileLoading } = usePublicProfile(uid);
   const { favorites: theirFavorites } = useFavorites(uid);
   const { patches: theirPatches } = usePatches(uid);
@@ -2694,21 +2702,21 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
 
   if (profileLoading) {
     return (
-      <div className="h-full flex items-center justify-center" style={flatBg}>
+      <div className="h-full flex items-center justify-center" style={{ backgroundColor: T.void }}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
       </div>
     );
   }
   if (!profile) {
     return (
-      <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
+      <div className="h-full flex flex-col items-center justify-center" style={{ backgroundColor: T.void }}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Player not found.</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto pb-6" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-6" style={{ backgroundColor: T.void }}>
       <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
         <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
@@ -2736,7 +2744,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
               confirmUnfriend ? (
                 <div className="flex gap-2 mb-4" style={{ maxWidth: 280 }}>
                   <button onClick={() => setConfirmUnfriend(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Cancel</button>
-                  <button onClick={() => { cancelOrUnfriend(currentUser.uid, uid); setConfirmUnfriend(false); }} className="flex-1 py-2 text-[12px] font-semibold" style={{ ...display, background: T.alert, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>Unfriend</button>
+                  <button onClick={() => { cancelOrUnfriend(currentUser.uid, uid); setConfirmUnfriend(false); }} className="flex-1 py-2 text-[12px] font-semibold" style={{ ...display, background: T.alert, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}>Unfriend</button>
                 </div>
               ) : (
                 <button onClick={() => setConfirmUnfriend(true)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Friends ✓</button>
@@ -2744,7 +2752,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
             ) : isPending ? (
               <span className="px-4 py-2 mb-4 text-[13px] font-medium" style={{ ...body, color: T.ashFaint }}>Request Sent</span>
             ) : (
-              <button onClick={() => sendRequest(currentUser.uid, currentProfile, uid, profile)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...display, background: T.ash, color: "#fff", borderRadius: T.rPill, boxShadow: T.shadowSm }}>
+              <button onClick={() => sendRequest(currentUser.uid, currentProfile, uid, profile)} className="px-4 py-2 mb-4 text-[13px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}>
                 + Add Friend
               </button>
             )}
@@ -2832,6 +2840,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
 }
 
 function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, createTeam }) {
+  const { T, display, body, mono } = useTheme();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [teamName, setTeamName] = useState("");
@@ -2939,7 +2948,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
               onClick={handleCreate}
               disabled={!teamName.trim() || creating}
               className="w-full py-2.5 text-[13px] font-semibold"
-              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !teamName.trim() || creating ? 0.5 : 1 }}
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !teamName.trim() || creating ? 0.5 : 1 }}
             >
               {creating ? "Creating…" : "Create Team"}
             </button>
@@ -2992,6 +3001,7 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
 
 function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember }) {
+  const { T, display, body, mono } = useTheme();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -3065,21 +3075,21 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
 
   if (teamLoading) {
     return (
-      <div className="h-full flex items-center justify-center" style={flatBg}>
+      <div className="h-full flex items-center justify-center" style={{ backgroundColor: T.void }}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading…</p>
       </div>
     );
   }
   if (!team) {
     return (
-      <div className="h-full flex flex-col items-center justify-center" style={flatBg}>
+      <div className="h-full flex flex-col items-center justify-center" style={{ backgroundColor: T.void }}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Team not found.</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto pb-6" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-6" style={{ backgroundColor: T.void }}>
       <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
         <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
@@ -3101,8 +3111,8 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
             <Shield size={32} color={T.ashDim} />
           )}
           {isOfficer && (
-            <div className="absolute -bottom-1 -right-1 w-7 h-7 flex items-center justify-center" style={{ background: T.ash, borderRadius: 14, border: `2px solid ${T.void}` }}>
-              {patchUploading ? <span className="text-[9px]" style={{ ...mono, color: "#FFFFFF" }}>…</span> : <Camera size={13} color="#FFFFFF" strokeWidth={2.5} />}
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 flex items-center justify-center" style={{ background: T.cta, borderRadius: 14, border: `2px solid ${T.void}` }}>
+              {patchUploading ? <span className="text-[9px]" style={{ ...mono, color: T.inverse }}>…</span> : <Camera size={13} color={T.inverse} strokeWidth={2.5} />}
             </div>
           )}
         </button>
@@ -3139,7 +3149,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
                 onClick={handleSaveInfo}
                 disabled={saving}
                 className="flex-1 py-2 text-[12px] font-semibold"
-                style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}
+                style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}
               >
                 {saving ? "Saving…" : "Save"}
               </button>
@@ -3155,7 +3165,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
           <button
             onClick={handleJoin}
             className="w-full py-3 font-semibold text-[14px] mb-5"
-            style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd }}
+            style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}
           >
             Join Team
           </button>
@@ -3271,6 +3281,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
 }
 
 function ProfileRow({ label, value, static: isStatic, href }) {
+  const { T, display, body, mono } = useTheme();
   const content = (
     <>
       <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{label}</span>
@@ -3310,18 +3321,19 @@ function splitPatchDisplay(patch) {
 // that's the only owner-redeemable patch that exists; if more get added
 // later, this is the spot to turn into a picker rather than a hardcoded id.
 function SecretPatchScreen({ onBack }) {
+  const { T, display, body, mono } = useTheme();
   const [qrDataUrl, setQrDataUrl] = useState(null);
 
   useEffect(() => {
     QRCode.toDataURL(`atlas:redeem:secret-agent`, {
       width: 280,
       margin: 4, // real quiet zone (ISO/IEC 18004 standard is 4 modules) — 1 was under-spec and slows real scanning
-      color: { dark: T.ash, light: "#FFFFFF" },
+      color: { dark: "#002C48", light: "#FFFFFF" } /* fixed — always scannable regardless of theme */,
     }).then(setQrDataUrl);
   }, []);
 
   return (
-    <div className="h-full overflow-y-auto flex flex-col items-center justify-center px-6" style={flatBg}>
+    <div className="h-full overflow-y-auto flex flex-col items-center justify-center px-6" style={{ backgroundColor: T.void }}>
       <button onClick={onBack} className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center">
         <ChevronLeft size={20} color={T.ash} />
       </button>
@@ -3348,6 +3360,7 @@ function SecretPatchScreen({ onBack }) {
 // granted, so this scanner doesn't need updating if more redeemable
 // patches get added later.
 function RedeemScannerScreen({ onBack, user, grantPatch }) {
+  const { T, display, body, mono } = useTheme();
   const containerRef = useRef(null);
   const scannerRef = useRef(null);
   const [status, setStatus] = useState(null);
@@ -3436,6 +3449,7 @@ function RedeemScannerScreen({ onBack, user, grantPatch }) {
 }
 
 function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeaturedPatch }) {
+  const { T, display, body, mono } = useTheme();
   const featuredImageUrl = profile?.featuredPatch?.imageUrl;
   const [viewerIndex, setViewerIndex] = useState(null);
   const openViewer = (index) => setViewerIndex(index);
@@ -3449,7 +3463,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
   };
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
         <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
@@ -3478,7 +3492,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
                 >
                   {isFeatured && (
                     <div className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center" style={{ background: T.accent, borderRadius: 999 }}>
-                      <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                      <Check size={12} color={T.inverse} strokeWidth={3} />
                     </div>
                   )}
                   <button
@@ -3564,6 +3578,7 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
 }
 
 function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAvatar, deleteAccount }) {
+  const { T, display, body, mono } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -3648,7 +3663,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   };
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
         <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
@@ -3666,11 +3681,11 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
               {initial}
             </div>
           )}
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 flex items-center justify-center" style={{ background: T.ash, borderRadius: 14, border: `2px solid ${T.void}` }}>
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 flex items-center justify-center" style={{ background: T.cta, borderRadius: 14, border: `2px solid ${T.void}` }}>
             {avatarUploading ? (
-              <span className="text-[9px]" style={{ ...mono, color: "#FFFFFF" }}>…</span>
+              <span className="text-[9px]" style={{ ...mono, color: T.inverse }}>…</span>
             ) : (
-              <Camera size={13} color="#FFFFFF" strokeWidth={2.5} />
+              <Camera size={13} color={T.inverse} strokeWidth={2.5} />
             )}
           </div>
         </button>
@@ -3723,7 +3738,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
           onClick={handleSave}
           disabled={saving}
           className="w-full py-3 font-semibold text-[14px] mt-1"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}
+          style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}
         >
           {saving ? "Saving…" : "Save Changes"}
         </button>
@@ -3761,7 +3776,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
                   onClick={handleDelete}
                   disabled={!deletePassword || deleting}
                   className="flex-1 py-2.5 text-[12px] font-semibold"
-                  style={{ ...display, background: T.alert, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: !deletePassword || deleting ? 0.5 : 1 }}
+                  style={{ ...display, background: T.alert, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: !deletePassword || deleting ? 0.5 : 1 }}
                 >
                   {deleting ? "Deleting…" : "Permanently Delete"}
                 </button>
@@ -3775,6 +3790,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
 }
 
 function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches }) {
+  const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -3793,7 +3809,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
 
   useEffect(() => {
     if (!referralUrl) return;
-    QRCode.toDataURL(referralUrl, { width: 280, margin: 4, color: { dark: T.ash, light: "#FFFFFF" } }).then(setReferralQr);
+    QRCode.toDataURL(referralUrl, { width: 280, margin: 4, color: { dark: "#002C48", light: "#FFFFFF" } /* fixed — always scannable regardless of theme */ }).then(setReferralQr);
   }, [referralUrl]);
 
   const handleCopyReferral = async () => {
@@ -3831,6 +3847,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [showAppearancePicker, setShowAppearancePicker] = useState(false);
   const LANGUAGES = ["English", "Spanish", "French"]; // covers major US + Canadian languages relevant here
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -3869,7 +3886,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
   };
 
   return (
-    <div className="h-full overflow-y-auto pb-24" style={flatBg}>
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <ScreenHeader title="Profile" />
       <div className="px-6 pt-4">
         <div className="p-4 flex items-center gap-3 mb-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -3890,19 +3907,19 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
             )}
             <div
               className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center"
-              style={{ background: T.ash, borderRadius: 3, border: `2px solid ${T.panel}` }}
+              style={{ background: T.cta, borderRadius: 3, border: `2px solid ${T.panel}` }}
             >
               {avatarUploading ? (
-                <span className="text-[8px]" style={{ ...mono, color: "#FFFFFF" }}>…</span>
+                <span className="text-[8px]" style={{ ...mono, color: T.inverse }}>…</span>
               ) : (
-                <Camera size={10} color="#FFFFFF" strokeWidth={2.5} />
+                <Camera size={10} color={T.inverse} strokeWidth={2.5} />
               )}
             </div>
           </button>
           <div>
             <span className="text-[16px] font-semibold inline-flex items-center gap-1.5" style={{ ...display, color: T.ash }}>
               {profile?.callsign || "Loading…"}
-              {profile?.verified && <BadgeCheck size={15} color="#fff" fill={T.accent} />}
+              {profile?.verified && <BadgeCheck size={15} color={T.inverse} fill={T.accent} />}
               {profile?.featuredPatch && (
                 <img
                   src={profile.featuredPatch.imageUrl}
@@ -3945,7 +3962,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
           <button
             onClick={handleCopyReferral}
             className="w-full py-2.5 text-[13px] font-semibold"
-            style={{ ...display, background: copied ? T.good : T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowSm }}
+            style={{ ...display, background: copied ? T.good : T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}
           >
             {copied ? "Copied!" : "Copy Invite Link"}
           </button>
@@ -4021,7 +4038,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
               type="submit"
               disabled={passwordSaving}
               className="w-full py-3 font-semibold text-[13px]"
-              style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: passwordSaving ? 0.6 : 1 }}
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: passwordSaving ? 0.6 : 1 }}
             >
               {passwordSaving ? "Updating…" : "Update Password"}
             </button>
@@ -4030,6 +4047,13 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
 
         <Eyebrow>Support & Preferences</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+          <button onClick={() => setShowAppearancePicker(!showAppearancePicker)} className="w-full flex items-center justify-between py-3.5">
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Appearance</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{theme === "dark" ? "Dark" : "Light"}</span>
+              <ChevronRight size={15} color={T.ashFaint} style={{ transform: showAppearancePicker ? "rotate(90deg)" : "none" }} />
+            </div>
+          </button>
           <button onClick={() => setShowLanguagePicker(!showLanguagePicker)} className="w-full flex items-center justify-between py-3.5">
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Language</span>
             <div className="flex items-center gap-2">
@@ -4040,6 +4064,35 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
           <ProfileRow label="FAQs" />
           <ProfileRow label="Report a concern" value="Join our Discord" href="https://discord.gg/hR8EntGsq" />
         </div>
+
+        {showAppearancePicker && (
+          <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            <div className="flex gap-2 mb-2">
+              {[
+                { key: "light", label: "Light" },
+                { key: "dark", label: "Dark" },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setTheme(opt.key)}
+                  className="px-3 py-1.5 text-[12px] font-medium"
+                  style={{
+                    ...body,
+                    border: `1px solid ${theme === opt.key ? T.accent : T.line}`,
+                    background: theme === opt.key ? T.accent : "transparent",
+                    color: theme === opt.key ? T.inverse : T.ashDim,
+                    borderRadius: T.rPill,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
+              Dark uses the "Night Ops" look — dark liquid-glass panels, night-vision green and blaze-orange accents.
+            </p>
+          </div>
+        )}
 
         {showLanguagePicker && (
           <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -4053,7 +4106,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
                     ...body,
                     border: `1px solid ${(profile?.language || "English") === lang ? T.accent : T.line}`,
                     background: (profile?.language || "English") === lang ? T.accent : "transparent",
-                    color: (profile?.language || "English") === lang ? "#fff" : T.ashDim,
+                    color: (profile?.language || "English") === lang ? T.inverse : T.ashDim,
                     borderRadius: T.rPill,
                   }}
                 >
@@ -4087,6 +4140,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
 // beforeinstallprompt, so that path is used when available; otherwise the
 // instructions fall back to the same manual style.
 function InstallGateScreen({ platform, deferredPrompt }) {
+  const { T, display, body, mono } = useTheme();
   const [installing, setInstalling] = useState(false);
 
   const handleInstallClick = async () => {
@@ -4098,7 +4152,7 @@ function InstallGateScreen({ platform, deferredPrompt }) {
   };
 
   return (
-    <div className="h-screen flex flex-col items-center justify-center px-8 text-center" style={flatBg}>
+    <div className="h-screen flex flex-col items-center justify-center px-8 text-center" style={{ backgroundColor: T.void }}>
       <style>{FONTS}</style>
       <div className="w-16 h-16 flex items-center justify-center mb-4 overflow-hidden" style={{ borderRadius: 12 }}>
         <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Atlas" className="w-full h-full" style={{ objectFit: "cover" }} />
@@ -4124,7 +4178,7 @@ function InstallGateScreen({ platform, deferredPrompt }) {
           onClick={handleInstallClick}
           disabled={installing}
           className="w-full py-3.5 font-semibold text-[14px]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, maxWidth: 320, opacity: installing ? 0.6 : 1 }}
+          style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, maxWidth: 320, opacity: installing ? 0.6 : 1 }}
         >
           {installing ? "Opening…" : "Install Atlas"}
         </button>
@@ -4158,6 +4212,7 @@ const ONBOARDING_FREQUENCIES = ["This is my first time", "A few times a year", "
 // confirmed, so nothing is lost if someone closes the app partway through;
 // only the final "finish" call needs to succeed for the gate to lift.
 function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvatar, completeOnboarding }) {
+  const { T, display, body, mono } = useTheme();
   const STEPS = ["name", "callsign", "photo", "eventTypes", "frequency"];
   const [step, setStep] = useState(0);
   const [firstName, setFirstName] = useState(profile?.firstName || "");
@@ -4240,7 +4295,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
   };
 
   return (
-    <div className="h-screen flex flex-col" style={flatBg}>
+    <div className="h-screen flex flex-col" style={{ backgroundColor: T.void }}>
       <style>{FONTS}</style>
       <div className="px-6 pt-8 pb-4">
         <div className="flex gap-1 mb-5">
@@ -4334,10 +4389,10 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
                     key={key}
                     onClick={() => toggleEventType(key)}
                     className="p-4 flex flex-col items-center gap-2 transition-transform duration-100 active:scale-[0.97]"
-                    style={{ background: selected ? T.ash : T.panel, borderRadius: 8, border: `1px solid ${selected ? T.ash : T.line}` }}
+                    style={{ background: selected ? T.cta : T.panel, borderRadius: 8, border: `1px solid ${selected ? T.cta : T.line}` }}
                   >
-                    <Icon size={20} color={selected ? "#FFFFFF" : T.ashDim} />
-                    <span className="text-[12px] font-semibold" style={{ ...body, color: selected ? "#FFFFFF" : T.ash }}>{label}</span>
+                    <Icon size={20} color={selected ? T.inverse : T.ashDim} />
+                    <span className="text-[12px] font-semibold" style={{ ...body, color: selected ? T.inverse : T.ash }}>{label}</span>
                   </button>
                 );
               })}
@@ -4355,7 +4410,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
                   key={f}
                   onClick={() => setFrequency(f)}
                   className="p-3.5 text-left text-[13px] font-medium transition-transform duration-100 active:scale-[0.98]"
-                  style={{ ...body, background: frequency === f ? T.ash : T.panel, color: frequency === f ? "#FFFFFF" : T.ash, borderRadius: T.rPill, border: `1px solid ${frequency === f ? T.ash : T.line}` }}
+                  style={{ ...body, background: frequency === f ? T.cta : T.panel, color: frequency === f ? T.inverse : T.ash, borderRadius: T.rPill, border: `1px solid ${frequency === f ? T.cta : T.line}` }}
                 >
                   {f}
                 </button>
@@ -4373,7 +4428,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
           onClick={handleNext}
           disabled={!canContinue || saving}
           className="w-full py-3.5 font-semibold text-[14px]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !canContinue || saving ? 0.5 : 1 }}
+          style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !canContinue || saving ? 0.5 : 1 }}
         >
           {saving ? "Saving…" : step < STEPS.length - 1 ? "Continue" : "Finish"}
         </button>
@@ -4383,6 +4438,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
 }
 
 function LegalAgreementScreen({ onAccept }) {
+  const { T, display, body, mono } = useTheme();
   const [tab, setTab] = useState("terms");
   const [checked, setChecked] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -4401,7 +4457,7 @@ function LegalAgreementScreen({ onAccept }) {
   };
 
   return (
-    <div className="h-screen flex flex-col" style={flatBg}>
+    <div className="h-screen flex flex-col" style={{ backgroundColor: T.void }}>
       <style>{FONTS}</style>
       <div className="px-6 pt-8 pb-3">
         <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Before you continue</h1>
@@ -4424,8 +4480,8 @@ function LegalAgreementScreen({ onAccept }) {
       </div>
       <div className="px-6 pt-3 pb-6" style={{ borderTop: `1px solid ${T.line}`, background: T.void }}>
         <button onClick={() => setChecked(!checked)} className="w-full flex items-center gap-2 mb-3 text-left">
-          <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center" style={{ border: `1.5px solid ${checked ? T.ash : T.line}`, background: checked ? T.ash : "transparent", borderRadius: 4 }}>
-            {checked && <Check size={13} color="#fff" strokeWidth={3} />}
+          <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center" style={{ border: `1.5px solid ${checked ? T.cta : T.line}`, background: checked ? T.cta : "transparent", borderRadius: 4 }}>
+            {checked && <Check size={13} color={T.inverse} strokeWidth={3} />}
           </div>
           <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>I've read and agree to the Terms of Use, Privacy Policy, and EULA.</span>
         </button>
@@ -4433,7 +4489,7 @@ function LegalAgreementScreen({ onAccept }) {
           onClick={handleAccept}
           disabled={!checked || saving}
           className="w-full py-3.5 font-semibold text-[14px]"
-          style={{ ...display, background: T.ash, color: "#FFFFFF", borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !checked || saving ? 0.5 : 1 }}
+          style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: !checked || saving ? 0.5 : 1 }}
         >
           {saving ? "Continuing…" : "Agree & Continue"}
         </button>
@@ -4452,8 +4508,9 @@ const LOADING_KEYFRAMES = `
 // Shared across every "waiting on auth/profile to resolve" gate in the App
 // shell — same three spots that used to just say "Loading…" as plain text.
 function LoadingScreen() {
+  const { T, display, body, mono } = useTheme();
   return (
-    <div className="h-full flex items-center justify-center" style={flatBg}>
+    <div className="h-full flex items-center justify-center" style={{ backgroundColor: T.void }}>
       <style>{LOADING_KEYFRAMES}</style>
       <div className="flex gap-2">
         {[0, 0.15, 0.3].map((delay) => (
@@ -4499,6 +4556,7 @@ const PATCH_UNLOCK_KEYFRAMES = `
 // the wizard finishes, and this only ever renders while that's still
 // false.
 function WelcomeSplashScreen({ onContinue }) {
+  const { T, display, body, mono } = useTheme();
   return (
     <div
       className="fixed inset-0 flex flex-col items-center justify-center px-8"
@@ -4538,6 +4596,7 @@ function WelcomeSplashScreen({ onContinue }) {
 // marks each patch seen as it's dismissed; naturally disappears once
 // there's nothing left unseen.
 function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
+  const { T, display, body, mono } = useTheme();
   const [index, setIndex] = useState(0);
   const [advancing, setAdvancing] = useState(false);
 
@@ -4600,7 +4659,8 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
   );
 }
 
-export default function App() {
+function AppShell() {
+  const { T, display, body, mono } = useTheme();
   // The same proven fix from the owner app, ported over rather than
   // rediscovered — a real WebKit bug can corrupt this PWA's own
   // window.innerHeight/visualViewport.height after visiting an external
@@ -4900,7 +4960,7 @@ export default function App() {
         createBookingCheckout={createBookingCheckout}
       />
     ) : (
-      <div className="h-full flex items-center justify-center" style={flatBg}>
+      <div className="h-full flex items-center justify-center" style={{ backgroundColor: T.void }}>
         <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>Loading event…</p>
       </div>
     );
@@ -5048,5 +5108,13 @@ export default function App() {
         <PatchUnlockedOverlay unseenPatches={patches.filter((p) => p.seen === false)} user={user} markPatchSeen={markPatchSeen} />
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppShell />
+    </ThemeProvider>
   );
 }
