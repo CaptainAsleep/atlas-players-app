@@ -370,7 +370,7 @@ function BottomNav({ active, onNavigate }) {
 }
 
 /* ---------- screens ---------- */
-function LoginScreen({ signIn, signUp, referralCode }) {
+function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -400,6 +400,23 @@ function LoginScreen({ signIn, signUp, referralCode }) {
       }
     } catch (err) {
       setError(friendlyError(err.code));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setBusy(true);
+    try {
+      await signInWithGoogle(referralCode);
+      localStorage.removeItem("atlas_referral"); // spent, don't keep applying it to future signups on this device
+    } catch (err) {
+      // A user closing the Google popup themselves isn't a real error —
+      // nothing to show them for it.
+      if (err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
+        setError(friendlyError(err.code));
+      }
     } finally {
       setBusy(false);
     }
@@ -479,7 +496,15 @@ function LoginScreen({ signIn, signUp, referralCode }) {
       </div>
 
       <div className="flex flex-col gap-2.5 mb-6">
-        {["Continue with Google", "Continue with Apple", "Continue with Facebook"].map((label) => (
+        <button
+          onClick={handleGoogleSignIn}
+          disabled={busy}
+          className="w-full py-3 font-medium text-[13px] flex items-center justify-center gap-2 transition-transform duration-100 active:scale-[0.98]"
+          style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill, opacity: busy ? 0.6 : 1, cursor: busy ? "default" : "pointer" }}
+        >
+          Continue with Google
+        </button>
+        {["Continue with Apple", "Continue with Facebook"].map((label) => (
           <button
             key={label}
             disabled
@@ -4628,7 +4653,7 @@ export default function App() {
 
   const { fields, loading: fieldsLoading } = useFields();
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signInWithGoogle, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
@@ -4814,7 +4839,7 @@ export default function App() {
   } else if (authLoading) {
     content = <LoadingScreen />;
   } else if (!user) {
-    content = <LoginScreen signIn={signIn} signUp={signUp} referralCode={referralCode} />;
+    content = <LoginScreen signIn={signIn} signUp={signUp} signInWithGoogle={signInWithGoogle} referralCode={referralCode} />;
   } else if (!profile) {
     content = <LoadingScreen />;
   } else if (profile.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {

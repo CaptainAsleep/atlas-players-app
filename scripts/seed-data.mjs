@@ -1480,28 +1480,6 @@ const fields = [
       "No published admission price found on the homepage (pricing lives on a separate Prices page not fetched); omitted rather than estimated.",
   },
   {
-    id: "awaken-arena-san-antonio",
-    name: "Awaken Arena (San Antonio)",
-    city: "San Antonio, TX",
-    address: "1228 Cornerway Blvd, San Antonio, TX 78219",
-    phone: "(830) 328-2820",
-    website: "https://www.awakenarena.com",
-    ownerEmailDomain: "awakenarena.com",
-    facebook: "https://www.facebook.com/AwakenArenaEntertainment",
-    instagram: "https://www.instagram.com/awakenarena/",
-    youtube: "https://www.youtube.com/@awakenarenaHQ",
-    tiktok: "https://www.tiktok.com/@awakenarena",
-    discord: "https://discord.com/invite/vEFBKTVXVW",
-    indoorOutdoor: "indoor",
-    admission: "$30/player day pass, $25/player night pass",
-    about:
-      "Air-conditioned indoor tactical combat arena running Team Deathmatch, Capture the Flag, and custom scenario game modes, with day/night open-play sessions and a weekday military discount.",
-    status: "active",
-    dataSource: "website",
-    lastScraped: "2026-09-02",
-    notes: "Operator also runs a sister location in Austin (below) — shared website/socials/phone.",
-  },
-  {
     id: "awaken-arena-austin",
     name: "Awaken Arena (Austin)",
     city: "Austin, TX",
@@ -1521,7 +1499,7 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes: "Sister location to the San Antonio Awaken Arena above — shares the same website, phone, and social accounts.",
+    notes: "Sister location to the now-closed San Antonio Awaken Arena (removed 2026-09-19) — this Austin location remains open; shares the same website, phone, and social accounts.",
   },
 
   // Tennessee (added 2026-09-10)
@@ -5281,6 +5259,26 @@ const fields = [
     lastScraped: "2026-09-19",
     notes:
       "Paintball- and NERF-war programs are also offered alongside airsoft at this venue -- included per this project's paintball-venue inclusion bar since airsoft is a genuine, separately-marketed program, not just \"paintball guns allowed.\" Field fee $12 / rental fee $18 (plus field fee) per last-documented 2024-season pricing; reconfirm before treating as current.",
+  },
+  // ---- Michigan (additional field added 2026-09-19) --------------------
+  {
+    id: "fortify-ranch-airsoft-white-lake",
+    name: "Fortify Ranch Airsoft",
+    city: "White Lake, MI",
+    address: "7600 Hitchcock Rd, White Lake, MI 48383",
+    facebook: "https://www.facebook.com/p/Fortify-Ranch-Airsoft-61576696365156/",
+    instagram: "https://www.instagram.com/fortifyranch/",
+    tiktok: "https://www.tiktok.com/@fortify.ranch",
+    indoorOutdoor: "outdoor",
+    admission: "$40/player per documented 2025 fundraiser event (includes 1,000 BBs and lunch); reconfirm before treating as standard/current pricing",
+    about:
+      "Airsoft program run on the grounds of Fortify Ranch, a horse rescue and equestrian facility (rescues, rehabilitates, and rehomes horses). Airsoft events have included fundraisers for the ranch's rescue work, held on a western-style village field noted as under construction as of mid-2025.",
+    status: "active",
+    dataSource:
+      "Michael (project owner) confirmed field is currently active as of 2026-09-19 + a documented June 29, 2025 fundraiser event (AllEvents.in) + the ranch's own Weebly site (confirms address, no airsoft program mentioned there -- airsoft appears to be a separately-branded program/Facebook page at the same physical property)",
+    lastScraped: "2026-09-19",
+    notes:
+      "Facebook page (Fortify Ranch Airsoft) has not been updated since end of 2025 per Michael, but he confirmed the business is currently active as of this addition. No phone number or standing/current pricing found independently -- the $40 admission figure is from a specific 2025 one-off fundraiser event, not confirmed as ongoing open-play pricing.",
   },
 ];
 

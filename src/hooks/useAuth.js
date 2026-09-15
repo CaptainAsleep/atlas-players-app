@@ -3,9 +3,11 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   EmailAuthProvider,
+  GoogleAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut as firebaseSignOut,
   updatePassword,
   updateProfile,
@@ -63,12 +65,15 @@ export function useAuth() {
     });
   }, [user, profile?.callsign]);
 
-  async function signUp(email, password, callsign, referredBy) {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const finalCallsign = callsign || email.split("@")[0];
-    if (callsign) await updateProfile(cred.user, { displayName: callsign });
+  // Shared by email/password signUp and any social sign-in provider: creates
+  // the Firestore users/{uid} doc plus its publicProfiles/{uid} mirror for a
+  // brand-new account, and bumps the referrer's count if this signup came
+  // through a referral link/QR. Callers must only invoke this for a uid that
+  // doesn't already have a users/{uid} doc.
+  async function createPlayerDocs(uid, email, callsign, referredBy) {
+    const finalCallsign = callsign || (email ? email.split("@")[0] : "Player");
     const createdAt = serverTimestamp();
-    await setDoc(doc(db, "users", cred.user.uid), {
+    await setDoc(doc(db, "users", uid), {
       email,
       callsign: finalCallsign,
       createdAt,
@@ -84,7 +89,7 @@ export function useAuth() {
     });
     // The narrow public mirror — never email/phone/real name, just what
     // another player is allowed to see.
-    await setDoc(doc(db, "publicProfiles", cred.user.uid), {
+    await setDoc(doc(db, "publicProfiles", uid), {
       callsign: finalCallsign,
       avatarUrl: null,
       featuredPatch: null,
@@ -103,11 +108,41 @@ export function useAuth() {
         console.error("referral count increment failed:", err)
       );
     }
+  }
+
+  async function signUp(email, password, callsign, referredBy) {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    if (callsign) await updateProfile(cred.user, { displayName: callsign });
+    await createPlayerDocs(cred.user.uid, email, callsign, referredBy);
     return cred.user;
   }
 
   async function signIn(email, password) {
     const cred = await signInWithEmailAndPassword(auth, email, password);
+    return cred.user;
+  }
+
+  // Google sign-in via popup — deliberately never signInWithRedirect. A
+  // redirect navigates the tab away and back, which is exactly the WebKit
+  // smart-app-banner bug that corrupted window.innerHeight/visualViewport
+  // on return from the Stripe Connect flow. Popup keeps this tab in place,
+  // same fix pattern already used for every Stripe redirect.
+  // New-account detection checks for an existing users/{uid} doc (same
+  // Firestore-doc-check pattern as the self-healing backfill above) rather
+  // than Firebase's own getAdditionalUserInfo().isNewUser, since what this
+  // app actually cares about is whether a Firestore profile exists, not the
+  // Auth account's own history. Deliberately does NOT use the Google
+  // account's real displayName as the callsign — callsign is a chosen
+  // public handle, and publicProfiles is explicitly designed to never carry
+  // a real name — so this falls back to the email prefix, same default
+  // email/password signup uses when no callsign is given.
+  async function signInWithGoogle(referredBy) {
+    const provider = new GoogleAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    const existing = await getDoc(doc(db, "users", cred.user.uid));
+    if (!existing.exists()) {
+      await createPlayerDocs(cred.user.uid, cred.user.email, null, referredBy);
+    }
     return cred.user;
   }
 
@@ -225,6 +260,7 @@ export function useAuth() {
     authLoading,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     updateCallsign,
     updateProfileFields,
