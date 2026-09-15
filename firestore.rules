@@ -115,6 +115,16 @@ service cloud.firestore {
           || isAdmin()
         );
       }
+
+      // Michael's own free-form tracking notes about this field (follow-up
+      // calls, claim history, anything worth remembering) — admin-only,
+      // deliberately NOT extended to the field's own owner the way
+      // private/{docId} above is. Different purpose (Michael's internal
+      // notes vs. shared operational data like the shipping address), so
+      // a separate, narrower rule rather than reusing that one.
+      match /adminNotes/{noteId} {
+        allow read, write: if isAdmin();
+      }
     }
     match /events/{eventId} {
       allow read: if true;
