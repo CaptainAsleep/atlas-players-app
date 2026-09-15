@@ -5229,6 +5229,59 @@ const fields = [
     notes:
       "Explicitly-priced, separately-scheduled airsoft offering confirmed (not just \"paintball guns allowed\"), satisfying this project's paintball-venue inclusion bar. Same parent company/phone number as Pyrrhic Tactical Sports (Nampa) above.",
   },
+  // ---- Maine (added 2026-09-19) -----------------------------------------
+  {
+    id: "harris-farm-airsoft-dayton",
+    name: "Harris Farm Airsoft Field",
+    city: "Dayton, ME",
+    address: "271 Buzzell Road, Dayton, ME",
+    website: "https://www.harrisairsoft.com",
+    facebook: "https://www.facebook.com/HarrisAirsoft/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Well-known 55-acre outdoor Maine field known as \"the SugarHouse,\" across from Harris Farm Store. Mature trees, hills, gullies, brooks, swamps, a 200-ft firing range, and high-walled CQB buildings. Seasonal (closed for winter).",
+    status: "active",
+    dataSource:
+      "own website (harrisairsoft.com, reachable, active dated 2026 events calendar through Sep 26, 2026) + Facebook",
+    lastScraped: "2026-09-19",
+    notes:
+      "No published phone number found on own site or directories. Ticketing handled via a linked Square site (harrisairsoft.square.site); pricing not publicly visible without checkout.",
+  },
+  {
+    id: "coles-farm-airsoft-dayton",
+    name: "Coles Airsoft (Coles Family Farm)",
+    city: "Dayton, ME",
+    address: "492 River Road, Dayton, ME",
+    website: "https://www.colesairsoft.com",
+    facebook: "https://www.facebook.com/colesairsoft/",
+    indoorOutdoor: "outdoor",
+    about:
+      "58-acre outdoor airsoft operation run on Coles Family Farm property. Mature and new-growth trees, hills, gullies, brooks, a pond, trenches, forts, trails, bridges, and a 200-ft firing range. Distinct address and ownership from Harris Farm Airsoft, despite both being small airsoft operations in the same town of Dayton, ME.",
+    status: "active",
+    dataSource:
+      "own website (colesairsoft.com, reachable) + a dated \"D-Day 2025\" event page (June 6-7, 2025) + active Events list (Fall Swap Meet, ProLeague 05, and others) + Facebook",
+    lastScraped: "2026-09-19",
+    notes:
+      "No published phone number or pricing found on own site. Confirmed as a genuinely separate business from Harris Farm Airsoft (different address, different independent website, different Facebook page, no shared-ownership statement found either way).",
+  },
+  {
+    id: "sass-linneus",
+    name: "Southern Aroostook Action Sports (SASS)",
+    city: "Linneus, ME",
+    address: "133 Codfish Ridge Rd, Linneus, ME 04730",
+    phone: "(207) 694-8409",
+    website: "https://www.saasmaine.com",
+    facebook: "https://www.facebook.com/SAASMAINE/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Multi-activity outdoor sports park in Aroostook County spanning roughly 26-30 acres of woodland, marshes, open fields, and CQB areas. Branded \"Airsoft | Paintball | NERF\" -- airsoft is a genuine, actively-marketed core offering here, not an afterthought to paintball. Operates every Sunday between Memorial Day weekend and early November, plus occasional Saturday private/special events.",
+    status: "active",
+    dataSource:
+      "own website (saasmaine.com, reachable) + Bangor Daily News feature (Jun 30, 2024, on the field expanding) + The County newspaper feature (Jul 1, 2024) + Facebook",
+    lastScraped: "2026-09-19",
+    notes:
+      "Paintball- and NERF-war programs are also offered alongside airsoft at this venue -- included per this project's paintball-venue inclusion bar since airsoft is a genuine, separately-marketed program, not just \"paintball guns allowed.\" Field fee $12 / rental fee $18 (plus field fee) per last-documented 2024-season pricing; reconfirm before treating as current.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
