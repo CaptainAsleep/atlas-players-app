@@ -5091,6 +5091,144 @@ const fields = [
     notes:
       "Low confidence -- single-source/directory-corroborated only, same treatment as other thin AirsoftC3-only entries elsewhere in this file. No street address, phone, or recent posting activity could be independently confirmed, but no evidence of closure either. Recommend a direct check before treating as fully current.",
   },
+  // ---- Idaho (added 2026-09-19) ----------------------------------------
+  {
+    id: "cqb-underground-bonners-ferry",
+    name: "CQB Underground",
+    city: "Bonners Ferry, ID",
+    address: "6426 Kootenai St, Unit B, Bonners Ferry, ID 83805",
+    phone: "(208) 267-8887",
+    website: "https://www.cqbunderground.com",
+    ownerEmailDomain: "cqbunderground.com",
+    facebook: "https://www.facebook.com/CQBunderground",
+    instagram: "https://www.instagram.com/cqbunderground",
+    indoorOutdoor: "indoor",
+    admission:
+      "Roughly $25 play + $15 gear rental (per 2021 opening figures); own site also lists membership and private-rental options.",
+    about:
+      "Indoor CQB airsoft arena (~9,000 sq ft) in downtown Bonners Ferry, opened August 2021. Combines a playing arena with a retail counter selling guns, gear, BBs, and accessories; offers open play, private event rentals, and a membership program.",
+    status: "active",
+    dataSource:
+      "own website (cqbunderground.com, live) + Bonners Ferry Herald 2021 feature + Yelp (updated July 2026, no closed tag) + AirsoftC3",
+    lastScraped: "2026-09-19",
+    notes:
+      "This is the real, Idaho-based CQB Underground -- a same-named reference has repeatedly surfaced as a false lead during other states' research (e.g. Colorado, Delaware) with people confusing it for a local business; this one is genuinely headquartered here in Bonners Ferry.",
+  },
+  {
+    id: "homestead-airsoft-bonners-ferry",
+    name: "Homestead Airsoft (Bonner's Airsoft)",
+    city: "Bonners Ferry, ID",
+    address: "828 Pywell Rd, Bonners Ferry, ID 83805",
+    phone: "(704) 315-5831",
+    facebook: "https://www.facebook.com/groups/bonnersairsoft/",
+    indoorOutdoor: "outdoor",
+    admission: "Free / donation-based; 30-player cap, RSVP required; free rental gear sometimes available.",
+    about:
+      "A free, community-run outdoor airsoft field in Bonners Ferry operating on a donation model rather than as a commercial storefront. Distinct from CQB Underground (different address/operators), though both serve the same small North Idaho community.",
+    status: "active",
+    dataSource:
+      "AirsoftC3 listing (last updated 2023-08-30) + an independent yolasite.com site describing the same free/RSVP model at the same address + the group's own Facebook group",
+    lastScraped: "2026-09-19",
+    notes:
+      "Low confidence -- include with caution. No dated recent posts found confirming 2025/2026 activity, though two independent sources agree on the free/RSVP model and address. The listed contact number carries a North Carolina area code, unusual for a small local field -- likely an organizer's personal cell rather than evidence of anything wrong, but worth noting. No evidence of closure.",
+  },
+  {
+    id: "advantage-airsoft-rigby",
+    name: "Advantage Airsoft (Advantage Professional Training)",
+    city: "Rigby, ID",
+    address: "418 N 4014 E, Suite 6, Rigby, ID 83442",
+    phone: "(208) 419-7960",
+    website: "https://advprotraining.com",
+    ownerEmailDomain: "advprotraining.com",
+    facebook: "https://www.facebook.com/AdvantageAirsoftLLC",
+    instagram: "https://www.instagram.com/advantageairsoft",
+    indoorOutdoor: "indoor",
+    about:
+      "East Idaho's largest indoor airsoft venue (a 4,500 sq ft CQB arena called \"The Factory\"), originally opened in Menan in Feb 2019 before relocating to Rigby's old sugar factory/mill building. Also runs a secondary/outdoor field called \"Midway.\" Owners also run a Halloween haunted-house attraction and law-enforcement active-shooter training in the same space.",
+    status: "active",
+    dataSource:
+      "own website (advprotraining.com, live product pages) + East Idaho News feature (Sept 2024) + a confirmed Aug 2025 event listing (AllEvents.in) + Boise Gun Club directory mirror (58 reviews, 5.0 stars)",
+    lastScraped: "2026-09-19",
+    notes:
+      "Rebrand/domain trap resolved: the older branded domain advantage-airsoft.com now shows \"This site is Paused\" -- the business transacts through advprotraining.com today even though its social handles and directory listings still say \"Advantage Airsoft.\" A loosely organized community group, East Idaho Airsoft, has members who play here (and at Air Combat Battlefield below plus informal, non-commercial spots) but has no fixed venue of its own -- not seeded separately.",
+  },
+  {
+    id: "reapers-den-airsoft-pocatello",
+    name: "Reaper's Den Airsoft (at LS Armory)",
+    city: "Pocatello, ID",
+    address: "7804 W Katsilometes Rd, Pocatello, ID 83204",
+    phone: "(208) 530-5503",
+    facebook: "https://www.facebook.com/reaperdenairsoft",
+    instagram: "https://www.instagram.com/reapersden_airsoft_arena",
+    indoorOutdoor: "indoor",
+    about:
+      "Airsoft arena and retail shop built out from an existing firearms training/gun range business (LS Armory), opened January 2025. Has both a 10,000 sq ft outdoor area and a 3,600 sq ft indoor arena, with the indoor side the more heavily promoted current offering. Retail shop hours Tue-Sat noon-7pm (till midnight Fri/Sat); arena open play Wed/Thu 6pm-midnight (including free pizza nights).",
+    status: "facebook_only",
+    dataSource:
+      "Idaho State Journal news article (2025-01-27) + Pocatello-Chubbuck Chamber of Commerce (listed under LS Armory) + TikTok/Instagram + Boise Gun Club directory mirror",
+    lastScraped: "2026-09-19",
+    notes:
+      "The business's own domain (reapersdenairsoft.com) returns a 404 on direct fetch despite being search-indexed -- treated as facebook_only rather than active since no reachable own-website primary source exists, matching this project's usual convention, though the real newspaper feature and Chamber of Commerce listing give solid independent corroboration. Very recently opened (Jan 2025) so has a shorter track record than other entries -- recommend a direct confirmation before treating pricing/hours as fully current.",
+  },
+  {
+    id: "air-combat-battlefield-burley",
+    name: "Air Combat Battlefield",
+    city: "Burley, ID",
+    address: "1050 E 5th Street, Burley, ID 83318",
+    phone: "(208) 650-3678",
+    website: "https://www.aircombatbattlefield.com",
+    ownerEmailDomain: "aircombatbattlefield.com",
+    facebook: "https://www.facebook.com/aircombatbattlefield",
+    indoorOutdoor: "outdoor",
+    admission: "$20 newcomer rental package (M4, goggles, mask, vest, 2 mags); $2 magazine refills.",
+    about:
+      "Outdoor airsoft battlefield (also offers laser tag) in Burley, south-central Idaho, serving the East Idaho Airsoft community. Open for general gameplay most Saturday afternoons, plus scheduled events.",
+    status: "active",
+    dataSource:
+      "own website (aircombatbattlefield.com, live) + East Idaho Airsoft's own \"Fields\" page + YouTube gameplay footage + Boise Gun Club/Vymaps directory entries agreeing on address and phone",
+    lastScraped: "2026-09-19",
+    notes: "Clearly distinguishes its airsoft offering from its own separate laser-tag offering.",
+  },
+  {
+    id: "pyrrhic-tactical-sports-nampa",
+    name: "Pyrrhic Tactical Sports",
+    city: "Nampa, ID",
+    address: "2104 Caldwell Blvd, Nampa, ID 83651",
+    phone: "(208) 629-6229",
+    website: "https://www.pyrrhicpaintball.com",
+    ownerEmailDomain: "pyrrhicpaintball.com",
+    instagram: "https://www.instagram.com/pyrrhicpaintball",
+    indoorOutdoor: "indoor",
+    admission: "Booked via strideevents.com; walk-on and party packages.",
+    about:
+      "The indoor half of the Pyrrhic Tactical Sports brand, billed as \"Idaho's first dedicated indoor Airsoft arena\" -- 4 themed arenas with tracer-tagged guns, alongside laser tag, Nerf, gel-blaster, and VR games in a Nampa storefront. Formally welcomed via a Nampa Chamber of Commerce ribbon-cutting.",
+    status: "active",
+    dataSource:
+      "own website (pyrrhicpaintball.com / lasertagidaho.com) + Nampa Chamber of Commerce ribbon-cutting listing + strideevents.com booking integration",
+    lastScraped: "2026-09-19",
+    notes:
+      "Same parent company and phone number as Pyrrhic Paintball (Caldwell) below -- seeded separately since they are two distinct bookable street addresses.",
+  },
+  {
+    id: "pyrrhic-paintball-caldwell",
+    name: "Pyrrhic Paintball",
+    city: "Caldwell, ID",
+    address: "11809 Ustick Rd, Caldwell, ID 83605",
+    phone: "(208) 629-6229",
+    website: "https://www.paintballboise.com",
+    ownerEmailDomain: "pyrrhicpaintball.com",
+    instagram: "https://www.instagram.com/pyrrhicpaintball",
+    indoorOutdoor: "outdoor",
+    admission: "Airsoft \"Birthday Party\" packages and \"Airsoft Walk-Ons\" (2-3 hr sessions), booked via strideevents.com.",
+    about:
+      "Self-described \"Idaho's #1 Paintball & Airsoft Park\" -- a multi-field outdoor recreation site outside Caldwell offering both paintball and dedicated, separately-priced airsoft sessions and parties. Hours: Sat 10am-8pm, Sun 12-6pm, weekdays by reservation.",
+    status: "active",
+    dataSource:
+      "own website (paintballboise.com / pyrrhicpaintball.com) + Yelp (updated September 2026, not marked closed) + Yellow Pages",
+    lastScraped: "2026-09-19",
+    notes:
+      "Explicitly-priced, separately-scheduled airsoft offering confirmed (not just \"paintball guns allowed\"), satisfying this project's paintball-venue inclusion bar. Same parent company/phone number as Pyrrhic Tactical Sports (Nampa) above.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
