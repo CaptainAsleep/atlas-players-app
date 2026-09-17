@@ -5352,6 +5352,25 @@ const fields = [
     dataSource: "website",
     lastScraped: "2026-09-16",
   },
+  // ---- Kentucky (additional field added 2026-09-17) ---------------------
+  {
+    id: "black-mountain-airsoft-milton",
+    name: "Black Mountain Airsoft",
+    city: "Milton, KY",
+    address: "234 Campbell Hill Rd, Milton, KY 40045",
+    phone: "(502) 269-5422",
+    facebook: "https://www.facebook.com/groups/blackmountainairsoft/",
+    indoorOutdoor: "outdoor",
+    admission: "Free/donation-based -- explicitly run as a not-for-profit \"free place to play for the community\" per the field's own GoFundMe campaign",
+    about:
+      "Veteran-owned, not-for-profit community airsoft field with wooded sections, open fields, buildings, and a village area, built and maintained largely through volunteer community workdays. Hosts organized milsim events, including a multi-day NATO vs. Soviet campaign (\"Operation Crimson Relic\") scheduled May 22-24, 2026.",
+    status: "active",
+    dataSource:
+      "GoFundMe campaign (field improvement fundraiser, confirms address/phone/mission) + AllEvents.in listings for a dated 2025 community build day and a dated May 2026 milsim event + Facebook group",
+    lastScraped: "2026-09-17",
+    notes:
+      "No website -- Facebook group is the field's primary online presence. Explicitly not-for-profit/veteran-owned, so may not be a standard Atlas-booking customer, but included per Michael's request regardless since it's a genuine, currently-active field.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
