@@ -455,6 +455,269 @@ export const bookFreeEvent = onCall(
   }
 );
 
+// Owner-triggered cancellation that also settles what's owed to anyone who
+// already reserved. Not a Stripe refund — Atlas's booking-fee model is a
+// destination charge, so the field owner's cut of a paid booking has
+// already settled into their own Connect account by the time this runs;
+// reaching back into that account to reverse it is a real money-movement
+// risk this doesn't attempt. Instead: every paid booking becomes a
+// digital voucher (same amount the player actually paid), redeemable at
+// a future event at this same field via bookEventWithVoucher below, and
+// every booking (paid or free) gets an in-app notice so the player
+// actually finds out. Bookings themselves are never deleted — same
+// "keep the real record" choice already made for deleteEvent/canceled
+// events elsewhere in this app.
+export const cancelEventWithVouchers = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const eventId = request.data?.eventId;
+    if (!eventId) {
+      throw new HttpsError("invalid-argument", "Missing eventId.");
+    }
+
+    const db = getFirestore();
+    const eventRef = db.collection("events").doc(eventId);
+    const eventSnap = await eventRef.get();
+    if (!eventSnap.exists) {
+      throw new HttpsError("not-found", "Event not found.");
+    }
+    const eventData = eventSnap.data();
+
+    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
+    if (!fieldSnap.exists || fieldSnap.data().ownerId !== uid) {
+      throw new HttpsError("permission-denied", "You don't own this event's field.");
+    }
+    const fieldData = fieldSnap.data();
+
+    if (eventData.canceled) {
+      // Already canceled — nothing new to do, but don't error the owner
+      // app out of a clean UI state over a double-tap.
+      return { canceled: true, vouchersIssued: 0 };
+    }
+
+    const bookingsSnap = await eventRef.collection("bookings").get();
+    const now = new Date();
+
+    // Chunked batches, not one giant batch — each paid booking touches up
+    // to 4 docs (voucher, both booking-doc stamps, notice) while a free
+    // booking touches just 1 (notice only), so 100 bookings per chunk
+    // stays comfortably under Firestore's 500-writes-per-batch cap even
+    // for an all-paid roster. The event's own canceled flag rides along
+    // in the first chunk (or its own chunk, if there are zero bookings).
+    const CHUNK_SIZE = 100;
+    let vouchersIssued = 0;
+    const docs = bookingsSnap.docs;
+    for (let i = 0; i === 0 || i < docs.length; i += CHUNK_SIZE) {
+      const batch = db.batch();
+      if (i === 0) {
+        batch.update(eventRef, { canceled: true, canceledAt: FieldValue.serverTimestamp() });
+      }
+      const chunk = docs.slice(i, i + CHUNK_SIZE);
+      for (const bookingDoc of chunk) {
+        const b = bookingDoc.data();
+        const playerUid = bookingDoc.id; // booking doc id is the player's uid
+        const userBookingRef = db.collection("users").doc(playerUid).collection("bookings").doc(eventId);
+        const noticeRef = db.collection("users").doc(playerUid).collection("cancellationNotices").doc();
+
+        let voucherId = null;
+        let voucherAmountCents = null;
+        if (b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0) {
+          const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
+          voucherId = voucherRef.id;
+          voucherAmountCents = b.amountPaidCents;
+          batch.set(voucherRef, {
+            fieldId: eventData.fieldId,
+            fieldName: eventData.fieldName || fieldData.name || null,
+            amountCents: voucherAmountCents,
+            originalAmountCents: voucherAmountCents,
+            status: "active",
+            sourceEventId: eventId,
+            sourceEventTitle: eventData.title || null,
+            issuedAt: now,
+            redeemedAt: null,
+            redeemedEventId: null,
+            redeemedEventTitle: null,
+          });
+          batch.update(bookingDoc.ref, { voucherIssuedId: voucherId });
+          batch.update(userBookingRef, { voucherIssuedId: voucherId });
+          vouchersIssued += 1;
+        }
+
+        batch.set(noticeRef, {
+          type: "event_canceled",
+          eventId,
+          eventTitle: eventData.title || null,
+          fieldId: eventData.fieldId,
+          fieldName: eventData.fieldName || fieldData.name || null,
+          voucherId,
+          voucherAmountCents,
+          createdAt: now,
+          acknowledged: false,
+        });
+      }
+      await batch.commit();
+      if (docs.length === 0) break;
+    }
+
+    return { canceled: true, vouchersIssued };
+  }
+);
+
+// The redemption side of cancelEventWithVouchers above — lets a player use
+// an active, field-scoped voucher to book a future event at that same
+// field, entirely without Stripe. Deliberately full-cover-only for now: a
+// voucher can only be applied when its balance covers the whole cost of
+// this booking (no combining with a card charge, no stacking two
+// vouchers) — this keeps the live Stripe Checkout path in
+// createBookingCheckout completely untouched by this feature. Any
+// leftover balance beyond what this booking costs is kept, not forfeited
+// — a bigger voucher just becomes a smaller one, still usable at this
+// same field later, rather than disappearing.
+export const bookEventWithVoucher = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in to book.");
+    }
+    const uid = request.auth.uid;
+    const eventId = request.data?.eventId;
+    const voucherId = request.data?.voucherId;
+    if (!eventId || !voucherId) {
+      throw new HttpsError("invalid-argument", "Missing eventId or voucherId.");
+    }
+
+    const db = getFirestore();
+    const eventRef = db.collection("events").doc(eventId);
+    const bookingRef = eventRef.collection("bookings").doc(uid);
+    const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
+    const voucherRef = db.collection("users").doc(uid).collection("vouchers").doc(voucherId);
+
+    const eventSnap = await eventRef.get();
+    if (!eventSnap.exists) {
+      throw new HttpsError("not-found", "Event not found.");
+    }
+    const eventData = eventSnap.data();
+
+    if (eventData.canceled) {
+      throw new HttpsError("failed-precondition", "This event has been canceled.");
+    }
+
+    if (eventData.waiver) {
+      const sigSnap = await db.collection("waiverSignatures").doc(`${uid}_${eventId}`).get();
+      if (!sigSnap.exists) {
+        throw new HttpsError("failed-precondition", "Waiver must be signed before booking.");
+      }
+    }
+
+    if (typeof eventData.maxCapacity === "number" && (eventData.bookedCount || 0) >= eventData.maxCapacity) {
+      throw new HttpsError("failed-precondition", "This event is full.");
+    }
+
+    const existingBooking = await bookingRef.get();
+    if (existingBooking.exists) {
+      throw new HttpsError("already-exists", "Already booked for this event.");
+    }
+
+    // Same price resolution as createBookingCheckout — a voucher redeems
+    // against the real total the player would otherwise owe, fee
+    // included. feeModel lives on the owner's own doc, which the player
+    // app can't read directly, so this (like the Stripe path) has to be
+    // the one place that actually knows the real number.
+    const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
+    if (!entryPriceCents || entryPriceCents <= 0) {
+      throw new HttpsError("failed-precondition", "This event doesn't have a valid price set — book it as a free event instead.");
+    }
+    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
+    const fieldData = fieldSnap.data() || {};
+    const ownerSnap = fieldData.ownerId ? await db.collection("owners").doc(fieldData.ownerId).get() : null;
+    const ownerData = ownerSnap?.data() || {};
+    const bookingFeeCents = computeStandardFee(entryPriceCents);
+    const passFeeToPlayer = ownerData.feeModel !== "absorb";
+    const totalCents = passFeeToPlayer ? entryPriceCents + bookingFeeCents : entryPriceCents;
+
+    const profileSnap = await db.collection("users").doc(uid).get();
+    const profileData = profileSnap.data() || {};
+    const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: selectedChoice.priceCents } : {};
+
+    await db.runTransaction(async (t) => {
+      const [voucherSnap, freshEventSnap, freshBookingSnap] = await Promise.all([
+        t.get(voucherRef),
+        t.get(eventRef),
+        t.get(bookingRef),
+      ]);
+      if (!voucherSnap.exists) {
+        throw new HttpsError("not-found", "Voucher not found.");
+      }
+      const voucher = voucherSnap.data();
+      if (voucher.status !== "active") {
+        throw new HttpsError("failed-precondition", "This voucher has already been used.");
+      }
+      if (voucher.fieldId !== eventData.fieldId) {
+        throw new HttpsError("failed-precondition", "This voucher isn't valid at this field.");
+      }
+      if (freshBookingSnap.exists) {
+        throw new HttpsError("already-exists", "Already booked for this event.");
+      }
+      const freshEventData = freshEventSnap.data();
+      if (freshEventData.canceled) {
+        throw new HttpsError("failed-precondition", "This event has been canceled.");
+      }
+      if (typeof freshEventData.maxCapacity === "number" && (freshEventData.bookedCount || 0) >= freshEventData.maxCapacity) {
+        throw new HttpsError("failed-precondition", "This event is full.");
+      }
+      if (voucher.amountCents < totalCents) {
+        throw new HttpsError(
+          "failed-precondition",
+          `This voucher ($${(voucher.amountCents / 100).toFixed(2)}) doesn't cover this event's full cost ($${(totalCents / 100).toFixed(2)}) — book with a card instead.`
+        );
+      }
+
+      const now = new Date();
+      const remainingCents = voucher.amountCents - totalCents;
+      t.set(bookingRef, {
+        uid,
+        fieldId: eventData.fieldId,
+        teamId: profileData.teamId || null,
+        callsign: profileData.callsign || "Player",
+        avatarUrl: profileData.avatarUrl || null,
+        bookedAt: now,
+        paid: true,
+        paidByVoucher: true,
+        voucherRedeemedId: voucherId,
+        voucherAppliedCents: totalCents,
+        ...choiceFields,
+      });
+      t.set(userBookingRef, {
+        eventId,
+        fieldId: eventData.fieldId,
+        eventTitle: eventData.title || null,
+        fieldName: eventData.fieldName || null,
+        date: eventData.date || null,
+        endDate: eventData.endDate || null,
+        bookedAt: now,
+        paid: true,
+        paidByVoucher: true,
+        voucherRedeemedId: voucherId,
+        selectedChoiceLabel: selectedChoice?.label || null,
+      });
+      t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + 1 });
+      t.update(voucherRef, {
+        amountCents: remainingCents,
+        status: remainingCents > 0 ? "active" : "redeemed",
+        redeemedAt: now,
+        redeemedEventId: eventId,
+        redeemedEventTitle: eventData.title || null,
+      });
+    });
+
+    return { booked: true };
+  }
+);
+
 // Real Stripe events land here, not the checkout redirect — a person can
 // land on the success_url above without payment actually having gone
 // through, so the redirect is only ever immediate visual feedback. This

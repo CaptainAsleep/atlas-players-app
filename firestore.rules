@@ -313,6 +313,34 @@ service cloud.firestore {
         allow read: if true;
         allow write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Digital vouchers issued when an owner cancels an event a player
+      // already paid to attend — see cancelEventWithVouchers. Same trust
+      // model as owners/{ownerId}'s Stripe-derived fields: only ever
+      // written by a Cloud Function via the Admin SDK (issued at
+      // cancellation, decremented/redeemed at booking via
+      // bookEventWithVoucher), never directly by a client, since a
+      // client-writable balance here would be real, spendable money.
+      match /vouchers/{voucherId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow write: if false;
+      }
+
+      // In-app notices — currently just "an event you reserved was
+      // canceled," with a voucher amount if one was issued. Same
+      // Cloud-Function-only create as vouchers above, since these are
+      // written to another user's subcollection (the canceling owner
+      // isn't the notice's own recipient) and a client can't safely be
+      // trusted to write into someone else's data. The one thing the
+      // recipient CAN do themselves is dismiss it, narrowed to just the
+      // acknowledged field — same single-field self-update idiom already
+      // used for owners/{ownerId} and event bookings' checkedIn.
+      match /cancellationNotices/{noticeId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, delete: if false;
+        allow update: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["acknowledged"]);
+      }
     }
 
     // Collection-group read for the admin portal's "patches received"

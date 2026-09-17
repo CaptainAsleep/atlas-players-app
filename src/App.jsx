@@ -21,6 +21,7 @@ import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCa
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions } from "./hooks/useBookings";
+import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { FONTS } from "./theme";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 
@@ -1475,7 +1476,8 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
 }
 
 function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
-  myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout }) {
+  myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout,
+  fieldVouchers, redeemVoucher }) {
   const { T, display, body, mono, theme } = useTheme();
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   const isPast = (ev.endDate || ev.date) < localDateStr();
@@ -1500,6 +1502,21 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const [signError, setSignError] = useState("");
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const [voucherBusy, setVoucherBusy] = useState(false);
+  const [voucherError, setVoucherError] = useState("");
+  // Tracks whether the currently-open waiver sheet was opened from the
+  // "Use Voucher" affordance rather than the normal Reserve button, so
+  // handleSign (below) knows which action to resume once the signature
+  // saves — signing is a shared first step for either path.
+  const [pendingVoucherRedeem, setPendingVoucherRedeem] = useState(false);
+  // Best-fit voucher for this event's field — largest balance first, since
+  // that's the one most likely to fully cover this event's cost (v1 is
+  // full-cover-only; exact sufficiency is arbitrated server-side in
+  // bookEventWithVoucher, since the fee-inclusive total depends on the
+  // field owner's feeModel, which this app can't read directly).
+  const bestFieldVoucher = fieldVouchers && fieldVouchers.length > 0
+    ? [...fieldVouchers].sort((a, b) => b.amountCents - a.amountCents)[0]
+    : null;
   const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
@@ -1557,11 +1574,48 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
   const handleBook = () => {
     if (choiceMissing) return; // Reserve is already disabled for this case — just a defensive no-op
+    setPendingVoucherRedeem(false); // defensive — a prior, uncompleted "Use Voucher" waiver attempt shouldn't hijack a normal Reserve
     if (waiverBlocking) {
       setShowWaiver(true);
       return;
     }
     proceedToBook();
+  };
+
+  // Redeems the best-fit field voucher instead of going through
+  // bookEvent/createBookingCheckout — no Stripe involved at all here, so
+  // there's no checkout tab to open and no webhook to wait on; a
+  // successful call means the booking already exists by the time this
+  // returns. A voucher that doesn't fully cover this event throws
+  // failed-precondition with a message that's safe to show as-is.
+  //
+  // Split the same way proceedToBook/handleBook are: this half does the
+  // actual work with no gating re-checks, so handleSign below can resume
+  // straight into it right after a waiver signature saves without racing
+  // the `signature` prop's own listener catching up.
+  const proceedToRedeemVoucher = async () => {
+    if (!bestFieldVoucher) return;
+    setVoucherBusy(true);
+    setVoucherError("");
+    const location = await getQuickLocation();
+    try {
+      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location);
+      setVoucherBusy(false);
+    } catch (err) {
+      console.error("voucher redemption failed:", err.code || err.message || err);
+      setVoucherError(err.message || "Couldn't apply that voucher — try again, or book normally.");
+      setVoucherBusy(false);
+    }
+  };
+
+  const handleRedeemVoucher = () => {
+    if (!bestFieldVoucher || choiceMissing) return;
+    if (waiverBlocking) {
+      setPendingVoucherRedeem(true);
+      setShowWaiver(true);
+      return;
+    }
+    proceedToRedeemVoucher();
   };
 
   const handleCancel = async () => {
@@ -1612,9 +1666,15 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       });
       setShowWaiver(false);
       // Signing is step one of booking now, not a standalone action —
-      // proceed straight into the real booking the moment the signature
-      // saves, rather than making the player tap "Reserve" a second time.
-      await proceedToBook();
+      // proceed straight into the real booking (or voucher redemption,
+      // whichever this signature was actually for) the moment the
+      // signature saves, rather than making the player tap a second time.
+      if (pendingVoucherRedeem) {
+        setPendingVoucherRedeem(false);
+        await proceedToRedeemVoucher();
+      } else {
+        await proceedToBook();
+      }
     } catch (err) {
       setSignError("Couldn't save your signature — try again.");
     } finally {
@@ -1761,6 +1821,30 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               </div>
               {choiceMissing && (
                 <p className="text-[11px] mt-2" style={{ ...body, color: T.accent }}>Choose one to continue.</p>
+              )}
+            </div>
+          )}
+
+          {bestFieldVoucher && !myBooking && !isPast && !ev.canceled && (
+            <div className="p-4" style={{ background: T.tintGood, borderRadius: T.rCard }}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Ticket size={16} color={T.good} className="flex-shrink-0" />
+                  <div className="text-[12px] font-medium" style={{ ...body, color: T.ash }}>
+                    {bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher available at this field
+                  </div>
+                </div>
+                <button
+                  onClick={handleRedeemVoucher}
+                  disabled={voucherBusy || bookingBusy || choiceMissing}
+                  className="px-3 py-2 text-[12px] font-semibold flex-shrink-0"
+                  style={{ ...display, background: T.good, color: T.inverse, borderRadius: T.rPill, opacity: voucherBusy || bookingBusy || choiceMissing ? 0.6 : 1 }}
+                >
+                  {voucherBusy ? "…" : "Use Voucher"}
+                </button>
+              </div>
+              {voucherError && (
+                <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{voucherError}</p>
               )}
             </div>
           )}
@@ -3789,7 +3873,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers }) {
   const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
@@ -3967,6 +4051,28 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
             {copied ? "Copied!" : "Copy Invite Link"}
           </button>
         </div>
+
+        {vouchers && vouchers.length > 0 && (
+          <>
+            <Eyebrow>Vouchers</Eyebrow>
+            <div className="mb-5 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+              {vouchers.map((v) => (
+                <div key={v.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Ticket size={16} color={T.good} className="flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium truncate" style={{ ...body, color: T.ash }}>{v.fieldName || "Unknown field"}</div>
+                      <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>From "{v.sourceEventTitle || "a canceled event"}"</div>
+                    </div>
+                  </div>
+                  <div className="text-[14px] font-semibold flex-shrink-0" style={{ ...mono, color: T.good }}>
+                    {v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         <Eyebrow>Account Settings</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -4595,6 +4701,61 @@ function WelcomeSplashScreen({ onContinue }) {
 // never feels like a wall of clutter. Advances through the stack and
 // marks each patch seen as it's dismissed; naturally disappears once
 // there's nothing left unseen.
+// One-at-a-time popup for "an event you reserved was canceled" —
+// useCancellationNotices already narrows this down to the single oldest
+// unacknowledged notice, so this component just has to render it and
+// clear it on dismiss. Deliberately a modal card (Ticket dialogs
+// elsewhere in this app use the same dim-background + centered-panel
+// idiom), not a full-screen takeover like PatchUnlockedOverlay below —
+// this is a heads-up, not a celebration.
+function CancellationNoticeModal({ notice, onDismiss }) {
+  const { T, display, body } = useTheme();
+  const [dismissing, setDismissing] = useState(false);
+
+  const handleDismiss = async () => {
+    setDismissing(true);
+    try {
+      await onDismiss();
+    } catch (err) {
+      console.error("acknowledgeNotice failed:", err);
+      setDismissing(false);
+    }
+  };
+
+  const amount = typeof notice.voucherAmountCents === "number" ? notice.voucherAmountCents / 100 : null;
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.55)", zIndex: 2500 }}>
+      <div className="w-full p-5" style={{ background: T.panel, borderRadius: T.rCard, maxWidth: 340, boxShadow: T.shadowLg }}>
+        <div className="w-10 h-10 mb-3 flex items-center justify-center" style={{ background: T.tint, borderRadius: T.rPill }}>
+          <Ticket size={18} color={T.accent} />
+        </div>
+        <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Event canceled</div>
+        <p className="text-[13px] mb-3" style={{ ...body, color: T.ashDim }}>
+          "{notice.eventTitle || "An event"}" at {notice.fieldName || "the field"} was canceled by the field owner.
+        </p>
+        {amount != null ? (
+          <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
+            You've received a <strong>${amount % 1 === 0 ? amount : amount.toFixed(2)} voucher</strong>, good for a future event at {notice.fieldName || "this field"}.
+          </p>
+        ) : (
+          <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>
+            This was a free reservation, so there's nothing further to settle.
+          </p>
+        )}
+        <button
+          onClick={handleDismiss}
+          disabled={dismissing}
+          className="w-full py-2.5 text-[13px] font-semibold"
+          style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: dismissing ? 0.6 : 1 }}
+        >
+          {dismissing ? "…" : "Got it"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
   const { T, display, body, mono } = useTheme();
   const [index, setIndex] = useState(0);
@@ -4773,6 +4934,9 @@ function AppShell() {
   const { interested: whosInterested, interestedLoading: whosInterestedLoading } = useEventInterested(activeEvent?.id);
   const { bookings: myBookings, bookingsLoading: myBookingsLoading } = useMyBookings(user?.uid);
   const { bookEvent, cancelBooking, createBookingCheckout } = useBookingActions();
+  const { vouchers: myVouchers } = useMyVouchers(user?.uid);
+  const { noticeToShow, acknowledgeNotice } = useCancellationNotices(user?.uid);
+  const { redeemVoucher } = useVoucherRedemption();
 
   // Closes the check-in patch loop: whenever a checked-in booking's event
   // has a reward patch attached, and this player doesn't already have a
@@ -4958,6 +5122,8 @@ function AppShell() {
         bookEvent={bookEvent}
         cancelBooking={cancelBooking}
         createBookingCheckout={createBookingCheckout}
+        fieldVouchers={activeEvent ? myVouchers.filter((v) => v.fieldId === activeEvent.fieldId) : []}
+        redeemVoucher={redeemVoucher}
       />
     ) : (
       <div className="h-full flex items-center justify-center" style={{ backgroundColor: T.void }}>
@@ -5068,6 +5234,7 @@ function AppShell() {
         favorites={favorites}
         events={events}
         patches={patches}
+        vouchers={myVouchers}
       />
     );
   } else if (screen === "account") {
@@ -5106,6 +5273,9 @@ function AppShell() {
       </div>
       {user && profile && !installGate && (
         <PatchUnlockedOverlay unseenPatches={patches.filter((p) => p.seen === false)} user={user} markPatchSeen={markPatchSeen} />
+      )}
+      {user && profile && !installGate && noticeToShow && (
+        <CancellationNoticeModal notice={noticeToShow} onDismiss={() => acknowledgeNotice(noticeToShow.id)} />
       )}
     </div>
   );
