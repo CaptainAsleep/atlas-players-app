@@ -3805,13 +3805,13 @@ const fields = [
     instagram: "https://www.instagram.com/tacticalairsoftarena/",
     indoorOutdoor: "indoor",
     admission:
-      "Not separately published for Manassas; its sister Rockville, MD location charges $28 admission / $25 rental / $47 all-weekend pass, likely comparable",
+      "Not separately published for Manassas; its sister Rockville, MD location (see tactical-airsoft-arena-rockville, added 2026-09-18) confirms $28 admission / $25 rental / $47 all-weekend pass, likely comparable",
     about:
       "7,800-sq-ft indoor airsoft arena with reconfigurable modular plywood walls, forming the second location (opened 2018) of a chain whose first arena opened in Rockville, MD in 2008. Combined, the two locations offer 10,000+ sq ft of playable space.",
     status: "active",
     dataSource: "website (shared chain site) + Facebook + Instagram + YouTube + Yelp/Tripadvisor (4.7 stars, 273 reviews) + industry press (RGK Airsoft)",
     lastScraped: "2026-09-11",
-    notes: "Hours: Wed & Fri 6pm-11pm, Sat 2pm-10pm, Sun 11am-7pm. The shared website (tacticalairsoftarena.com) primarily surfaces the Rockville, MD address — Manassas-specific pricing wasn't independently found.",
+    notes: "Hours: Wed & Fri 6pm-11pm, Sat 2pm-10pm, Sun 11am-7pm. The shared website (tacticalairsoftarena.com) primarily surfaces the Rockville, MD address — Manassas-specific pricing wasn't independently found. The Rockville, MD flagship location is now also seeded separately as part of the Maryland batch.",
   },
   {
     id: "valhalla-tactical-airsoft",
@@ -5370,6 +5370,166 @@ const fields = [
     lastScraped: "2026-09-17",
     notes:
       "No website -- Facebook group is the field's primary online presence. Explicitly not-for-profit/veteran-owned, so may not be a standard Atlas-booking customer, but included per Michael's request regardless since it's a genuine, currently-active field.",
+  },
+  // ---- Maryland (added 2026-09-18) ---------------------------------------
+  {
+    id: "replay-airsoft-baltimore",
+    name: "Replay Airsoft",
+    city: "Baltimore, MD",
+    address: "6801 Eastern Ave, Suite 118, Baltimore, MD 21224",
+    website: "https://www.replayairsoft.com",
+    facebook: "https://www.facebook.com/ReplayAirsoft/",
+    instagram: "https://www.instagram.com/replayairsoft/",
+    indoorOutdoor: "indoor",
+    admission:
+      "Not independently confirmed (own site rate-limited automated fetches during research); markets itself as \"Maryland's BIGGEST indoor arena\" with free protective gear included and a half-price Thursday military/first-responder promo",
+    about:
+      "Indoor CQB airsoft arena, recently relocated to this Eastern Ave, Baltimore address per Michael. Protective gear included free with admission; runs military/first-responder discount promotions.",
+    status: "active",
+    dataSource:
+      "supplied directly by Michael (address, hours, website) + Facebook/X/Instagram corroboration",
+    lastScraped: "2026-09-18",
+    notes:
+      "Hours per Michael: Wed-Fri 6pm-10pm, Sat 3pm-10pm, Sun 3pm-9pm (closed Mon-Tue). Instagram profile still geo-tags the business as \"Glen Burnie, MD\" -- its prior address before the recent move to this Baltimore location; the current Eastern Ave address is per Michael and is a real, distinct commercial property (confirmed via commercial real-estate listings), not a stale-directory artifact. No phone number or exact admission pricing independently confirmed -- own site returned rate-limit (429) errors on repeated fetch attempts during this research.",
+  },
+  {
+    id: "robinhood-adventure-park-havre-de-grace",
+    name: "Robinhood Adventure Park",
+    city: "Havre de Grace, MD",
+    address: "2429 Old Robinhood Rd, Havre de Grace, MD 21078",
+    phone: "(410) 838-6856",
+    website: "https://www.robinhoodadventurepark.com",
+    indoorOutdoor: "outdoor",
+    admission: "Airsoft walk-on ~$25 online / $30 at door; rental package +$30",
+    about:
+      "Combined paintball/airsoft/gel blaster/Nerf/laser tag outdoor adventure park -- 10 acres of themed fields plus 35 additional acres for larger airsoft operations. Successor business to the now-closed East Coast Airsoft Arena (Bel Air/Forest Hill), under the same ownership.",
+    status: "active",
+    dataSource:
+      "own website (robinhoodadventurepark.com) + VisitMaryland listing + Patch news coverage of its opening + Facebook",
+    lastScraped: "2026-09-18",
+    notes:
+      "An old prior domain (robinhoodpaintball.net) now hosts an unrelated hijacked gambling-spam site -- do not use or link that domain; robinhoodadventurepark.com is the only correct current site.",
+  },
+  {
+    id: "southern-maryland-paintball-newburg",
+    name: "Southern Maryland Paintball (SMP)",
+    city: "Newburg, MD",
+    address: "11272 Edge Hill Rd, Newburg, MD 20664",
+    phone: "(240) 419-9626",
+    website: "https://www.southernmdpaintball.com/airsoft-at-smp/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-primary outdoor venue (also offers axe throwing) with a genuine, dedicated separate airsoft program and field, confirmed via its own site's dedicated airsoft page. Sister location to North East Adventure Paintball & Airsoft (below); both cross-promote a shared 2026 event calendar.",
+    status: "active",
+    dataSource:
+      "own website (dedicated /airsoft-at-smp/ page) + a 2026 summer camp/event listing (sportscarnival.com) + an Axcitement feature (May 2026)",
+    lastScraped: "2026-09-18",
+    notes:
+      "Included per this project's paintball-venue inclusion bar since airsoft is a genuine, separately-marketed program, not just \"paintball guns allowed.\" Itemized airsoft pricing wasn't found on the page fetched.",
+  },
+  {
+    id: "nr-adventure-park-taneytown",
+    name: "NR Adventure Park",
+    city: "Taneytown, MD",
+    address: "3939 Old Taneytown Rd, Taneytown, MD 21787",
+    phone: "(410) 756-4200",
+    website: "https://www.nradventurepark.com",
+    indoorOutdoor: "outdoor",
+    about:
+      "26+ acre outdoor paintball and airsoft park with woodsball, military, urban, and turf fields. This address previously operated as \"Paintball Adventure Park\" (now shown closed on Yelp) and separately absorbed the customer base of the now-closed Route 40 Paintball Park (White Marsh) -- NR's own site runs a page titled \"Route 40 Paintball Closed? Play at NR Adventure Park!\" Genuine, separate airsoft offering alongside paintball.",
+    status: "active",
+    dataSource:
+      "own website (nradventurepark.com) + Yelp (updated May 2026) + Tripadvisor (active 2026 reviews) + Facebook",
+    lastScraped: "2026-09-18",
+    notes:
+      "Rebrand/consolidation chain -- do not separately list \"Paintball Adventure Park\"/\"Paintball Adventures Park\" (same address, now closed under that name) or Route 40 Paintball Park (White Marsh, closed, paintball-only) as distinct fields.",
+  },
+  {
+    id: "north-east-adventure-paintball-airsoft",
+    name: "North East Adventure Paintball & Airsoft (NEA)",
+    city: "North East, MD",
+    address: "2235 Pulaski Hwy, North East, MD 21901",
+    phone: "(667) 365-0351",
+    website: "https://www.neapaintball.com",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor venue in Cecil County offering paintball, airsoft, and GellyBall as distinct activities across 5 dedicated field configurations. Sister location to Southern Maryland Paintball (above); the two cross-promote a shared 2026 event calendar.",
+    status: "active",
+    dataSource: "own website (neapaintball.com) + Facebook",
+    lastScraped: "2026-09-18",
+    notes: "",
+  },
+  {
+    id: "tactical-airsoft-arena-rockville",
+    name: "Tactical Airsoft Arena (Rockville)",
+    city: "Rockville, MD",
+    address: "20B Southlawn Court, Rockville, MD 20850",
+    phone: "(301) 838-7474",
+    website: "https://www.tacticalairsoftarena.com",
+    facebook: "https://www.facebook.com/tacticalairsoftarena/",
+    instagram: "https://www.instagram.com/tacticalairsoftarena/",
+    indoorOutdoor: "indoor",
+    admission:
+      "$28 admission / $25 rental / $47 all-weekend pass; 20% military/first-responder discount",
+    about:
+      "The original/flagship location (opened 2008) of a two-location Maryland/Virginia indoor CQB airsoft arena chain -- the sister Manassas, VA location (opened 2018, see tactical-airsoft-arena-manassas) shares this same website and social accounts. Private parties and organized play; a CBS Baltimore feature named it among the \"Best Paintball Arenas Near Baltimore.\"",
+    status: "active",
+    dataSource:
+      "own website (tacticalairsoftarena.com, shared chain site) + Yelp (updated August 2026, 75 reviews) + CBS Baltimore feature + Facebook/Instagram",
+    lastScraped: "2026-09-18",
+    notes:
+      "Two distinct id-separate physical locations under one brand/shared website, same multi-location-chain pattern used throughout this project. See tactical-airsoft-arena-manassas for the VA sister location.",
+  },
+  {
+    id: "outdoor-xtreme-chesapeake-city",
+    name: "Outdoor Xtreme Chesapeake City Paintball & Airsoft (OXCC)",
+    city: "Chesapeake City, MD",
+    address: "2941 Old Telegraph Rd, Chesapeake City, MD 21915",
+    phone: "(410) 885-5555",
+    website: "https://www.oxcc.com",
+    indoorOutdoor: "outdoor",
+    admission: "Airsoft walk-ons Saturday and Sunday; private parties available weekdays by arrangement",
+    about:
+      "Outdoor venue in Cecil County offering paintball, airsoft, and GellyBall as genuinely separate activities, with rental equipment available. Part of the multi-state \"Outdoor Xtreme\" chain (see also Outdoor Xtreme Linglestown, PA).",
+    status: "active",
+    dataSource:
+      "own website (oxcc.com, confirmed reachable) + Yelp (updated June 2026) + Tripadvisor (active 2026 listing) + YouTube",
+    lastScraped: "2026-09-18",
+    notes:
+      "Own site returned an intermittent 503 error on a first fetch attempt but loaded cleanly on retry -- confirmed reachable, not a dead domain.",
+  },
+  {
+    id: "paintball-sportsland-frederick",
+    name: "Paintball Sportsland, Inc.",
+    city: "Frederick, MD",
+    address: "10418 Old Liberty Rd, Frederick, MD 21701",
+    facebook: "https://www.facebook.com/PBSLINC",
+    indoorOutdoor: "outdoor",
+    about:
+      "\"Paintball and Airsoft games every weekend, year round\" per the business's own description. Operates rain or shine.",
+    status: "facebook_only",
+    dataSource:
+      "Yelp (updated May 2026) + Tripadvisor (active 2026 reviews) + Nextdoor + Facebook -- own website (paintball-sportsland.com) returned a 503 server error on every fetch attempt across multiple retries during this research",
+    lastScraped: "2026-09-18",
+    notes:
+      "Set to facebook_only per this project's standing convention: when a business's own website cannot be confirmed reachable as a primary source, that status applies regardless of how much independent third-party corroboration exists (same treatment as KDK Airsoft/MO and Reaper's Den Airsoft/ID). Phone number found only inconsistently across sources; omitted rather than guessed.",
+  },
+  {
+    id: "elite-gaming-delmarva-salisbury",
+    name: "Elite Gaming Delmarva",
+    city: "Salisbury, MD",
+    address: "337 Civic Ave, Salisbury, MD 21804",
+    facebook: "https://www.facebook.com/Elitegamingdelmarva/",
+    indoorOutdoor: "indoor",
+    admission: "Party packages from $350/2hrs for 12 people, ages 12+",
+    about:
+      "Indoor airsoft CQB arena on the Eastern Shore/Delmarva Peninsula, marketed as new to the Salisbury area. Books via an online Square scheduling page rather than its own site directly.",
+    status: "facebook_only",
+    dataSource:
+      "live Square booking page (square.site/book/CJT148QDYXXR4/elite-gaming-delmarva-salisbury-md, shows current hours: Thu 6-10pm, Fri/Sat until midnight, Sun 12-10pm, closed Mon-Wed) + Facebook/X/YouTube -- own domain (elitegamingdelmarva.com) failed to resolve on every fetch attempt during this research",
+    lastScraped: "2026-09-18",
+    notes:
+      "Set to facebook_only per this project's standing convention for an unreachable own domain, despite the live, current Square booking calendar as corroboration (same treatment as Reaper's Den Airsoft/ID). Suite number is inconsistent across third-party sources (Suite 10 vs. Suite 40 both appear) -- omitted from the address rather than guessed; recommend confirming directly before this becomes a claimable listing.",
   },
 ];
 
