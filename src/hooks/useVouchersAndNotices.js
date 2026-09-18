@@ -80,11 +80,12 @@ export function useCancellationNotices(uid) {
 }
 
 // Redeems an active voucher against a future event at the same field —
-// entirely server-side (no Stripe involved at all), since the real total
-// this booking would otherwise cost (fee-inclusive) depends on the
-// field owner's feeModel, which the player app can't read directly. A
-// voucher that doesn't fully cover the cost throws failed-precondition
-// with a message safe to show as-is.
+// entirely server-side, no Stripe involved at all. Compared against the
+// new event's bare ticket price only, never a fee-inclusive total: the
+// player already paid Atlas's platform fee once, on the original
+// canceled booking, and isn't charged a second one just to spend the
+// credit it left them. A voucher that doesn't cover the ticket price
+// throws failed-precondition with a message safe to show as-is.
 export function useVoucherRedemption() {
   async function redeemVoucher(eventId, voucherId, selectedChoiceId, location) {
     const call = httpsCallable(functions, "bookEventWithVoucher");

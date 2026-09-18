@@ -1502,21 +1502,29 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const [signError, setSignError] = useState("");
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingError, setBookingError] = useState("");
-  const [voucherBusy, setVoucherBusy] = useState(false);
-  const [voucherError, setVoucherError] = useState("");
-  // Tracks whether the currently-open waiver sheet was opened from the
-  // "Use Voucher" affordance rather than the normal Reserve button, so
-  // handleSign (below) knows which action to resume once the signature
-  // saves — signing is a shared first step for either path.
+  // Whether the player has opted to apply their voucher to THIS booking —
+  // a single toggle inline with the normal reserve flow, not a separate
+  // button/action. One shared busy/error state (bookingBusy/bookingError
+  // above) covers both the voucher and normal-payment paths now, since
+  // there's only ever one primary action button below.
+  const [applyVoucher, setApplyVoucher] = useState(false);
+  // Tracks whether the currently-open waiver sheet was opened while the
+  // voucher toggle was on, so handleSign (below) knows which action to
+  // resume once the signature saves — signing is a shared first step for
+  // either path.
   const [pendingVoucherRedeem, setPendingVoucherRedeem] = useState(false);
   // Best-fit voucher for this event's field — largest balance first, since
-  // that's the one most likely to fully cover this event's cost (v1 is
-  // full-cover-only; exact sufficiency is arbitrated server-side in
-  // bookEventWithVoucher, since the fee-inclusive total depends on the
-  // field owner's feeModel, which this app can't read directly).
+  // that's the one most likely to cover this event's ticket price. A
+  // voucher never has a fee added back onto what it needs to cover (the
+  // player already paid Atlas's fee once, on the original canceled
+  // booking), so unlike the real Stripe total, "does it cover this?" is
+  // exact, client-computable math — no server round-trip needed just to
+  // decide whether to show the option.
   const bestFieldVoucher = fieldVouchers && fieldVouchers.length > 0
     ? [...fieldVouchers].sort((a, b) => b.amountCents - a.amountCents)[0]
     : null;
+  const voucherCoversCost = !!bestFieldVoucher && entryPriceCents > 0 && bestFieldVoucher.amountCents >= entryPriceCents;
+  const usingVoucher = applyVoucher && voucherCoversCost;
   const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
@@ -1572,50 +1580,58 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     }
   };
 
-  const handleBook = () => {
-    if (choiceMissing) return; // Reserve is already disabled for this case — just a defensive no-op
-    setPendingVoucherRedeem(false); // defensive — a prior, uncompleted "Use Voucher" waiver attempt shouldn't hijack a normal Reserve
+  // Redeems the best-fit field voucher instead of going through
+  // bookEvent/createBookingCheckout — no Stripe involved at all here, so
+  // there's no checkout tab to open and no webhook to wait on, and no
+  // platform fee gets added either (the player already paid one, on the
+  // original canceled booking). A successful call means the booking
+  // already exists by the time this returns. A voucher that doesn't
+  // cover this event's ticket price throws failed-precondition with a
+  // message that's safe to show as-is.
+  //
+  // Split the same way proceedToBook is: this half does the actual work
+  // with no gating re-checks, so handleSign below can resume straight
+  // into it right after a waiver signature saves without racing the
+  // `signature` prop's own listener catching up.
+  const proceedToRedeemVoucher = async () => {
+    if (!bestFieldVoucher) return;
+    setBookingBusy(true);
+    setBookingError("");
+    const location = await getQuickLocation();
+    try {
+      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location);
+      setBookingBusy(false);
+    } catch (err) {
+      console.error("voucher redemption failed:", err.code || err.message || err);
+      setBookingError(err.message || "Couldn't apply that voucher — try again, or book normally.");
+      setBookingBusy(false);
+    }
+  };
+
+  // The single primary-action handler for the bottom bar's one button —
+  // this is the "one flow" unification: applying a voucher isn't a
+  // separate action anymore, it's a toggle (applyVoucher/usingVoucher)
+  // that this same Reserve/Redeem button reacts to at the moment it's
+  // tapped, exactly like a real checkout's "apply promo code" would feed
+  // into its one "Complete Purchase" button rather than needing a second
+  // button of its own.
+  const handlePrimaryAction = () => {
+    if (choiceMissing) return; // button is already disabled for this case — just a defensive no-op
+    if (usingVoucher) {
+      if (waiverBlocking) {
+        setPendingVoucherRedeem(true);
+        setShowWaiver(true);
+        return;
+      }
+      proceedToRedeemVoucher();
+      return;
+    }
+    setPendingVoucherRedeem(false); // defensive — a stale voucher-toggle-on-waiver-open shouldn't hijack a normal Reserve
     if (waiverBlocking) {
       setShowWaiver(true);
       return;
     }
     proceedToBook();
-  };
-
-  // Redeems the best-fit field voucher instead of going through
-  // bookEvent/createBookingCheckout — no Stripe involved at all here, so
-  // there's no checkout tab to open and no webhook to wait on; a
-  // successful call means the booking already exists by the time this
-  // returns. A voucher that doesn't fully cover this event throws
-  // failed-precondition with a message that's safe to show as-is.
-  //
-  // Split the same way proceedToBook/handleBook are: this half does the
-  // actual work with no gating re-checks, so handleSign below can resume
-  // straight into it right after a waiver signature saves without racing
-  // the `signature` prop's own listener catching up.
-  const proceedToRedeemVoucher = async () => {
-    if (!bestFieldVoucher) return;
-    setVoucherBusy(true);
-    setVoucherError("");
-    const location = await getQuickLocation();
-    try {
-      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location);
-      setVoucherBusy(false);
-    } catch (err) {
-      console.error("voucher redemption failed:", err.code || err.message || err);
-      setVoucherError(err.message || "Couldn't apply that voucher — try again, or book normally.");
-      setVoucherBusy(false);
-    }
-  };
-
-  const handleRedeemVoucher = () => {
-    if (!bestFieldVoucher || choiceMissing) return;
-    if (waiverBlocking) {
-      setPendingVoucherRedeem(true);
-      setShowWaiver(true);
-      return;
-    }
-    proceedToRedeemVoucher();
   };
 
   const handleCancel = async () => {
@@ -1826,27 +1842,40 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           )}
 
           {bestFieldVoucher && !myBooking && !isPast && !ev.canceled && (
-            <div className="p-4" style={{ background: T.tintGood, borderRadius: T.rCard }}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Ticket size={16} color={T.good} className="flex-shrink-0" />
-                  <div className="text-[12px] font-medium" style={{ ...body, color: T.ash }}>
-                    {bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher available at this field
-                  </div>
+            voucherCoversCost ? (
+              // A toggle, not a second action button — applying the
+              // voucher is now a single step inside the one Reserve/
+              // Redeem flow below, the same way a real checkout's promo-
+              // code field feeds into its one "Complete Purchase" button
+              // rather than needing a purchase button of its own.
+              <button
+                onClick={() => setApplyVoucher((v) => !v)}
+                disabled={bookingBusy}
+                className="w-full p-4 flex items-center gap-3 text-left"
+                style={{ background: usingVoucher ? T.tintGood : T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: usingVoucher ? `1.5px solid ${T.good}` : "none", outlineOffset: -1 }}
+              >
+                <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center" style={{ borderRadius: 5, border: `1.5px solid ${usingVoucher ? T.good : T.line}`, background: usingVoucher ? T.good : "transparent" }}>
+                  {usingVoucher && <Check size={13} color={T.inverse} strokeWidth={3} />}
                 </div>
-                <button
-                  onClick={handleRedeemVoucher}
-                  disabled={voucherBusy || bookingBusy || choiceMissing}
-                  className="px-3 py-2 text-[12px] font-semibold flex-shrink-0"
-                  style={{ ...display, background: T.good, color: T.inverse, borderRadius: T.rPill, opacity: voucherBusy || bookingBusy || choiceMissing ? 0.6 : 1 }}
-                >
-                  {voucherBusy ? "…" : "Use Voucher"}
-                </button>
+                <Ticket size={16} color={T.good} className="flex-shrink-0" />
+                <div className="text-[12px] font-medium flex-1 min-w-0" style={{ ...body, color: T.ash }}>
+                  Apply my {bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher for this field — covers this event in full, no fee
+                </div>
+              </button>
+            ) : (
+              // Exists but doesn't fully cover this particular selection
+              // (e.g. a pricier event, or a Price Options choice that
+              // pushed the cost up) — v1 doesn't combine a voucher with a
+              // card charge, so it's just not offered here, but the
+              // player should still know why their voucher isn't showing
+              // up as usable rather than wondering where it went.
+              <div className="p-3 flex items-center gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                <Ticket size={14} color={T.ashFaint} className="flex-shrink-0" />
+                <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
+                  You have a {bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher for this field, but it doesn't cover this event's price — it's still saved for a future event here.
+                </p>
               </div>
-              {voucherError && (
-                <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{voucherError}</p>
-              )}
-            </div>
+            )
           )}
 
           {ev.waiver && (
@@ -1913,10 +1942,12 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
       <div className="absolute bottom-4 left-4 right-4 px-5 py-3 flex items-center justify-between" style={{ background: T.glassFill, backdropFilter: T.glassBlur, WebkitBackdropFilter: T.glassBlur, border: T.glassBorder, borderRadius: T.rFloat, boxShadow: T.shadowFloat, zIndex: 1000 }}>
         <div>
           <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
-          <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash }}>
-            {selectedChoice
-              ? (entryPriceCents % 100 === 0 ? `$${entryPriceCents / 100}` : `$${(entryPriceCents / 100).toFixed(2)}`)
-              : (ev.price || field?.admission || "See listing")}
+          <div className="text-[18px] font-semibold" style={{ ...mono, color: usingVoucher ? T.good : T.ash }}>
+            {usingVoucher
+              ? "$0 (voucher)"
+              : selectedChoice
+                ? (entryPriceCents % 100 === 0 ? `$${entryPriceCents / 100}` : `$${(entryPriceCents / 100).toFixed(2)}`)
+                : (ev.price || field?.admission || "See listing")}
           </div>
           {typeof ev.maxCapacity === "number" && (
             <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
@@ -1983,12 +2014,12 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           </span>
         ) : (
           <button
-            onClick={handleBook}
+            onClick={handlePrimaryAction}
             disabled={bookingBusy || choiceMissing}
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
-            style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
+            style={{ ...display, background: usingVoucher ? T.good : T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
           >
-            {bookingBusy ? "…" : choiceMissing ? `Choose ${priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : "Reserve This Event"}
+            {bookingBusy ? "…" : choiceMissing ? `Choose ${priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : usingVoucher ? "Redeem Voucher" : "Reserve This Event"}
           </button>
         )}
       </div>

@@ -493,6 +493,15 @@ export const cancelEventWithVouchers = onCall(
     }
     const fieldData = fieldSnap.data();
 
+    // Needed to back the Atlas platform fee out of each voucher's value —
+    // a voucher only replaces the ticket, not the booking fee (Atlas's
+    // own service fee stays non-refundable, same as most ticketing
+    // platforms' convenience fees). feeModel is locked in for good once
+    // an owner picks it, so the current value is safe to use even for a
+    // booking made earlier under the same owner.
+    const ownerSnap = fieldData.ownerId ? await db.collection("owners").doc(fieldData.ownerId).get() : null;
+    const passFeeToPlayer = (ownerSnap?.data()?.feeModel) !== "absorb";
+
     if (eventData.canceled) {
       // Already canceled — nothing new to do, but don't error the owner
       // app out of a clean UI state over a double-tap.
@@ -528,7 +537,16 @@ export const cancelEventWithVouchers = onCall(
         if (b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0) {
           const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
           voucherId = voucherRef.id;
-          voucherAmountCents = b.amountPaidCents;
+          // Ticket price only — when the player paid the platform fee on
+          // top (pass_to_player), that fee is backed out of the voucher's
+          // value; when the owner absorbed it, amountPaidCents was
+          // already just the ticket price and nothing needs subtracting.
+          // Atlas doesn't refund its own booking fee just because the
+          // owner canceled.
+          const feeCentsOnThisBooking = typeof b.bookingFeeCents === "number" ? b.bookingFeeCents : 0;
+          voucherAmountCents = passFeeToPlayer
+            ? Math.max(0, b.amountPaidCents - feeCentsOnThisBooking)
+            : b.amountPaidCents;
           batch.set(voucherRef, {
             fieldId: eventData.fieldId,
             fieldName: eventData.fieldName || fieldData.name || null,
@@ -622,22 +640,20 @@ export const bookEventWithVoucher = onCall(
       throw new HttpsError("already-exists", "Already booked for this event.");
     }
 
-    // Same price resolution as createBookingCheckout — a voucher redeems
-    // against the real total the player would otherwise owe, fee
-    // included. feeModel lives on the owner's own doc, which the player
-    // app can't read directly, so this (like the Stripe path) has to be
-    // the one place that actually knows the real number.
+    // A voucher redeems against the new event's ticket price ONLY — no
+    // Atlas platform fee gets added here, ever. The player already paid
+    // a booking fee once, on the original (canceled) event; that fee is
+    // what Atlas keeps for having processed that transaction, and it's
+    // gone regardless of what happens to the ticket price itself. Making
+    // them pay a second fee just to redeem credit for a ticket they
+    // never got to use would be charging them twice for one fee. So
+    // unlike createBookingCheckout, there's no fee lookup here at all —
+    // no field/owner read, no computeStandardFee call — this is compared
+    // and paid for in ticket-price terms only, start to finish.
     const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
     if (!entryPriceCents || entryPriceCents <= 0) {
       throw new HttpsError("failed-precondition", "This event doesn't have a valid price set — book it as a free event instead.");
     }
-    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
-    const fieldData = fieldSnap.data() || {};
-    const ownerSnap = fieldData.ownerId ? await db.collection("owners").doc(fieldData.ownerId).get() : null;
-    const ownerData = ownerSnap?.data() || {};
-    const bookingFeeCents = computeStandardFee(entryPriceCents);
-    const passFeeToPlayer = ownerData.feeModel !== "absorb";
-    const totalCents = passFeeToPlayer ? entryPriceCents + bookingFeeCents : entryPriceCents;
 
     const profileSnap = await db.collection("users").doc(uid).get();
     const profileData = profileSnap.data() || {};
@@ -669,15 +685,15 @@ export const bookEventWithVoucher = onCall(
       if (typeof freshEventData.maxCapacity === "number" && (freshEventData.bookedCount || 0) >= freshEventData.maxCapacity) {
         throw new HttpsError("failed-precondition", "This event is full.");
       }
-      if (voucher.amountCents < totalCents) {
+      if (voucher.amountCents < entryPriceCents) {
         throw new HttpsError(
           "failed-precondition",
-          `This voucher ($${(voucher.amountCents / 100).toFixed(2)}) doesn't cover this event's full cost ($${(totalCents / 100).toFixed(2)}) — book with a card instead.`
+          `This voucher ($${(voucher.amountCents / 100).toFixed(2)}) doesn't cover this event's ticket price ($${(entryPriceCents / 100).toFixed(2)}) — book with a card instead.`
         );
       }
 
       const now = new Date();
-      const remainingCents = voucher.amountCents - totalCents;
+      const remainingCents = voucher.amountCents - entryPriceCents;
       t.set(bookingRef, {
         uid,
         fieldId: eventData.fieldId,
@@ -688,7 +704,7 @@ export const bookEventWithVoucher = onCall(
         paid: true,
         paidByVoucher: true,
         voucherRedeemedId: voucherId,
-        voucherAppliedCents: totalCents,
+        voucherAppliedCents: entryPriceCents,
         ...choiceFields,
       });
       t.set(userBookingRef, {
