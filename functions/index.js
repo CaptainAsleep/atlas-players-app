@@ -527,6 +527,19 @@ export const cancelEventWithVouchers = onCall(
     const bookingsSnap = await eventRef.collection("bookings").get();
     const now = new Date();
 
+    // Owner-configurable expiration window, defaulting to 365 days when
+    // never set. The value passed with this cancellation both drives the
+    // vouchers issued right now and becomes the owner's new saved
+    // default for next time (persisted below, after the writes succeed)
+    // — so an owner who picks 365 once for The Compound doesn't have to
+    // remember to type it again on every future cancellation.
+    const rawExpirationDays = Number(request.data?.voucherExpirationDays);
+    const savedExpirationDays = ownerSnap?.data()?.voucherExpirationDays;
+    const expirationDays = Number.isInteger(rawExpirationDays) && rawExpirationDays >= 1 && rawExpirationDays <= 3650
+      ? rawExpirationDays
+      : (Number.isInteger(savedExpirationDays) ? savedExpirationDays : 365);
+    const expiresAt = new Date(now.getTime() + expirationDays * 86400000);
+
     // Chunked batches, not one giant batch — each paid booking touches up
     // to 4 docs (voucher, both booking-doc stamps, notice) while a free
     // booking touches just 1 (notice only), so 100 bookings per chunk
@@ -572,6 +585,7 @@ export const cancelEventWithVouchers = onCall(
             sourceEventId: eventId,
             sourceEventTitle: eventData.title || null,
             issuedAt: now,
+            expiresAt,
             redeemedAt: null,
             redeemedEventId: null,
             redeemedEventTitle: null,
@@ -597,7 +611,136 @@ export const cancelEventWithVouchers = onCall(
       if (docs.length === 0) break;
     }
 
+    // Only ever save a value that was actually used for a real
+    // cancellation, never something typed but not submitted.
+    if (ownerSnap?.exists && savedExpirationDays !== expirationDays) {
+      await ownerSnap.ref.update({ voucherExpirationDays: expirationDays });
+    }
+
     return { canceled: true, vouchersIssued };
+  }
+);
+
+// Lets an owner give a voucher directly to one specific player who
+// already paid for a booking on a still-active (non-canceled) event —
+// the "player has a last-minute emergency, we want to make it right"
+// case — without canceling the whole event for everyone else. Reuses the
+// exact same fee-exclusion math and voucher/notice shapes
+// cancelEventWithVouchers already uses, just scoped to a single booking,
+// and cancels that one booking (frees the spot) the same way the
+// player's own cancelBooking would. The voucher this issues carries
+// excludedEventId so it can never be turned around and redeemed on the
+// very event the player just backed out of.
+export const grantVoucherToPlayer = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const ownerUid = request.auth.uid;
+    const eventId = request.data?.eventId;
+    const playerUid = request.data?.uid;
+    if (!eventId || !playerUid) {
+      throw new HttpsError("invalid-argument", "Missing eventId or uid.");
+    }
+
+    const db = getFirestore();
+    const eventRef = db.collection("events").doc(eventId);
+    const eventSnap = await eventRef.get();
+    if (!eventSnap.exists) {
+      throw new HttpsError("not-found", "Event not found.");
+    }
+    const eventData = eventSnap.data();
+
+    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
+    if (!fieldSnap.exists || fieldSnap.data().ownerId !== ownerUid) {
+      throw new HttpsError("permission-denied", "You don't own this event's field.");
+    }
+    const fieldData = fieldSnap.data();
+
+    if (eventData.canceled) {
+      throw new HttpsError("failed-precondition", "This event is already canceled — the whole roster already got vouchers.");
+    }
+
+    const ownerSnap = fieldData.ownerId ? await db.collection("owners").doc(fieldData.ownerId).get() : null;
+    const passFeeToPlayer = (ownerSnap?.data()?.feeModel) !== "absorb";
+    const savedExpirationDays = ownerSnap?.data()?.voucherExpirationDays;
+    const expirationDays = Number.isInteger(savedExpirationDays) && savedExpirationDays >= 1 && savedExpirationDays <= 3650
+      ? savedExpirationDays
+      : 365;
+
+    const bookingRef = eventRef.collection("bookings").doc(playerUid);
+    const userBookingRef = db.collection("users").doc(playerUid).collection("bookings").doc(eventId);
+    const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
+    const noticeRef = db.collection("users").doc(playerUid).collection("cancellationNotices").doc();
+
+    let voucherAmountCents = 0;
+
+    await db.runTransaction(async (t) => {
+      const [bookingSnap, freshEventSnap] = await Promise.all([t.get(bookingRef), t.get(eventRef)]);
+      if (!bookingSnap.exists) {
+        throw new HttpsError("not-found", "This player doesn't have a booking on this event.");
+      }
+      const b = bookingSnap.data();
+      if (!(b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0)) {
+        throw new HttpsError("failed-precondition", "This player didn't pay for this booking — nothing to voucher.");
+      }
+      const freshEventData = freshEventSnap.data();
+      if (freshEventData.canceled) {
+        throw new HttpsError("failed-precondition", "This event is already canceled.");
+      }
+
+      // Same ticket-price-only math cancelEventWithVouchers uses — the
+      // Atlas platform fee is never refunded or put on a voucher.
+      const feeCentsOnThisBooking = typeof b.bookingFeeCents === "number" ? b.bookingFeeCents : 0;
+      voucherAmountCents = passFeeToPlayer
+        ? Math.max(0, b.amountPaidCents - feeCentsOnThisBooking)
+        : b.amountPaidCents;
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + expirationDays * 86400000);
+
+      // Frees the spot exactly like the player's own cancelBooking does
+      // (useBookings.js), just performed on their behalf with the Admin
+      // SDK since an owner can't write to another player's own data.
+      t.delete(bookingRef);
+      t.delete(userBookingRef);
+      t.update(eventRef, { bookedCount: Math.max(0, (freshEventData.bookedCount || 0) - 1) });
+
+      t.set(voucherRef, {
+        fieldId: eventData.fieldId,
+        fieldName: eventData.fieldName || fieldData.name || null,
+        amountCents: voucherAmountCents,
+        originalAmountCents: voucherAmountCents,
+        status: "active",
+        sourceEventId: eventId,
+        sourceEventTitle: eventData.title || null,
+        issuedAt: now,
+        expiresAt,
+        // Blocks this exact voucher from being redeemed right back into
+        // the event the player just backed out of. Deliberately no
+        // player-facing copy anywhere explains this — it's enforced only
+        // here and in bookEventWithVoucher's redemption check.
+        excludedEventId: eventId,
+        grantedManually: true,
+        redeemedAt: null,
+        redeemedEventId: null,
+        redeemedEventTitle: null,
+      });
+      t.set(noticeRef, {
+        type: "voucher_granted",
+        eventId,
+        eventTitle: eventData.title || null,
+        fieldId: eventData.fieldId,
+        fieldName: eventData.fieldName || fieldData.name || null,
+        voucherId: voucherRef.id,
+        voucherAmountCents,
+        createdAt: now,
+        acknowledged: false,
+      });
+    });
+
+    return { granted: true, voucherId: voucherRef.id, amountCents: voucherAmountCents };
   }
 );
 
@@ -690,6 +833,12 @@ export const bookEventWithVoucher = onCall(
       }
       if (voucher.fieldId !== eventData.fieldId) {
         throw new HttpsError("failed-precondition", "This voucher isn't valid at this field.");
+      }
+      if (voucher.expiresAt && voucher.expiresAt.toDate() < new Date()) {
+        throw new HttpsError("failed-precondition", "This voucher has expired.");
+      }
+      if (voucher.excludedEventId === eventId) {
+        throw new HttpsError("failed-precondition", "This voucher isn't valid for this event — try a different one.");
       }
       if (freshBookingSnap.exists) {
         throw new HttpsError("already-exists", "Already booked for this event.");

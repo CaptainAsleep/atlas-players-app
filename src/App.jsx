@@ -4087,20 +4087,34 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
           <>
             <Eyebrow>Vouchers</Eyebrow>
             <div className="mb-5 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-              {vouchers.map((v) => (
+              {vouchers.map((v) => {
+                // No sweep job flips status to "expired" in Firestore —
+                // this is purely a time comparison for display. The real
+                // enforcement (rejecting an expired voucher at
+                // redemption) happens server-side in bookEventWithVoucher.
+                const isExpired = v.expiresAt && v.expiresAt.toDate() < new Date();
+                return (
                 <div key={v.id} className="px-4 py-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Ticket size={16} color={T.good} className="flex-shrink-0" />
+                    <Ticket size={16} color={isExpired ? T.ashFaint : T.good} className="flex-shrink-0" />
                     <div className="min-w-0">
-                      <div className="text-[13px] font-medium truncate" style={{ ...body, color: T.ash }}>{v.fieldName || "Unknown field"}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="text-[13px] font-medium truncate" style={{ ...body, color: T.ash }}>{v.fieldName || "Unknown field"}</div>
+                        {isExpired && (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
+                            EXPIRED
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>From "{v.sourceEventTitle || "a canceled event"}"</div>
                     </div>
                   </div>
-                  <div className="text-[14px] font-semibold flex-shrink-0" style={{ ...mono, color: T.good }}>
+                  <div className="text-[14px] font-semibold flex-shrink-0" style={{ ...mono, color: isExpired ? T.ashFaint : T.good }}>
                     {v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -4754,6 +4768,12 @@ function CancellationNoticeModal({ notice, onDismiss }) {
   };
 
   const amount = typeof notice.voucherAmountCents === "number" ? notice.voucherAmountCents / 100 : null;
+  // A manually-granted voucher (owner gave it directly, event never got
+  // canceled) reuses this exact same notice pipeline with a different
+  // type, so it needs its own copy — no cancellation language at all,
+  // and deliberately nothing about why it can't be redeemed on the same
+  // event it came from.
+  const isGrant = notice.type === "voucher_granted";
 
   return (
     <div className="fixed inset-0 flex items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.55)", zIndex: 2500 }}>
@@ -4761,18 +4781,29 @@ function CancellationNoticeModal({ notice, onDismiss }) {
         <div className="w-10 h-10 mb-3 flex items-center justify-center" style={{ background: T.tint, borderRadius: T.rPill }}>
           <Ticket size={18} color={T.accent} />
         </div>
-        <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Event canceled</div>
-        <p className="text-[13px] mb-3" style={{ ...body, color: T.ashDim }}>
-          "{notice.eventTitle || "An event"}" at {notice.fieldName || "the field"} was canceled by the field owner.
-        </p>
-        {amount != null ? (
-          <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
-            You've received a <strong>${amount % 1 === 0 ? amount : amount.toFixed(2)} voucher</strong>, good for a future event at {notice.fieldName || "this field"}.
-          </p>
+        {isGrant ? (
+          <>
+            <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>You've received a voucher</div>
+            <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
+              You've received a <strong>${amount % 1 === 0 ? amount : amount.toFixed(2)} voucher</strong> for {notice.fieldName || "this field"} — good for a future event there.
+            </p>
+          </>
         ) : (
-          <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>
-            This was a free reservation, so there's nothing further to settle.
-          </p>
+          <>
+            <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Event canceled</div>
+            <p className="text-[13px] mb-3" style={{ ...body, color: T.ashDim }}>
+              "{notice.eventTitle || "An event"}" at {notice.fieldName || "the field"} was canceled by the field owner.
+            </p>
+            {amount != null ? (
+              <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
+                You've received a <strong>${amount % 1 === 0 ? amount : amount.toFixed(2)} voucher</strong>, good for a future event at {notice.fieldName || "this field"}.
+              </p>
+            ) : (
+              <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>
+                This was a free reservation, so there's nothing further to settle.
+              </p>
+            )}
+          </>
         )}
         <button
           onClick={handleDismiss}
@@ -5153,7 +5184,11 @@ function AppShell() {
         bookEvent={bookEvent}
         cancelBooking={cancelBooking}
         createBookingCheckout={createBookingCheckout}
-        fieldVouchers={activeEvent ? myVouchers.filter((v) => v.fieldId === activeEvent.fieldId) : []}
+        fieldVouchers={activeEvent ? myVouchers.filter((v) =>
+          v.fieldId === activeEvent.fieldId &&
+          !(v.expiresAt && v.expiresAt.toDate() < new Date()) &&
+          v.excludedEventId !== activeEvent.id
+        ) : []}
         redeemVoucher={redeemVoucher}
       />
     ) : (
