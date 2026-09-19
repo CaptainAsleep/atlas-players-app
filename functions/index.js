@@ -99,7 +99,20 @@ export const checkPayoutsStatus = onCall(
       return { payoutsEnabled: false };
     }
 
-    const account = await stripe.accounts.retrieve(accountId);
+    // Balance pulled alongside the account status so the owner app can show
+    // real pending/available totals (see the Payouts screen's "why haven't
+    // I been paid" reassurance) without a second round trip. USD-only sum
+    // — Atlas doesn't currently support other currencies anywhere else, so
+    // there's nothing to gain from breaking this out per-currency yet.
+    const [account, balance] = await Promise.all([
+      stripe.accounts.retrieve(accountId),
+      stripe.balance.retrieve({}, { stripeAccount: accountId }),
+    ]);
+    const sumUsdCents = (buckets) =>
+      (buckets || []).filter((b) => b.currency === "usd").reduce((sum, b) => sum + b.amount, 0);
+    const balanceAvailableCents = sumUsdCents(balance.available);
+    const balancePendingCents = sumUsdCents(balance.pending);
+
     // account.settings.payouts.schedule comes back on a plain retrieve, no
     // expand needed — {interval: "daily"|"weekly"|"monthly"|"manual",
     // delay_days, weekly_anchor?, monthly_anchor?}. Cached on the owner doc
@@ -111,11 +124,14 @@ export const checkPayoutsStatus = onCall(
         chargesEnabled: account.charges_enabled,
         connectOnboardingComplete: account.details_submitted,
         payoutSchedule: account.settings?.payouts?.schedule || null,
+        balanceAvailableCents,
+        balancePendingCents,
+        balanceCheckedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
 
-    return { payoutsEnabled: account.payouts_enabled };
+    return { payoutsEnabled: account.payouts_enabled, balanceAvailableCents, balancePendingCents };
   }
 );
 
