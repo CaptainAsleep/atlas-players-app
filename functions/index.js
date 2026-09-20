@@ -3,8 +3,61 @@ import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { Resend } from "resend";
 
 initializeApp();
+
+// Stored via `firebase functions:secrets:set RESEND_API_KEY` — the same
+// Resend account/key already used for the field-owner welcome email in
+// the separate atlas-email-sender CLI project.
+const resendApiKey = defineSecret("RESEND_API_KEY");
+
+// Player-facing emails are signed as Michael personally, not "The Atlas
+// team" — same sender identity already verified for the owner email.
+const PLAYER_EMAIL_FROM = "Michael @ Atlas <welcome@airsoftatlas.app>";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const templatesDir = path.join(__dirname, "templates");
+const signupWelcomeTemplate = readFileSync(path.join(templatesDir, "signup-welcome.html"), "utf-8");
+const bookingConfirmationFirstTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-first.html"), "utf-8");
+const bookingConfirmationRepeatTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-repeat.html"), "utf-8");
+
+// Plain [token] -> value substitution, same style already proven in
+// atlas-email-sender/send.mjs (html.split(token).join(value)) — no
+// templating library needed for this.
+function fillTemplate(html, replacements) {
+  let out = html;
+  for (const [token, value] of Object.entries(replacements)) {
+    out = out.split(token).join(value ?? "");
+  }
+  return out;
+}
+
+// Mirrors formatDate()/formatTimeStr() in the player app's src/App.jsx —
+// kept in sync manually since functions/ and src/ don't share a module
+// here (same reasoning already documented next to distanceMilesServer
+// above).
+function formatEventDateForEmail(dateStr, endDateStr) {
+  if (!dateStr) return "";
+  const opts = { weekday: "short", month: "short", day: "numeric" };
+  const start = new Date(dateStr + "T00:00:00");
+  const startFmt = start.toLocaleDateString("en-US", opts);
+  if (!endDateStr) return startFmt;
+  const end = new Date(endDateStr + "T00:00:00");
+  return `${startFmt} – ${end.toLocaleDateString("en-US", opts)}`;
+}
+function formatTimeStrForEmail(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t || "");
+  if (!m) return t || "";
+  let h = parseInt(m[1], 10);
+  const suffix = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m[2]} ${suffix}`;
+}
 
 // Stored via `firebase functions:secrets:set STRIPE_SECRET_KEY` and
 // `firebase functions:secrets:set STRIPE_WEBHOOK_SECRET` — never hardcoded,
@@ -1192,3 +1245,158 @@ export const verifyWebsiteClaim = onCall(
   }
 );
 
+// ===========================================================================
+// Player-facing emails (signup welcome + booking confirmation)
+// ===========================================================================
+// Both functions below are pure Firestore triggers: they read data after a
+// write has already committed and only ever send an email or write one
+// unrelated bookkeeping field. Neither one touches createBookingCheckout,
+// bookFreeEvent, or stripeWebhook — the actual booking/payment logic is
+// completely untouched by this feature.
+
+// Fires once, the moment a brand-new player finishes onboarding
+// (completedOnboarding flips false -> true — the same gate
+// WelcomeSplashScreen in src/App.jsx already uses for the in-app
+// walkthrough). Guarded by welcomeEmailSentAt, written by this function
+// itself *before* attempting the send, so a duplicate/retried trigger can
+// never cause a duplicate email — worst case on a Resend failure is a
+// missed email, never a double one.
+export const sendPlayerWelcomeEmail = onDocumentUpdated(
+  { document: "users/{userId}", secrets: [resendApiKey] },
+  async (event) => {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    if (!(before.completedOnboarding === false && after.completedOnboarding === true)) return;
+    if (after.welcomeEmailSentAt) return; // already sent
+    if (!after.email) {
+      console.warn(`sendPlayerWelcomeEmail: skipping ${event.params.userId} — no email on file.`);
+      return;
+    }
+
+    // Mark as sent before attempting the send — see comment above.
+    await event.data.after.ref.update({ welcomeEmailSentAt: FieldValue.serverTimestamp() });
+
+    const callsign = after.callsign || "Player";
+    const html = fillTemplate(signupWelcomeTemplate, { "[PLAYER CALLSIGN]": callsign });
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: PLAYER_EMAIL_FROM,
+        to: after.email,
+        subject: `Welcome to Atlas, ${callsign} — here's the rundown before your first game`,
+        html,
+      });
+      if (error) {
+        console.error(`sendPlayerWelcomeEmail: Resend error for ${event.params.userId}:`, error);
+      }
+    } catch (err) {
+      console.error(`sendPlayerWelcomeEmail: failed for ${event.params.userId}:`, err);
+    }
+  }
+);
+
+// Fires on every booking, paid or free — bookFreeEvent and stripeWebhook's
+// checkout.session.completed handler both write the same doc shape here
+// (eventTitle, fieldName, date, endDate, paid, bookedAt — confirmed by
+// reading both), so this one trigger covers both flows without touching
+// either of them. No idempotency flag needed: a booking doc is created
+// exactly once, so this listener fires exactly once per booking.
+export const sendBookingConfirmationEmail = onDocumentCreated(
+  { document: "users/{userId}/bookings/{eventId}", secrets: [resendApiKey] },
+  async (event) => {
+    const { userId, eventId } = event.params;
+    const booking = event.data.data() || {};
+    const db = getFirestore();
+
+    const profileSnap = await db.collection("users").doc(userId).get();
+    const profile = profileSnap.data() || {};
+    if (!profile.email) {
+      console.warn(`sendBookingConfirmationEmail: skipping ${userId}/${eventId} — no email on file.`);
+      return;
+    }
+    const callsign = profile.callsign || "Player";
+
+    // startTime isn't denormalized onto this booking mirror (only
+    // date/endDate are) — one extra read here rather than touching
+    // bookFreeEvent/stripeWebhook's write path just for this.
+    const eventSnap = await db.collection("events").doc(eventId).get();
+    const eventData = eventSnap.data() || {};
+
+    const isPaid = booking.paid === true;
+    let amountPaidCents = null;
+    if (isPaid) {
+      // amountPaidCents lives on the event-scoped booking doc, not this
+      // user-scoped mirror — see stripeWebhook's checkout.session.completed
+      // handler above.
+      const eventBookingSnap = await db.collection("events").doc(eventId).collection("bookings").doc(userId).get();
+      amountPaidCents = eventBookingSnap.data()?.amountPaidCents ?? null;
+    }
+
+    // First-ever booking vs. repeat, decided at send time by querying the
+    // player's own booking history — not trusted from anything computed at
+    // booking-creation time.
+    const priorBookingsSnap = await db.collection("users").doc(userId).collection("bookings").limit(2).get();
+    const isFirstBooking = priorBookingsSnap.size <= 1;
+
+    const fieldName = booking.fieldName || eventData.fieldName || "your field";
+    const eventTitle = booking.eventTitle || eventData.title || "your event";
+    const eventDateTime = [
+      formatEventDateForEmail(booking.date || eventData.date, booking.endDate || eventData.endDate),
+      formatTimeStrForEmail(eventData.startTime),
+    ].filter(Boolean).join(", ");
+
+    const commonReplacements = {
+      "[PLAYER CALLSIGN]": callsign,
+      "[FIELD NAME]": fieldName,
+      "[EVENT NAME]": eventTitle,
+      "[EVENT DATE], [START TIME]": eventDateTime,
+    };
+
+    let html;
+    let subject;
+    if (isFirstBooking) {
+      html = fillTemplate(bookingConfirmationFirstTemplate, commonReplacements);
+      subject = `You're locked in at ${fieldName}`;
+    } else {
+      const amountPaidStr = isPaid && typeof amountPaidCents === "number"
+        ? `$${(amountPaidCents / 100).toFixed(2)}`
+        : null;
+      // Per Michael's call: a repeat FREE booking gets adapted copy, not
+      // the paid-only wording the drafts started with — no "your payment"
+      // claim, no Amount Paid row, no Stripe-receipt note, when nothing
+      // was actually charged.
+      const introLine = isPaid
+        ? `Hey ${callsign} &mdash; this confirms your payment and your spot. Your waiver's signed, nothing else to do before game day.`
+        : `Hey ${callsign} &mdash; this confirms your spot. Your waiver's signed, nothing else to do before game day.`;
+      const amountRow = isPaid
+        ? `<tr>\n              <td style="padding:6px 0; font-family:Helvetica,Arial,sans-serif; font-size:13px; color:#686C72; width:90px; vertical-align:top;">Amount paid</td>\n              <td style="padding:6px 0; font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:14px; color:#002C48;">${amountPaidStr}</td>\n            </tr>`
+        : "";
+      const stripeNote = isPaid
+        ? `<p style="margin:12px 0 0; font-size:12px; line-height:1.6; color:#9A9D9F;">\n        A separate receipt for this charge comes from Stripe, our payment processor &mdash; this email is your Atlas booking confirmation.\n      </p>`
+        : "";
+      html = fillTemplate(bookingConfirmationRepeatTemplate, {
+        ...commonReplacements,
+        "[INTRO_LINE]": introLine,
+        "[AMOUNT_ROW]": amountRow,
+        "[STRIPE_NOTE]": stripeNote,
+      });
+      subject = `You're booked at ${fieldName}`;
+    }
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: PLAYER_EMAIL_FROM,
+        to: profile.email,
+        subject,
+        html,
+      });
+      if (error) {
+        console.error(`sendBookingConfirmationEmail: Resend error for ${userId}/${eventId}:`, error);
+      }
+    } catch (err) {
+      console.error(`sendBookingConfirmationEmail: failed for ${userId}/${eventId}:`, err);
+    }
+  }
+);

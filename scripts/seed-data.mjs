@@ -61,8 +61,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-08-23",
-    notes:
-      "As of 2026 also hosts events for two fields that lost their own properties: WASTE and Sektor7.",
   },
   {
     id: "futureball",
@@ -176,7 +174,6 @@ const fields = [
     hours: "Saturday 10am-dark, Sunday 11am-5pm",
     about: "100-acre woodsball field offering open play and group/party bookings.",
     status: "no-airsoft",
-    notes: "Site makes no mention of airsoft anywhere — \"woodsball\" (paintball) only, dedicated events calendar is empty. Confirmed 2026-09-08, per Michael.",
     dataSource: "website",
     lastScraped: "2026-09-08",
   },
@@ -194,7 +191,6 @@ const fields = [
     hours: "Random Draw League Nights Fridays 6pm; open year-round, reservations required",
     about: "Indoor paintball arena open year-round, with a new outdoor field added in 2026.",
     status: "no-airsoft",
-    notes: "Does not host airsoft events — indoor paintball arena plus youth/teen paintball leagues only. Confirmed 2026-09-08, per Michael.",
     dataSource: "website",
     lastScraped: "2026-09-08",
   },
@@ -212,7 +208,6 @@ const fields = [
     discord: "https://discord.gg/VBTApvwdwS",
     indoorOutdoor: "outdoor",
     status: "no-airsoft",
-    notes: "TC Paintball Lansing rebranded to Capital City Paintball at the same address. Site shows no active airsoft program — one stray \"AIRSOFT DATES 7/26/2026, Entry $25\" line and nothing since. Confirmed 2026-09-08, per Michael.",
     dataSource: "website",
     lastScraped: "2026-09-08",
   },
@@ -235,7 +230,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-08-23",
-    notes: "Live event dates are inside a FareHarbor booking widget, not static HTML — needs a targeted follow-up pass.",
   },
   {
     id: "total-control",
@@ -251,7 +245,7 @@ const fields = [
     imageUrl:
       "https://images.squarespace-cdn.com/content/v1/61d7b2bfa282352059b4cd24/251e9c3e-9870-485e-b4c2-d992d51e2690/TCP+Field+Sign.jpg",
     status: "closed",
-    notes: "Playing field closed (site itself lists it CLOSED); per Michael, appears to have sold the property. Confirmed 2026-09-08.",
+    notes: "This field has closed; the property has reportedly been sold.",
     dataSource: "website",
     lastScraped: "2026-09-08",
   },
@@ -265,7 +259,7 @@ const fields = [
     facebook: "https://www.facebook.com/nestofvipersairsoft",
     indoorOutdoor: "outdoor",
     status: "closed",
-    notes: "Field closed — July 14, 2026 event was confirmed as the final event at this location, per Michael. Confirmed 2026-09-08.",
+    notes: "This field has closed. Its final event was held July 14, 2026.",
     dataSource: "website",
     lastScraped: "2026-09-08",
   },
@@ -280,7 +274,6 @@ const fields = [
     instagram: "https://www.instagram.com/motorcityairsoft/",
     indoorOutdoor: "indoor",
     status: "unscrapable",
-    notes: "Site renders via JavaScript (Square Online) — homepage fetch returns no content. Use Facebook/Places data instead.",
     dataSource: "sheet",
   },
   {
@@ -293,7 +286,6 @@ const fields = [
     facebook: "https://www.facebook.com/holeinthewallpaintball",
     indoorOutdoor: "outdoor",
     status: "unscrapable",
-    notes: "Site returns an empty shell on fetch — likely JS-rendered.",
     dataSource: "sheet",
   },
   {
@@ -333,7 +325,7 @@ const fields = [
     facebook: "https://www.facebook.com/KizzyField",
     indoorOutdoor: "outdoor",
     status: "closed",
-    notes: "Shut down in 2024, per Michael. Confirmed 2026-09-08.",
+    notes: "This field closed in 2024.",
     dataSource: "sheet",
   },
   {
@@ -344,7 +336,7 @@ const fields = [
     facebook: "https://www.facebook.com/sfodairsoft04",
     indoorOutdoor: "outdoor",
     status: "closed",
-    notes: "Per Michael (2026-09-08): field may be selling the property. Not independently confirmed (Facebook is unreachable for automated verification) — treated as inactive for now; revisit if this firms up or turns out wrong.",
+    notes: "This field is no longer active.",
     dataSource: "sheet",
   },
   {
@@ -354,7 +346,6 @@ const fields = [
     address: "8257 N 1 Rd, Copemish, MI 49625",
     indoorOutdoor: "outdoor",
     status: "facebook_only",
-    notes: "No website or Facebook link found in source sheet.",
     dataSource: "sheet",
   },
   {
@@ -366,7 +357,7 @@ const fields = [
     indoorOutdoor: "outdoor",
     status: "relocated",
     relocatedTo: "darkfire-airsoft",
-    notes: "Per Darkfire Airsoft's site, WASTE lost this property in 2026 and now runs events out of Darkfire's Hillsdale field.",
+    notes: "This field has relocated and now runs events out of Darkfire Airsoft's Hillsdale, MI location.",
     dataSource: "sheet + darkfireairsoft.com",
   },
   {
@@ -382,7 +373,6 @@ const fields = [
     ownerEmailDomain: "missionairsoft.com", // for owner-app claim verification — must match the claiming email's domain
     indoorOutdoor: "outdoor",
     status: "closing",
-    notes: "Field's own website shows only a permanent closure announcement, but per a recent Facebook post the field was still hosting games as of ~21 hours before this was added. Status is genuinely unclear — confirm directly before planning a visit.",
     dataSource: "user report + missionairsoft.com",
   },
   {
@@ -415,8 +405,6 @@ const fields = [
     status: "private-booking",
     dataSource: "website",
     lastScraped: "2026-08-28",
-    notes:
-      "Private-session model only, no public dated events found to seed — inventing fake dates for their rotating session-type menu (Friday Night Battle, Saturday Strike, etc.) would be fabricated data, not real scraped info. indoorOutdoor and admission price also weren't stated anywhere on the site, so left unset rather than guessed. If they ever start running real public open-play events, revisit and add those as real events separately. Per Michael (2026-09-08): stays visible on the map/browse list even though there's nothing to book through Atlas — a real, active business, just not one that fits Atlas's open-event model. See the 'Private-Booking Venues' scope in atlas-status.md for the full plan if they ever want real Atlas bookings.",
   },
 
   // ---- Indiana (added 2026-09-10, from seed-data-draft-IN.mjs) ------------
@@ -438,8 +426,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Same business, phone number, and social accounts as htk-airsoft-loogootee below — two physical locations under one brand, same as the Awaken Arena San Antonio/Austin pattern. Site states \"weekly operations paused\"; treat as active-but-irregular rather than closed.",
   },
   {
     id: "htk-airsoft-loogootee",
@@ -458,8 +444,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Same business, phone number, and social accounts as htk-airsoft-jasper above. No separate hero image found for this location specifically.",
   },
   {
     id: "coyote-force",
@@ -481,8 +465,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "The site's /airsoft-lafayette-indiana and /airsoft pages both describe this same Ladoga field marketed to different regional audiences, not separate locations — confirmed one physical address only.",
   },
   {
     id: "battleground-indy",
@@ -501,8 +483,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Paintball-primary venue, not airsoft-primary — included because airsoft is an explicit, named offering (twice-monthly open play) rather than an incidental mention.",
   },
   {
     id: "blast-camp",
@@ -542,8 +522,6 @@ const fields = [
     status: "active",
     dataSource: "website (paintballindianapolis.com: home, /plan-price, /about, /news-updates) + Facebook + Instagram + Yelp (Franklin listing updated May 2026)",
     lastScraped: "2026-09-11",
-    notes:
-      "Re-verified and enriched 2026-09-11 at Michael's request. Business has a documented name/location history: operated previously as 'Spec Ops Group' and 'Paintball Indianapolis' at two different Martinsville, IN addresses (both now confirmed CLOSED on Yelp) before relocating to the current Franklin address. Corrected zip from 46143 to 46131 (46143 is Greenwood, IN's zip, not Franklin's) and added the Ste 100 suite number, per Yahoo Local, Redfin, and Boise Gun Club directory cross-checks. Phone number has conflicting reports across directories ((317) 743-7251 per the site itself, used here; (317) 480-4139 per two regional directories; (765) 516-4854 per Yahoo Local) -- worth confirming by phone if it ever goes stale. Not currently listed on AirsoftC3 under any of its names.",
   },
 
   {
@@ -563,8 +541,6 @@ const fields = [
     status: "active",
     dataSource: "website (sherwoodpaintball.com: home, /prices) + Facebook + Yelp/Tripadvisor/BBB/Yahoo Local (legacy name)",
     lastScraped: "2026-09-13",
-    notes:
-      "Still listed on Yelp, Tripadvisor, Yahoo Local, and BBB under the legacy name 'Sherwood Forest Paintball' -- the business's own current site brands simply as 'Sherwood Paintball Inc.' Both paintball and airsoft are offered per the site's activities list, but the pricing page is paintball-specific -- no separate BB/airsoft package pricing was found, so admission above reflects paintball pricing only. Minimum age 10.",
   },
 
   {
@@ -585,8 +561,6 @@ const fields = [
     status: "active",
     dataSource: "website (actionparkpaintball.com: home, /pricing, /hours) + Facebook + Instagram + WNIT/PBS Michiana feature",
     lastScraped: "2026-09-13",
-    notes:
-      "Paintball-primary venue, not airsoft-primary — included because Airsoft is an explicit, separately-priced admission option on the site's own pricing page ($20 BYO / $40 rental), same inclusion logic used for battleground-indy above. Site never explicitly states indoor vs. outdoor; treated as outdoor based on the described game areas (castle, \"state-of-the-art fields\") consistent with typical outdoor paintball parks of this type and scale — worth a call to confirm if it's ever in question.",
   },
 
   // ---- Ohio (added 2026-09-10, from seed-data-draft-OH-TX.mjs) -----------
@@ -608,8 +582,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes:
-      "g2tact.com is JS-rendered and didn't expose address/phone to automated fetch; address and phone were corroborated by two independent business directories (ohiobiz.com and airsoftc3.com) that agree exactly. Recommend a human confirm by phone before publishing.",
   },
   {
     id: "patriots-ridge-airsoft",
@@ -629,8 +601,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes:
-      "Business only publishes a free Gmail address and a Wix subdomain (no custom domain), so ownerEmailDomain (gmail.com) will NOT uniquely match the website host — standard domain-match claim verification won't work here; flag for manual owner verification.",
   },
   {
     id: "lvl-up-sports",
@@ -669,8 +639,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes:
-      "Primarily a paintball park that also runs a dedicated airsoft program under a separate Instagram handle (i70airsoftofficial); shares site, address, and staff with the paintball side.",
   },
   {
     id: "splatterpark",
@@ -711,8 +679,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes:
-      "Previously excluded from this list as 'no owned website' — that was wrong; parkersairsoft.com is their own GoDaddy-built site with a live schedule and shop. No public email or social links found on-site (only a call/text number), so claim verification will need the phone number or a human check rather than an email-domain match. Admission/membership terms aren't fully spelled out on the site — confirm before publishing pricing.",
   },
   {
     id: "action-acres",
@@ -731,8 +697,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes:
-      "Shares phone number, owner, and parent website (parkersairsoft.com) with Parker's Airsoft Field above — same claim-verification caveat applies (no public email/social links found).",
   },
   {
     id: "sektor7",
@@ -746,8 +710,6 @@ const fields = [
       "Formerly served the North East Ohio airsoft community. Its own site confirms it's currently closed (\"We are currently closed as we search for our next adventure\"); per Darkfire Airsoft's Michigan profile, Sektor7 lost its property in 2026 and now runs its events out of Darkfire's Hillsdale, MI field.",
     dataSource: "sektor7airsoft.com + darkfireairsoft.com",
     lastScraped: "2026-09-02",
-    notes:
-      "No precise street address or phone confirmed — site's /about page 404s and Facebook blocks automated fetch; Facebook page title (\"SEKTOR7 | Cleveland OH\") and the site's 216 area-code phone number both point to Cleveland specifically. Kept status: closed (matches the relocated/waste pattern already in this file) rather than active, since the field itself no longer operates at this location.",
   },
 
   // ---- Illinois (added 2026-09-10, from seed-data-draft-IL.mjs) ----------
@@ -793,8 +755,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Admission pricing not published on the site (directs to an online booking system instead) — omitted rather than estimated.",
   },
   {
     id: "saltfork-paintball",
@@ -817,8 +777,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "The business's own site gives its location only as a cross-street description (\"Century Blvd & Coon Ave\"); the numbered street address above is corroborated by Yelp and a local chamber-of-commerce listing, not stated verbatim on the business's own site.",
   },
   {
     id: "paintball-explosion",
@@ -839,8 +797,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Specific admission pricing lives on separate pages not fetched; omitted rather than estimated.",
   },
   {
     id: "badlandz-paintball",
@@ -860,8 +816,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Paintball-primary venue; included because its own site explicitly advertises \"exciting airsoft battles\" as a real offering, not an incidental mention.",
   },
   {
     id: "sinnissippi-airsoft",
@@ -877,8 +831,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Site is a free Weebly subdomain, not a custom business domain — no ownerEmailDomain set, since there's nothing for a claiming email to match; claim verification here will need a phone or manual check, same situation as Patriots Ridge Airsoft in the Ohio batch. No specific airsoft hours published on the homepage — real schedule lives on the club's calendar/Facebook instead. No usable hero image found on the Weebly site, so imageUrl is left unset.",
   },
 
   // ---- Wisconsin (added 2026-09-10, from seed-data-draft-WI.mjs) ---------
@@ -918,8 +870,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "No public admission pricing found on the homepage (rentals/pricing live in a separate shop section not fetched) — omitted rather than estimated.",
   },
   {
     id: "commando-paintball",
@@ -938,8 +888,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Specific admission pricing lives on separate activity pages not fetched; omitted rather than estimated.",
   },
   {
     id: "edge-paintball-airsoft",
@@ -958,8 +906,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "No pricing published on the homepage — bookings and pricing both live through a third-party reservation system (vantora.com) not fetched; omitted rather than estimated.",
   },
   {
     id: "airsoft-arena-milwaukee",
@@ -974,8 +920,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Facebook + Yelp + Groupon + AirsoftC3 (no owned business website found)",
     lastScraped: "2026-09-10",
-    notes:
-      "No dedicated business website was found for this facility, only social media and third-party directories. The exact same name, address, and description ('40,000 sq ft', 'largest indoor') appear consistently across Yelp, Groupon, and two separate AirsoftC3 listings, which is why it's included at all — but treated as status: facebook_only (same as several existing Michigan entries in this file) rather than active, since claim verification and up-to-date hours/pricing can't be confirmed from a primary source. A human should confirm this is still operating before publishing.",
   },
 
   // ---- Missouri (added 2026-09-10, from seed-data-draft-MO.mjs) ----------
@@ -996,8 +940,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Site lists a separate mailing address (3801 N 20th Street, Ozark, MO 65721) distinct from the operational field address above — used the operational address.",
   },
   {
     id: "the-rock-airsoft",
@@ -1012,8 +954,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "No numbered street address found anywhere, including the business's own site — only described as \"a Rock Quarry\" in Bolivar, MO; left address unset rather than guessed. Shares a phone number with So Go Airsoft in Ozark, and So Go's own site describes running \"a new outdoor field\" it calls The Rock — treated here as a sister location, though The Rock's own site doesn't independently confirm the relationship back.",
   },
   {
     id: "mass-airsoft",
@@ -1034,7 +974,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "No admission pricing published on the site; omitted rather than estimated.",
   },
   {
     id: "huckleberry-ridge-airsoft",
@@ -1048,8 +987,6 @@ const fields = [
     status: "active",
     dataSource: "AllEvents.in + KOAM local news + McDonald County Chamber of Commerce (the business's own website is under construction)",
     lastScraped: "2026-09-10",
-    notes:
-      "The business's own website (a Weebly site) is explicitly marked \"Website Under Construction\" with no address, contact, or schedule info. Address and operating status instead corroborated by a local TV news article (koamnewsnow.com), the county chamber of commerce's own event listing, and AllEvents.in — all three independently agree on the address and describe an active, ongoing event series (most recently \"Mechanized IV\", Dec 2026).",
   },
   {
     id: "kdk-airsoft",
@@ -1063,8 +1000,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Facebook + Yelp + Visit Joplin tourism directory + OpenCorporates (no owned business website found)",
     lastScraped: "2026-09-10",
-    notes:
-      "No dedicated business website was found, only social media and directories — but it's independently confirmed as a real, currently-registered Missouri LLC via OpenCorporates, and listed in the official Visit Joplin tourism directory, which is why it's included at all. Treated as status: facebook_only (same as Airsoft Arena Milwaukee in the Wisconsin batch) rather than active, since claim verification and current hours/pricing can't be confirmed from a primary source.",
   },
   {
     id: "semo-airsoft-blodgett-field-sikeston",
@@ -1080,8 +1015,6 @@ const fields = [
     dataSource:
       "own website (semoairsoft.com/airsoft-facilities) + Boise Gun Club directory mirror (independently corroborates address/phone) + Facebook group posts referencing this specific location by name (e.g. a March game-day post) + SEMO Airsoft LLC business registration",
     lastScraped: "2026-09-17",
-    notes:
-      "Michael flagged this business via a link he sent. The operator's homepage (separate from the /airsoft-facilities page) carries stale content (a 2015 copyright notice, most recent named event from 2017), but the facilities page itself and independent Facebook group activity referencing Blodgett Field by name appear current -- treated as active rather than facebook_only since the own site's facilities page is the primary source and is independently corroborated. Same operator/phone number as the Morley and Benton entries below -- three physical venues run by one business, seeded separately since each is a distinct playable location.",
   },
   {
     id: "semo-airsoft-morley-high-school",
@@ -1097,8 +1030,6 @@ const fields = [
     dataSource:
       "own website (semoairsoft.com/airsoft-facilities) + Boise Gun Club directory mirror + Facebook group posts referencing night games at Morley High School specifically",
     lastScraped: "2026-09-17",
-    notes:
-      "Same operator (SEMO Airsoft LLC) and phone number as Blodgett Field (Sikeston) and Benton Speedway -- see that entry's notes for the stale-homepage caveat, which applies equally here.",
   },
   {
     id: "semo-airsoft-benton-speedway",
@@ -1114,8 +1045,6 @@ const fields = [
     dataSource:
       "own website (semoairsoft.com/airsoft-facilities) + Boise Gun Club directory mirror",
     lastScraped: "2026-09-17",
-    notes:
-      "Same operator (SEMO Airsoft LLC) and phone number as Blodgett Field (Sikeston) and Old Morley High School -- see the Blodgett Field entry's notes for the stale-homepage caveat, which applies equally here.",
   },
 
   // ---- Minnesota (added 2026-09-10, from seed-data-draft-MN.mjs) --------
@@ -1136,8 +1065,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Site is next to AJ Acres Campground. Also runs a sister location in Sioux Falls, SD (605-361-5200, facebook.com/AirsoftSiouxFalls) — not seeded here since it's out of state. Admission pricing sold through an online ticket shop rather than published flat rates; omitted rather than estimated.",
   },
   {
     id: "champion-valley-park",
@@ -1158,8 +1085,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "mnpropaintball.com now redirects to championvalleypark.com — the business appears to have rebranded/consolidated under the Champion Valley Park name, which is used here.",
   },
   {
     id: "big-lake-tactical",
@@ -1176,8 +1101,6 @@ const fields = [
     dataSource:
       "Facebook + Yelp + Airsoft Society forum showcase + independent business directories (own website, a Zoho-hosted site, is currently broken — see notes)",
     lastScraped: "2026-09-10",
-    notes:
-      "Own website (biglaketactical.zohosites.com) is unreachable — every attempt to load it redirects back to itself rather than returning content, suggesting the Zoho site is dead or misconfigured. Address, phone, hours, and pricing above are corroborated instead across multiple independent third-party sources that all agree (Yelp listing at the same address, an Airsoft Society forum showcase page, and general business directories). Treated as status: facebook_only, same as Airsoft Arena Milwaukee (WI) and KDK Airsoft (MO), since current details can't be confirmed from a primary source.",
   },
 
   // Iowa (added 2026-09-10)
@@ -1198,8 +1121,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "The business's own site doesn't explicitly say indoor vs. outdoor — marked outdoor based on the rural acreage address and weekend-walk-in/weekday-reservation pattern shared with every other outdoor field seeded so far; flagging the inference rather than treating it as confirmed.",
   },
   {
     id: "rapid-fire-airsoft",
@@ -1220,8 +1141,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Site calls this a \"60,000 sq ft CQB Field\" built inside/around a converted barn and tote structures — treated as outdoor given the rural farm address and total absence of any climate-controlled/indoor-facility language, but noting it in case the layout turns out to be more enclosed than a typical open field.",
   },
   {
     id: "central-city-airsoft",
@@ -1235,8 +1154,6 @@ const fields = [
     dataSource:
       "Facebook (Centralcityairsoft) + Instagram (@centralcityairsoft) + X/Twitter (@CCA_Events_LLC) + AirsoftSociety forum showcase + AirsoftC3 directory (no owned website found)",
     lastScraped: "2026-09-10",
-    notes:
-      "Same treatment as Airsoft Arena Milwaukee (WI batch) and KDK Airsoft (MO batch): no dedicated business website, but independently corroborated across enough separate sources — including an active-looking 2025 season-schedule post — to be worth including as facebook_only rather than excluding outright. Claim verification and current hours/pricing can't be confirmed from a primary source.",
   },
 
   // Kansas (added 2026-09-10)
@@ -1255,7 +1172,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Hours listed as Saturdays 8am-5pm, weather permitting; no phone or email published on the site.",
   },
   {
     id: "foxhole-paintball-airsoft",
@@ -1271,8 +1187,6 @@ const fields = [
     dataSource:
       "Facebook + Yelp + TripAdvisor + local business directories (Yahoo Local, findglocal, chamberofcommerce.com) — no owned business website found",
     lastScraped: "2026-09-10",
-    notes:
-      "No dedicated business website found. Address is corroborated across multiple independent sources, though a few directories disagree on the house number (2311 vs. 3211 vs. 8000 Upham Rd) — went with 2311, the value that recurs most consistently including on the freshest-looking listing (a Yelp page showing a September 2026 update). Hours: Saturday-Sunday 10am-5pm per Yahoo Local; Monday-Friday closed. Treated as facebook_only, same as Center Mass Airsoft below and the existing MI/WI/MO/MN entries, since current details can't be confirmed from a primary source.",
   },
   {
     id: "center-mass-airsoft",
@@ -1288,8 +1202,6 @@ const fields = [
     dataSource:
       "Facebook + do816.com event listings + Placedigger + Datanyze + Snapchat/Waze place listings — no owned business website found",
     lastScraped: "2026-09-10",
-    notes:
-      "This is the same 'Center Mass Airsoft' flagged as excluded from both the Indiana and Missouri batches over a Kansas-vs-Missouri location conflict — its street address (921 N 55th St, ZIP 66102) definitively places it in Kansas City, KANSAS, not Missouri, so it belongs here instead. One directory listed an 816 (Missouri) phone number, but 66102 is unambiguously a Wyandotte County, KS ZIP code; used the 913 (Kansas) number found elsewhere for the same business. No owned website found, so treated as facebook_only.",
   },
 
   {
@@ -1309,8 +1221,6 @@ const fields = [
     status: "active",
     dataSource: "website (graffitiks.com) + Facebook",
     lastScraped: "2026-09-13",
-    notes:
-      "Legal name per BBB/state records is Graffiti Paintball, LLC; site brands as \"Graffiti Paintball\" (domain graffitiks.com). Airsoft is schedule-restricted (2nd Saturday, 1st/4th Sunday monthly) rather than available every open day -- worth flagging to players expecting airsoft on any regular weekend visit.",
   },
 
   // Arkansas (added 2026-09-10)
@@ -1332,8 +1242,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-13",
-    notes:
-      "Two secondary sources gave slightly different house numbers (17023 / 16931 Chamber Springs Rd) — went with 16838 Chambers Springs Road since that's what the business's own site (smtairsoft.com) states directly. Re-verified 2026-09-13 per Michael's link (tracking params stripped) — no changes to hours/pricing/address since the original 2026-09-10 scrape; site also lists a toll-free number, (888) 731-1763, alongside the local number used above.",
   },
   {
     id: "modern-mission-airsoft",
@@ -1354,7 +1262,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Sessions run Friday 6pm and Saturday/Sunday 12pm & 2pm per the site's booking schedule.",
   },
   {
     id: "xtreme-paintball-laser-tag-ar",
@@ -1369,8 +1276,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes:
-      "Site is a Google Sites page rather than a dedicated domain, and lists a personal-looking contact email (twiley411@centurylink.net) rather than a business one — flagging as a smaller/informal operation, but airsoft is explicitly named as one of its offerings and the address/phone are given directly.",
   },
 
   {
@@ -1391,8 +1296,6 @@ const fields = [
     status: "active",
     dataSource: "website (diamondstatervpark.com/airsoft) + Facebook + Instagram",
     lastScraped: "2026-09-13",
-    notes:
-      "Airsoft is one offering at a larger RV/camping resort (Diamond State RV & Recreation Park) rather than a standalone dedicated field -- the property also runs 60 powered RV sites ($25-30/night), tent camping ($15/night), and private suites ($80/night), useful context for players planning to camp on a game weekend. Site is a subpage of the RV park's own domain (diamondstatervpark.com/airsoft), not a separate airsoft-specific domain.",
   },
 
   // Texas (added 2026-09-10, researched 2026-09-02 — see seed-data-draft-OH-TX.mjs)
@@ -1435,8 +1338,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes:
-      "Own site had no phone number listed (page says to look it up via Google/Facebook), so phone was omitted rather than guessed.",
   },
   {
     id: "cavtac-airsoft",
@@ -1476,8 +1377,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes:
-      "No published admission price found on the homepage (pricing lives on a separate Prices page not fetched); omitted rather than estimated.",
   },
   {
     id: "awaken-arena-austin",
@@ -1499,7 +1398,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-02",
-    notes: "Sister location to the now-closed San Antonio Awaken Arena (removed 2026-09-19) — this Austin location remains open; shares the same website, phone, and social accounts.",
   },
 
   // Tennessee (added 2026-09-10)
@@ -1556,7 +1454,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "No admission pricing or social media links published on the site; omitted rather than estimated.",
   },
   {
     id: "battle-ridge-airsoft",
@@ -1574,8 +1471,6 @@ const fields = [
     status: "active",
     dataSource: "website + BBB business profile",
     lastScraped: "2026-09-10",
-    notes:
-      "Formerly listed online as 'CartCon1 Airsoft' at the same address — several directories still reference the old name (BBB lists it as an alternate name). Using the current branding (Battle Ridge Airsoft) throughout.",
   },
   {
     id: "tenntak-airsoft",
@@ -1590,8 +1485,6 @@ const fields = [
     dataSource:
       "Yelp (updated September 2026) + Yahoo Local + AirsoftC3 + Womply (30 reviews) + AirsoftSociety forum + a registered TENNTAK / TENN TAK trademark (Justia) under TennTak Airsoft LLC — no owned website or Facebook page found",
     lastScraped: "2026-09-10",
-    notes:
-      "No dedicated business website or Facebook page turned up despite an unusually large number of independent corroborating sources (including a live federal trademark registration confirming the LLC is real) — treated as facebook_only per the usual convention for fields without a confirmable primary source, even though 'Facebook' isn't actually one of the sources here.",
   },
   {
     id: "woodland-park-airsoft",
@@ -1605,7 +1498,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Facebook business page + bushwookieairsoft.com's TN community field list (matching address and phone) + BST Airsoft field directory — no owned website found",
     lastScraped: "2026-09-11",
-    notes: "Thin verification beyond the Facebook page and two directory listings — no hours or pricing published anywhere found. Confirm directly before relying on this one.",
   },
   {
     id: "sweetwater-airsoft",
@@ -1623,7 +1515,6 @@ const fields = [
     status: "active",
     dataSource: "website (sweetwaterairsoft.com) + Facebook + Instagram + Discord + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes: "Supplied directly by Michael. Hours not published on the site (shown as \"closed\" with no schedule listed) — check its event calendar/socials for open-play dates.",
   },
   {
     id: "arnies-army-airsoft-dandridge",
@@ -1642,8 +1533,6 @@ const fields = [
     dataSource:
       "own website (airsoftarnie.com) — live Rates, Connect, Upcoming Events (an August 15, 2026 event listed), Safety Regulations, and Waiver pages all currently reachable — + Instagram + Facebook + exact address supplied directly by Michael",
     lastScraped: "2026-09-20",
-    notes:
-      "Supplied directly by Michael, including the exact address (2026-09-20), confirming the earlier inference that Dandridge -- not Sevierville, Pigeon Forge, Gatlinburg, or Knoxville -- is the actual location; SR-139 and the 37725 zip both check out for Dandridge, TN. Still not listed on any third-party directory (AirsoftC3, Yelp, etc.) as of this research, but the own domain is live and current (2026 rates, a forward-dated August 2026 event), so set to active.",
   },
   {
     id: "the-battlegrounds",
@@ -1661,7 +1550,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Instagram + YouTube + Yelp + Nextdoor",
     lastScraped: "2026-09-11",
-    notes: "Pricing not published on the homepage — check its booking page. Contact email (info@bgrounds.com) is on a different domain than the site itself, so no ownerEmailDomain is set.",
   },
   {
     id: "mercer-airsoft-center",
@@ -1679,7 +1567,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Instagram + Discord + Yelp",
     lastScraped: "2026-09-11",
-    notes: "Contact email is a personal verizon.net address, not domain-matched, so no ownerEmailDomain is set. Hours: Wed-Fri 4pm-8pm, Sat-Sun 9am-5pm.",
   },
   {
     id: "steeltown-event-park",
@@ -1694,7 +1581,6 @@ const fields = [
     status: "active",
     dataSource: "website + Yelp (updated June 2026) + Facebook + AirsoftC3 + Tripadvisor",
     lastScraped: "2026-09-11",
-    notes: "Pricing not itemized in what could be fetched — check steeltownpaintball.com/pricing directly.",
   },
   {
     id: "three-rivers-paintball-airsoft",
@@ -1712,7 +1598,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Twitter + Yelp + Tripadvisor + Nextdoor",
     lastScraped: "2026-09-11",
-    notes: "AirsoftC3 lists this under the fuller name \"Three Rivers Paintball and Airsoft Park\" — same business; current site branding is \"Three Rivers Paintball Park.\"",
   },
   {
     id: "poco-loco-paintball",
@@ -1727,7 +1612,6 @@ const fields = [
     status: "active",
     dataSource: "website + Yelp + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes: "Pricing not published in what could be fetched.",
   },
   {
     id: "ambush-airsoft-paintball",
@@ -1742,7 +1626,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Yelp",
     lastScraped: "2026-09-11",
-    notes: "Pricing is on the site's own pricing page but wasn't itemized in what could be fetched.",
   },
   {
     id: "combative-sports-pennsylvania",
@@ -1758,7 +1641,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "AirsoftC3 + Facebook + X/Twitter — no owned website found",
     lastScraped: "2026-09-11",
-    notes: "AirsoftC3's listing was last updated in 2023. Contact email on file is a personal gmail, not domain-matched, so no ownerEmailDomain is set.",
   },
   {
     id: "outdoor-xtreme-hatfield",
@@ -1775,7 +1657,6 @@ const fields = [
     status: "active",
     dataSource: "website (chain site + PA-specific subsite) + Facebook + Yelp + Tripadvisor + Macaroni Kid",
     lastScraped: "2026-09-11",
-    notes: "",
   },
   {
     id: "outdoor-xtreme-linglestown",
@@ -1792,7 +1673,6 @@ const fields = [
     status: "active",
     dataSource: "website (chain site + subsite) + Facebook + Tripadvisor + Groupon + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes: "AirsoftC3 lists this under the older name \"Linglestown Paintball and Airsoft\" — same field, current branding is \"Outdoor Xtreme Linglestown.\"",
   },
   {
     id: "steel-city-airsoft",
@@ -1807,8 +1687,6 @@ const fields = [
     status: "active",
     dataSource: "website + Yelp (updated June 2026) + Facebook + Instagram + Nextdoor + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes:
-      "Several older directories (Groupon, Yellow Pages, Manta) still list a prior address in Oakdale, PA (1 Willow Ave) — that appears to be a former location, distinct from the unrelated Steeltown Event Park now at the very similar-looking 2 Willow Ave in the same town. Current sources (Yelp June 2026, its own site, Facebook, Instagram) consistently point to the McKees Rocks address used here.",
   },
   {
     id: "urban-assault-paintball",
@@ -1824,8 +1702,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook",
     lastScraped: "2026-09-11",
-    notes:
-      "Airsoft is a once-a-week (Sunday only) sub-offering here, not a daily activity — flagging so expectations are set correctly, same pattern as other paintball-primary venues in this dataset (Louisiana's Paintball Command, Virginia's Bethel Battlefield).",
   },
   {
     id: "cjs-paintball-airsoft-park",
@@ -1846,8 +1722,6 @@ const fields = [
     dataSource:
       "website (cjspaintballpark.com, including dedicated /airsoft/ page) + Facebook + Instagram + X + YouTube (third-party gameplay video) + Tripadvisor",
     lastScraped: "2026-09-11",
-    notes:
-      "Facebook auto-tags the location as 'Centerville NE,' an unincorporated place adjacent to Martell — same business, not a second location. A 2025 Instagram post about a price increase confirms current, active operation.",
   },
   {
     id: "warped-sportz",
@@ -1866,8 +1740,6 @@ const fields = [
     dataSource:
       "website (warpedsportz.com: home, contact, events, about-us) + local news (theindependent.com, 2017) + Facebook + Groupon + Nextdoor",
     lastScraped: "2026-09-11",
-    notes:
-      "Address has moved: older directories (Groupon, Manta, Yahoo Local, airsoftboard.com) still list a prior Kearney/Amherst-area address (e.g. '15728 Odessa Road, Amherst, NE' or 'Kearney, NE 68847'); the address here is the current one per the business's own site. A separate, unrelated business also called 'Warped Sportz' (a skate/paintball shop in Crown Point, Indiana) shows up in searches — do not confuse its reviews/socials with this Nebraska field. Worth confirming current pricing by phone since it isn't itemized online.",
   },
   {
     id: "airsoft-sioux-falls",
@@ -1887,8 +1759,6 @@ const fields = [
     dataSource:
       "AirsoftC3 + website (crossfire-airsoft.com: home, /airsoft-sioux-falls, /schedule, /rates) + crossfire-paintball.com + Tripadvisor + Experience Sioux Falls tourism listing + CommunityVotes Sioux Falls 2025 (Gold, Paintball) + YouTube gameplay videos",
     lastScraped: "2026-09-11",
-    notes:
-      "Caution: as of this research (Sept 2026), the operator's own site still said it was 'hoping to open in July' for the 2026 season and needed volunteers to rebuild field bunkers first — no 2026-dated post/review/schedule entry was found confirming games actually ran this year. Not confirmed closed, but worth a phone/Facebook check before treating as fully active this season. Same corporate operator (Crossfire) also runs a paintball+airsoft field under the Crossfire brand in Clearwater, MN.",
   },
   {
     id: "black-hills-paintball",
@@ -1908,8 +1778,6 @@ const fields = [
     dataSource:
       "website (blackhillspaintball.com: home, /airsoft, /contact) + Facebook + Instagram + Threads + YouTube + local directories (paintballfieldfinder.com, localblackhills.com, Roadtrippers) + blackhillsstore.com gift-certificate listing",
     lastScraped: "2026-09-11",
-    notes:
-      "A directory (paintballfieldfinder.com) tacks 'and Airsoft' onto the business's name, but every independent source (own site, Facebook, Instagram) uses just 'Black Hills Paintball' — used that as the name here. Airsoft is a secondary product line to paintball and could be de-emphasized without a website update, so worth confirming current availability by phone before relying on the pricing above.",
   },
   {
     id: "black-rhino-airsoft",
@@ -1927,8 +1795,6 @@ const fields = [
     dataSource:
       "AirsoftC3 + Bismarck Tribune ('Airsoft field to open Saturday', 2017) + KFYR-TV (2021-07-15, ordinance-change story naming the business and owner) + North Dakota business registry (Entity #158912, domestic LLC, registered 2017-02-07, active/good standing) + Boise Gun Club directory (secondary)",
     lastScraped: "2026-09-11",
-    notes:
-      "Strongest-verified of the two ND entries: active/good-standing LLC registration plus two independent local news stories naming the business and owner directly. Gap: no independently confirmed 2024-2026 activity (reviews/posts) turned up in search — Facebook itself is robots-blocked from direct fetch, so recent activity may simply not be search-indexed rather than the field being inactive. A secondary phone number, (701) 255-5757, appears on one third-party directory; treated the AirsoftC3-listed number as primary.",
   },
   {
     id: "legacy-field",
@@ -1942,8 +1808,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 (field + business listings) + Facebook (title/metadata only — page blocked from direct fetch by robots.txt)",
     lastScraped: "2026-09-11",
-    notes:
-      "Weakest-verified entry in this batch — include with caution. No phone number, no independent website, and no matching North Dakota business registry entry were found (may operate as a sole proprietorship/DBA rather than a registered LLC). AirsoftC3 lists two slightly different addresses for the field vs. the business (27600 vs 27550 ND-1804) and Facebook's page title says 'Baldwin, ND' rather than Wilton — Wilton and Baldwin are neighboring small communities on the same highway, so this is likely one property near the boundary rather than two locations, but it could not be fully resolved. AirsoftC3's own listing was last updated 08/30/2023 — worth a phone/Facebook-Messenger check before relying on this as fully current. A same-name-different-state business, 'Legacy Paintball & Airsoft Park' in New York/Vermont, is unrelated — do not confuse its info with this ND field.",
   },
   {
     id: "command-decisions-wargames-center",
@@ -1959,7 +1823,6 @@ const fields = [
     dataSource:
       "website (cdwargames.com) + Yelp + Facebook + paintballevents.net (Fulda Gap, Nov 2025) + AllEvents (Carolina Outposts, Nov 2025)",
     lastScraped: "2026-09-11",
-    notes: "No public phone number found; contact appears to run through the website.",
   },
   {
     id: "gunnys-warfare-center",
@@ -1975,8 +1838,6 @@ const fields = [
     status: "active",
     dataSource: "website + Yelp + Tripadvisor + Nextdoor + Facebook",
     lastScraped: "2026-09-11",
-    notes:
-      "Some directories cross-reference nearby Waxhaw addressing for this rural Union County site — same location, not a second field.",
   },
   {
     id: "battle-on-bell-airsoft",
@@ -1992,8 +1853,6 @@ const fields = [
     dataSource:
       "website + Yelp (92 photos, updated Nov 2024) + YouTube + Nextdoor + Yahoo Local",
     lastScraped: "2026-09-11",
-    notes:
-      "A phone number is listed on a local Chamber of Commerce directory, but the full digits couldn't be independently confirmed — omitted rather than guessed.",
   },
   {
     id: "southfield-airsoft",
@@ -2008,7 +1867,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Superpages (address) + Nextdoor",
     lastScraped: "2026-09-11",
-    notes: "No phone number found published.",
   },
   {
     id: "jacksonville-paintball-airsoft-park",
@@ -2038,8 +1896,6 @@ const fields = [
     dataSource:
       "website + Nextdoor + old Facebook page (xtremekombatpark) + YouTube + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes:
-      "Rebrand: AirsoftC3 and some directories still list this under its old name 'Xtreme Kombat' — same physical location, now operating as Xtreme Park Adventures.",
   },
   {
     id: "rats-airsoft",
@@ -2086,8 +1942,6 @@ const fields = [
     status: "active",
     dataSource: "own Wix site + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes:
-      "Smallest/lowest-traffic operator in this batch — day-to-day activity is referenced on Facebook, but independently corroborating reviews were limited. Worth a confirmation call before treating as fully verified.",
   },
   {
     id: "paintball-central-greensboro",
@@ -2104,8 +1958,6 @@ const fields = [
     status: "active",
     dataSource: "website (dedicated 'Play Airsoft' page) + Eventseeker + Airsoft Nut + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes:
-      "AirsoftC3 lists this under 'PBC Sports Park - Greensboro'; the operating business's actual current branding is 'Paintball Central' (Greensboro location) — same facility, used current branding here.",
   },
   {
     id: "black-ops-paintball-airsoft",
@@ -2121,8 +1973,6 @@ const fields = [
     dataSource:
       "Yelp (updated July 2026) + Tripadvisor + Trip.com + Fayetteville Chamber of Commerce + Facebook + YouTube",
     lastScraped: "2026-09-11",
-    notes:
-      "Zip code not independently confirmed and omitted rather than guessed; some directories reference 'Eastover, NC' as the community name for this Fayetteville-mailing-address location.",
   },
   {
     id: "adventure-beach-paintball-airsoft",
@@ -2137,8 +1987,6 @@ const fields = [
     dataSource:
       "Tripadvisor + Yelp + YouTube + AirsoftC3 + Columbus County Chamber of Commerce",
     lastScraped: "2026-09-11",
-    notes:
-      "Include-with-caution: could not confirm airsoft is still a currently-offered activity versus paintball-only today — branding is primarily paintball, with airsoft evidenced historically (AirsoftC3's listing name and an older YouTube gameplay video). Worth confirming by phone before relying on this as an active airsoft option.",
   },
   {
     id: "airsoft-charleston",
@@ -2155,8 +2003,6 @@ const fields = [
     dataSource:
       "AirsoftC3 + Chamber of Commerce business directory + own site (home, directions, FAQ) + Battleonix directory",
     lastScraped: "2026-09-11",
-    notes:
-      "Confirmed hosting 'Operation Shadowlands' milsim events with Team Shadow Airsoft in both 2024 and 2025 — strong recent evidence of continuous operation. One automated extraction of the homepage showed '6714 Dorchester Rd' instead of 6658 — used 6658 since it's cross-referenced by AirsoftC3 and the Chamber of Commerce directory.",
   },
   {
     id: "black-ops-airsoft-south",
@@ -2174,8 +2020,6 @@ const fields = [
     dataSource:
       "own site (home, contact-us, game-play-rules) + Yelp + Nextdoor + YellowPages + Facebook (title only) + 843area.com + Wheree.com",
     lastScraped: "2026-09-11",
-    notes:
-      "Recently relocated: older directories (Yelp, Nextdoor, YellowPages, localgymsandfitness, 843area.com) still list a stale prior address, 1040 W Richardson Ave, Summerville, SC — the business's own site says it 'recently relocated' with new-field info posted to Facebook. Used the current Ravenel location per the operator's own site and Facebook page title; recommend confirming the exact street address/hours directly since the move appeared still being finalized. A separate, unrelated business, 'Black Ops Paintball & Airsoft' (Conway/Myrtle Beach, seeded separately below), has a similar name but is a different company.",
   },
   {
     id: "black-ops-paintball-airsoft-myrtle-beach",
@@ -2194,8 +2038,6 @@ const fields = [
     dataSource:
       "own site (contact, myrtle-beach, myrtle-beach/airsoft) + Apple Maps + Yelp + Nextdoor + Conway SC Chamber of Commerce + Tripadvisor",
     lastScraped: "2026-09-11",
-    notes:
-      "A related retail location, 'Black Ops Paintball and Airsoft Store' at 6650 SC-707, Myrtle Beach, SC, appears to be a satellite pro-shop rather than a second field. Not to be confused with the unrelated, similarly-named 'Black Ops Airsoft South' in Ravenel, SC (seeded separately above) — verified via separate websites, phone numbers, and addresses.",
   },
   {
     id: "sqairsoft",
@@ -2211,8 +2053,6 @@ const fields = [
     status: "active",
     dataSource: "own site (game-information page, live event calendar) + AirsoftC3 + Airsoft Nut + localgymsandfitness",
     lastScraped: "2026-09-11",
-    notes:
-      "Best-documented field in the state: its own site lists a full 2026 event calendar (monthly skirmishes Jan-Sept, 'Wasteland V' in May, 'Patch Wars' in Aug, and 'AOSC's 17th Anniversary Game' Sept 19-20, 2026) — a long-running, 17-year community anchor. AirsoftC3 double-lists this business under two name variants ('SQA (Escue Airsoft)' and 'Escue Airsoft (SQA)') — same business, not two fields. No phone number found published.",
   },
   {
     id: "battlecat-sports",
@@ -2229,8 +2069,6 @@ const fields = [
     dataSource:
       "own site (home, contact-us) + Yelp (updated August 2026) + YellowPages + Chamber of Commerce directory + Nextdoor + AirsoftC3 + Airsoft Nut",
     lastScraped: "2026-09-11",
-    notes:
-      "Hours: store Wed-Fri 10am-6pm, Sat 10am-10pm, Sun 12pm-6pm (closed Mon/Tue); public arena Sat 2pm-6pm, Sun 1pm-6pm; Youth Night Sat 6pm-10pm.",
   },
   {
     id: "red-fox-games",
@@ -2247,8 +2085,6 @@ const fields = [
     dataSource:
       "Tripadvisor + Yelp + Chamber of Commerce directory + YellowPages + Manta + visitgreenvillesc.com (Greenville tourism board) + The Woodruff Times (Aug 9, 2025 news article)",
     lastScraped: "2026-09-11",
-    notes:
-      "Strongly reaffirmed by local news: The Woodruff Times reported (Aug 9, 2025) that new operator Bethany Hauf took over under a long-term lease from 96-year-old original owner Vaughn Smith, explicitly 'leveling up' the paintball/airsoft/family offerings. Exact street number not published in any source found; Manta lists the city as 'Spartanburg, SC 29388,' but Woodruff is the consistently-used town name across Tripadvisor, Yelp, and news coverage. Requires a 25-player minimum for organized public game days per a partner-booking service (Airsoft X Greenville) that exclusively books this field — that service is not a separate venue.",
   },
   {
     id: "westminster-airsoft",
@@ -2262,8 +2098,6 @@ const fields = [
     status: "active",
     dataSource: "Google Maps + AirsoftC3 + eListing.us business directory + BlueSombrero + X/Twitter (@WestminsterAir1) + YouTube",
     lastScraped: "2026-09-11",
-    notes:
-      "Include with caution — moderate confidence. Both its BlueSombrero page and X profile returned access-blocked errors on direct fetch, so recent (2024-2026) activity could not be independently confirmed, though no closure signal was found either. Has real, consistent contact info across multiple sources. Recommend a direct phone call before treating as fully confirmed-active.",
   },
   {
     id: "airsoft-columbia",
@@ -2277,8 +2111,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + Yelp + Nextdoor + LinkedIn + X + n49.com business directory",
     lastScraped: "2026-09-11",
-    notes:
-      "Lower confidence — include with caution. The listed website domain does not currently resolve (DNS failure), suggesting it may be dead even if the group still runs informally via social media. No phone number found. The street address also independently appears in real-estate/MLS listings, suggesting this may be a private residential property used as a field (not unusual for small rural fields, but worth a direct confidence check) rather than a commercial venue. Yelp shows no 'CLOSED' banner (unlike a confirmed-closed comparison field found during this research), which is a mild positive signal. Recommend direct outreach via LinkedIn or social handles before treating as a fully bookable venue.",
   },
   {
     id: "miami-airsoft",
@@ -2324,8 +2156,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + official website (active pricing page) + Airsoft Society forum + multiple directories",
     lastScraped: "2026-09-11",
-    notes:
-      "Sources vary slightly on the exact street address in this immediate area (also seen as ~20750 Talbot Rd) — used the address most consistently corroborated.",
   },
   {
     id: "simple-airsoft-bb-ranch",
@@ -2340,8 +2170,6 @@ const fields = [
     status: "active",
     dataSource: "official site + Tripadvisor + Groupon + Ft Lauderdale Chamber of Commerce directory",
     lastScraped: "2026-09-11",
-    notes:
-      "Simple Airsoft also runs a retail shop at 7967 W 28th Ave, Hialeah, FL 33016 (same phone) and a separate indoor arena in Ft Lauderdale, seeded as its own entry (simple-airsoft-ftlauderdale) since it's a distinct bookable location.",
   },
   {
     id: "simple-airsoft-ftlauderdale",
@@ -2373,8 +2201,6 @@ const fields = [
     status: "active",
     dataSource: "official website + Facebook + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "Shares a YouTube channel with Miami Airsoft — likely the same ownership group operating both venues.",
   },
   {
     id: "invincibles-paintball-park",
@@ -2392,8 +2218,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + Visit St. Lucie tourism listing + Facebook + Airsoft Nut",
     lastScraped: "2026-09-11",
-    notes:
-      "Markets primarily as a 'paintball park' today but its own materials explicitly still list airsoft as an offering.",
   },
   {
     id: "palm-bay-paintball-park",
@@ -2422,7 +2246,6 @@ const fields = [
     status: "active",
     dataSource: "Yelp (updated May 2026) + AirsoftC3 + business registry",
     lastScraped: "2026-09-11",
-    notes: "A phone number is listed on a Chamber of Commerce directory but the full digits weren't independently confirmed.",
   },
   {
     id: "wasteland-ops-airsoft",
@@ -2439,8 +2262,6 @@ const fields = [
     status: "active",
     dataSource: "Yelp (updated Oct 2025) + Instagram + YouTube + AirsoftC3 + Airsoft Society forum",
     lastScraped: "2026-09-11",
-    notes:
-      "A separate AirsoftC3 listing, 'The Compound,' resolves to this identical address and phone number — an old/duplicate name for this same field, not a second venue. A duplicate entry under 'Reddick, FL' on a mirror directory also appears to be a geocoding error for this same field.",
   },
   {
     id: "raptor-airsoft-field-and-shop",
@@ -2470,8 +2291,6 @@ const fields = [
     status: "active",
     dataSource: "official site + Yelp (updated Feb 2026) + Tripadvisor + Sunbiz LLC registration",
     lastScraped: "2026-09-11",
-    notes:
-      "Recently relocated from a prior New Smyrna Beach address (190 Genesis Way) to this DeLand location, per the operator's own site — older directories (AirsoftC3, Nextdoor) may still show the old address.",
   },
   {
     id: "tactical-airsoft-compound",
@@ -2486,8 +2305,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + Airsoft Nut + multiple directories + Facebook page",
     lastScraped: "2026-09-11",
-    notes:
-      "Uncertain/possibly reduced activity — no review, post, or event confirmed in 2024-2026 was found, only older directory data. Include with caution; recommend a direct verification call before treating as fully bookable.",
   },
   {
     id: "black-tiger-airsoft",
@@ -2502,8 +2319,6 @@ const fields = [
     status: "active",
     dataSource: "official website + Hotfrog/Businessyab (old address record) + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes:
-      "Relocated: the old address (3399 Gina Trail, Lithia, FL — same shared address as DV8 Airsoft Field, seeded separately below) is stale in most directories. Used the new Lakeland address here.",
   },
   {
     id: "dv8-airsoft-field",
@@ -2518,8 +2333,6 @@ const fields = [
     status: "active",
     dataSource: "official site (active events calendar) + MindGame Productions event pages + AirsoftC3 + Waze/Apple Maps",
     lastScraped: "2026-09-11",
-    notes:
-      "Shares an address with the prior location of Black Tiger Airsoft (now relocated to Lakeland, seeded separately above) — DV8 remains at this Lithia address.",
   },
   {
     id: "warfare-airsoft",
@@ -2537,7 +2350,6 @@ const fields = [
     status: "active",
     dataSource: "official site + Macaroni Kid Bradenton (grand-opening article, 2025) + Facebook",
     lastScraped: "2026-09-11",
-    notes: "Newly opened in 2025.",
   },
   {
     id: "domination-airsoft-park",
@@ -2550,8 +2362,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 (address) + Facebook pages",
     lastScraped: "2026-09-11",
-    notes:
-      "Uncertain — no confirmed reviews/posts found from 2023-2026, only a stale 2020 directory listing. Include with caution; recommend a verification call before treating as bookable.",
   },
   {
     id: "clearwater-paintball",
@@ -2590,8 +2400,6 @@ const fields = [
     status: "active",
     dataSource: "Yelp (updated Sept 2026) + Tripadvisor + Nextdoor + Groupon + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "A 'GPXTREME' listing found in the same city (Hudson, FL) appears to be a duplicate/alternate directory entry for this same property, not a second venue.",
   },
   {
     id: "dead-end-outfitters",
@@ -2608,7 +2416,6 @@ const fields = [
     status: "active",
     dataSource: "local news (96krock.com, B1039 radio, Sept 2025) + Yelp + Yahoo Local + official site",
     lastScraped: "2026-09-11",
-    notes: "Strongest-verified new field in this batch — newly opened, dated local news coverage.",
   },
   {
     id: "combat-zone-sports",
@@ -2664,8 +2471,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + Nextdoor + Facebook",
     lastScraped: "2026-09-11",
-    notes:
-      "Uncertain — the website is an old Wix subdomain and no 2023-2026 review/post activity was found. Include with caution; recommend verification.",
   },
   {
     id: "beaver-bayou-battleground",
@@ -2694,8 +2499,6 @@ const fields = [
     status: "active",
     dataSource: "official website",
     lastScraped: "2026-09-11",
-    notes:
-      "Partners with Leviathan Tactical (1014 Underwood Ave, Pensacola) for retail — a partner shop, not a second field.",
   },
   {
     id: "evolution-airsoft-field",
@@ -2720,8 +2523,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 (last updated 08/30/2023) + Facebook + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "Uncertain/possibly dormant — no confirmed activity found in 2024-2026 and AirsoftC3's own listing is stale (2023). No exact street address published; the Facebook page is geotagged 'Fountain, FL,' a neighboring community. Include with a clear verify-before-listing flag.",
   },
   {
     id: "pandemic-airsoft",
@@ -2748,8 +2549,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 only — could not independently corroborate via Facebook/Yelp/Instagram in this pass",
     lastScraped: "2026-09-11",
-    notes:
-      "Unconfirmed recent activity — single-source verification only. Include with caution; recommend a phone/social check before treating as fully bookable.",
   },
   {
     id: "op31-airsoft",
@@ -2765,8 +2564,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + Instagram + Facebook (video posted by southern.airsoft.media showing the field) + Sunbiz (OP31, LLC)",
     lastScraped: "2026-09-11",
-    notes:
-      "Phone number's area code (731) is Tennessee-based, likely an owner's personal/business cell rather than an error — not unusual for small operators, but worth double-checking during onboarding.",
   },
   {
     id: "ge-airsoft",
@@ -2781,8 +2578,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Yelp (updated July 2026, 19 reviews) + Facebook + Instagram + BBB",
     lastScraped: "2026-09-11",
-    notes:
-      "Rebrand: formerly 'Goldeagle Airsoft Battlefield' — same address (5900 Sugarloaf Pkwy) confirms this is one field under a new name, not two. No phone number found published; contact runs through the site.",
   },
   {
     id: "power-ops-airsoft-conyers",
@@ -2798,8 +2593,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Yelp (updated April 2026, 37 reviews) + Facebook + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "Same operator also runs a second, larger field near Madison, GA (seeded separately as 'power-ops-airsoft-madison') — treated as two bookable locations of one business, similar to Simple Airsoft's two Florida locations. No phone number found published.",
   },
   {
     id: "power-ops-airsoft-madison",
@@ -2816,8 +2609,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Facebook + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "A Yelp listing for 'Wildfire Paintball' shows the same 2641 Hester Town Rd address — could not resolve whether that's shared land, a data-merge error, or a defunct secondary brand; excluded Wildfire as a separate entry pending direct verification. No phone number found published.",
   },
   {
     id: "fort-13-airsoft",
@@ -2835,8 +2626,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Facebook + Instagram + Snapchat",
     lastScraped: "2026-09-11",
-    notes:
-      "Some directories reference this location as 'Mount Airy, GA' — same property, Alto and Mount Airy are neighboring small communities.",
   },
   {
     id: "georgia-airsoft",
@@ -2852,7 +2641,6 @@ const fields = [
     status: "active",
     dataSource: "own site + AirsoftC3",
     lastScraped: "2026-09-11",
-    notes: "No phone number published; contact via info@georgiaairsoft.com.",
   },
   {
     id: "ss-airsoft",
@@ -2868,8 +2656,6 @@ const fields = [
     status: "active",
     dataSource: "own site (store.ssairsoft.com) + directories",
     lastScraped: "2026-09-11",
-    notes:
-      "Directories are split between this Flowery Branch address and an older 'Sugar Hill, GA' address (4729 Nelson Brogdon Blvd), about 10 miles apart — used the current address per the business's own site. Worth confirming directly before onboarding.",
   },
   {
     id: "airsoft-atlanta",
@@ -2889,8 +2675,6 @@ const fields = [
     status: "active",
     dataSource: "website (airsoftatlanta.com/pages/field-1) + Yelp (updated September 2026) + Facebook + Instagram + YouTube",
     lastScraped: "2026-09-13",
-    notes:
-      "Address previously omitted -- directories showed conflicting addresses (a Church St, Atlanta listing and a Peachtree Rd, Doraville listing, roughly 10 miles apart) and the business's own homepage didn't publish one. Resolved 2026-09-13 per Michael's link to the site's own /pages/field-1 page, which gives 3529 Church St Ste G, Atlanta, GA 30021 -- matching the Church St directory listing, not the Doraville one. Pricing detail also expanded from that page (hourly vs. all-day, own-gear vs. rental, specific add-on costs).",
   },
   {
     id: "elite-ops-airsoft",
@@ -2907,8 +2691,6 @@ const fields = [
     status: "active",
     dataSource: "Yelp (updated July 2026, 15 reviews) + Facebook + Instagram + X",
     lastScraped: "2026-09-11",
-    notes:
-      "Relocated from an older Canton, GA address (857 Hickory Flat Hwy) to this Ball Ground address — same business, not two fields. A similarly generic 'Elite Ops' style name could exist elsewhere; no exact-name match found in our other seeded states as of this batch.",
   },
   {
     id: "allstar-airsoft",
@@ -2939,8 +2721,6 @@ const fields = [
     status: "active",
     dataSource: "Yelp (updated May 2026) + own site + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "A second location under the same brand, 'Arkenstone 2' in Dallas, GA, is confirmed CLOSED per Yelp — not a duplicate of this still-open Acworth field. 'Georgia Paintball Store' in Kennesaw is the retail arm only, with no play field on site — not seeded as a separate venue.",
   },
   {
     id: "hoppers-paintball-airsoft",
@@ -2957,7 +2737,6 @@ const fields = [
     status: "active",
     dataSource: "Yelp + Roadtrippers + Facebook + YouTube",
     lastScraped: "2026-09-11",
-    notes: "Address not published on the business's own site; used the Yelp/Roadtrippers-listed address.",
   },
   {
     id: "team-airsoft-georgetown",
@@ -2974,8 +2753,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Facebook + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "Despite the generic name 'Team Airsoft,' this is confirmed to be a physical bookable venue (the 'Georgetown' field), not a competitive team — used a more specific id to avoid confusion. No phone number found published.",
   },
   {
     id: "big-indian-paintball-airsoft",
@@ -2990,8 +2767,6 @@ const fields = [
     status: "active",
     dataSource: "own site",
     lastScraped: "2026-09-11",
-    notes:
-      "A vague 'Middle Georgia Airsoft' listing (Toomsboro, GA) turned up in some directories but could not be independently verified as a real, separate business — likely a directory artifact; this field is the real, verifiable venue for that region.",
   },
   {
     id: "the-combat-zone",
@@ -3005,8 +2780,6 @@ const fields = [
     status: "active",
     dataSource: "HopUpAirsoft event calendar ('Homefront 2024' and 'Homefront 2025' hosted here) + Groupon (4.7 stars, 15 reviews) + Facebook + LinkedIn",
     lastScraped: "2026-09-11",
-    notes:
-      "Stale-directory trap: Yelp shows a 'CLOSED' tag, but independent airsoft-event-calendar corroboration (two named MILSIM events hosted here in 2024 and 2025) plus an active Groupon listing indicate it is still operating — included as active despite the Yelp tag. No phone number found published. Not to be confused with the unrelated 'Combat Zone Sports' already seeded in Florida, or with an unrelated California business called 'Gamepod Combat Zone.'",
   },
   {
     id: "fort-benning-airsoft-field",
@@ -3021,8 +2794,6 @@ const fields = [
     status: "active",
     dataSource: "Facebook + informal Wix site",
     lastScraped: "2026-09-11",
-    notes:
-      "Include with caution: this field is on an active-duty Army installation. Even though it advertises civilian access, actually getting on post typically requires an escort/sponsor or a visitor-center background check — this may not be realistically bookable the way the app expects. Recommend confirming base-access logistics directly before treating as a normal listing. This is the only currently-evidenced option for the Columbus, GA region — a separate 'Airsoft Columbus' business appears defunct (only stale references found).",
   },
   {
     id: "insane-paintball-airsoft-arena",
@@ -3052,8 +2823,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3",
     lastScraped: "2026-09-11",
-    notes:
-      "Low confidence — include with caution. AirsoftC3's listing was last updated 08/30/2023, and no 2024-2026 social media activity, reviews, or event listings could be found; its domain may be inactive. No phone number found published; contact via email (robert@dforce1airsoft.com per AirsoftC3). Recommend a direct check before relying on this as fully current.",
   },
   {
     id: "spartan-airsoft",
@@ -3068,8 +2837,6 @@ const fields = [
     status: "active",
     dataSource: "Valdosta Daily Times coverage (2015 launch) + Instagram (@thisisspartanairsoft)",
     lastScraped: "2026-09-11",
-    notes:
-      "Low confidence — include with caution. No Yelp, Tripadvisor, or Yellow Pages listing found, and no confirmed social-media activity more recent than the original 2015 launch coverage — this is the only lead found for the Valdosta area. Recommend a direct call to the listed phone number before relying on this as fully current.",
   },
   {
     id: "southern-tactical-airsoft-games",
@@ -3086,8 +2853,6 @@ const fields = [
     status: "active",
     dataSource: "own site + AirsoftC3 + chamberofcommerce.com + Alignable + Facebook + YouTube",
     lastScraped: "2026-09-11",
-    notes:
-      "Operates on the same property as 'Southern Alabama Paintball' and 'Battle City Laser Tag' — same business/operator, one physical venue under multiple activity-specific brand names; not seeded as a separate listing.",
   },
   {
     id: "ohatchee-airsoft-field",
@@ -3104,8 +2869,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Yelp (updated March 2026) + YellowPages + AirsoftC3 + Facebook + Yahoo Local + Battleonix",
     lastScraped: "2026-09-11",
-    notes:
-      "Street-number discrepancy across sources: own site says 4044 Gilberts Ferry Rd, while Yelp and the original grand-opening Facebook post say 4070 — zip also varies 36270/36271. Used the own-site address; recommend confirming directly.",
   },
   {
     id: "ridgeline-airsoft",
@@ -3122,8 +2885,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Facebook + Battleonix + Roadtrippers + AirsoftSociety forum",
     lastScraped: "2026-09-11",
-    notes:
-      "Also listed on GunRanges.org, which could cause confusion with a firearms range — confirmed via the operator's own site and airsoft-specific sources that this is a genuine airsoft field, not a gun range. Full seal goggles mandatory.",
   },
   {
     id: "mt-doom-paintball-airsoft",
@@ -3140,8 +2901,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Yelp (updated March 2026) + AirsoftC3 + Trip.com + Roadtrippers + D&B business directory",
     lastScraped: "2026-09-11",
-    notes:
-      "Runs under two Facebook pages (paintball- and airsoft-branded) for one physical venue — treated as a single listing, not two. Genuinely dual-sport, not a paintball-only mislabel.",
   },
   {
     id: "doomsday-paintball-airsoft-park",
@@ -3159,8 +2918,6 @@ const fields = [
     status: "active",
     dataSource: "own site (last-updated 05/08/2025) + AirsoftC3 + YouTube gameplay video + local news (Rocket City Now)",
     lastScraped: "2026-09-11",
-    notes:
-      "Also runs a seasonal Halloween haunted-house attraction under the same brand — a separate offering, not to be confused with the year-round airsoft/paintball operation.",
   },
   {
     id: "the-drop-zone-airsoft-paintball",
@@ -3178,7 +2935,6 @@ const fields = [
     status: "active",
     dataSource: "own site + YellowPages + LocalGymsAndFitness directory",
     lastScraped: "2026-09-11",
-    notes: "Strongest, most fully-documented listing found for the Auburn/Opelika region.",
   },
   {
     id: "apache-tactical-airsoft",
@@ -3193,8 +2949,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + YellowPages (Huntsville) + Facebook + Instagram + X + AirsoftSociety forum",
     lastScraped: "2026-09-11",
-    notes:
-      "Include with caution — moderate confidence. Facebook/Instagram content couldn't be directly checked for recent (2025-2026) activity, though no closure signal was found either. A separate 'Apache Airsoft Team/Squad' Instagram surfaced is a playing team, not this venue — not conflated. A nearby, unrelated Madison, AL business ('Last Resort Guns,' a real firearms range) is sometimes miscategorized by directories as an airsoft field — do not merge the two.",
   },
   {
     id: "dirt-planet-airsoft",
@@ -3213,8 +2967,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Facebook + Instagram",
     lastScraped: "2026-09-11",
-    notes:
-      "Low confidence — include with caution. Own site is live with a documented grand-opening history, but recent (2025-2026) social activity could not be independently confirmed. Recommend a live phone/booking check before onboarding.",
   },
   {
     id: "alabama-paintball-quest-airsoft",
@@ -3232,8 +2984,6 @@ const fields = [
     dataSource:
       "own site + alabamapaintball.com (parent network) + sportscarnival.com schedule page + PaintballFieldFinder.com + AllEvents.in",
     lastScraped: "2026-09-11",
-    notes:
-      "Airsoft is a newer, less-frequent offering layered onto a paintball-first business — flagged as lower-priority/lower-frequency than the dedicated airsoft fields in this batch. The network's other two locations (Central Alabama Paintball, Calera; Alabama Paintball 280, Chelsea) are paintball-only per all sources checked and are not seeded as airsoft venues.",
   },
   {
     id: "eagle-action-sportz-paintball-airsoft",
@@ -3253,8 +3003,6 @@ const fields = [
     dataSource:
       "own site + Yelp + TripAdvisor + Facebook + Instagram + Visit Hattiesburg (official CVB directory) + Visit Mississippi (state tourism site) + Nextdoor",
     lastScraped: "2026-09-11",
-    notes:
-      "TripAdvisor and some directories describe this as a paintball-only field — that's stale/incomplete copy; the operator's own current site is unambiguous that airsoft is a live, separately-priced offering today.",
   },
   {
     id: "action-pursuit-games-brandon",
@@ -3274,8 +3022,6 @@ const fields = [
     dataSource:
       "own site + Yelp (updated Feb 2026, two listings under Canton and Brandon at the same address) + Instagram + Airsoft Society forum + Mississippi Crappie Trail directory",
     lastScraped: "2026-09-11",
-    notes:
-      "Business name is legally 'Action Pursuit Games of Brandon LLC,' but the physical field is in Canton, MS — an apparent relocation-with-retained-name (or founder/operator association with Brandon) situation, not two separate venues. Best-documented Jackson-metro option found.",
   },
   {
     id: "blac-panther-airsoft",
@@ -3287,8 +3033,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 (sole source)",
     lastScraped: "2026-09-11",
-    notes:
-      "Low confidence — include with caution. Single-source listing (AirsoftC3 only, contact by email only) with no Yelp, Facebook, Instagram, reviews, or press found anywhere. Recommend a phone/email verification pass before treating as bookable.",
   },
   {
     id: "camp-liberty-mccool",
@@ -3300,8 +3044,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 (sole source)",
     lastScraped: "2026-09-11",
-    notes:
-      "Low confidence — include with caution. No independent web presence found beyond the AirsoftC3 listing (which is specific to McCool, MS coordinates, so appears genuine rather than a data-entry error). Two unrelated same-named 'Camp Liberty' venues exist elsewhere — a veteran/youth camp in Battleground, Alabama, and one in Brooklyn, Michigan — do not conflate with either. Recommend contacting the operator directly before onboarding.",
   },
   {
     id: "mississippi-airsoft-development-center",
@@ -3314,8 +3056,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 (sole source)",
     lastScraped: "2026-09-11",
-    notes:
-      "Low confidence — include with caution. AirsoftC3's own 'last updated' stamp reads August 30, 2023, three years stale, with zero corroboration found anywhere else. This is the only lead found for the Tupelo metro area proper — a separate 'Tupelo Airsoft Club' Facebook group is a player community, not a venue, and was not seeded.",
   },
   {
     id: "odins-paradise-airsoft",
@@ -3334,8 +3074,6 @@ const fields = [
     status: "active",
     dataSource: "own site + Yelp (listing updated May 2026) + Facebook + Instagram",
     lastScraped: "2026-09-12",
-    notes:
-      "Added directly per Michael's request. Airsoft-only — no paintball offering found. Hours per own site: Saturdays 9am-7pm (lunch break 1-2pm) plus 7-11pm for speedsoft events, Sundays 10am-5pm.",
   },
   {
     id: "acs-airsoft",
@@ -3352,7 +3090,6 @@ const fields = [
     status: "active",
     dataSource: "website + BBB business profile + Yelp (updated July 2026)",
     lastScraped: "2026-09-10",
-    notes: "Hours: Wed-Fri 12pm-6pm, Sat 10am-5pm, closed Sun-Tue per BBB/directory listings; not stated on the site itself. No pricing published on the site.",
   },
   {
     id: "conders-paintball-field",
@@ -3370,7 +3107,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Hours: Sat 10am-6pm, Sun 11am-6pm, weekdays by appointment only. No admission pricing published on the site.",
   },
   {
     id: "paintball-asylum",
@@ -3388,8 +3124,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook (airsoft open-play schedule posts) + BBB business profile",
     lastScraped: "2026-09-10",
-    notes:
-      "Business is legally registered as Asylum Extreme Sports, LLC (BBB), operating under the Paintball Asylum / Asylum Xtreme branding. The park's own site was mid-relaunch (\"a new more Xtreme experience coming\") at time of research; address/phone confirmed via the Asylum Xtreme retail site instead. Weekday hours listed as reservation-only; weekend walk-in hours not published.",
   },
   {
     id: "point6-airsoft-field",
@@ -3405,8 +3139,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook",
     lastScraped: "2026-09-10",
-    notes:
-      "The business's own site describes the field as still \"in development\" rather than a finished, fully-built facility — included as active/operating since it explicitly accepts players now, but flagging that this is an informal, evolving setup rather than a polished commercial field. Its Facebook page is titled \"Falmouth KY\" (a neighboring town) while the street address given on-site and via a location-tagged Instagram post resolves to Foster, KY 41043 — likely just an imprecise city tag on Facebook for the same rural property; no phone number found on either.",
   },
   {
     id: "jaegers-subsurface-paintball",
@@ -3425,7 +3157,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Hours: Mon-Thu 1pm-8pm, Fri 1pm-10pm, Sat 10am-10pm, Sun 10am-6pm (shifts seasonally per the site). No airsoft-specific pricing published; general paintball/laser tag pricing is on separate site pages.",
   },
   {
     id: "airsoft-tulsa",
@@ -3444,7 +3175,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Two phone lines published: (539) 525-0883 for the retail store/showroom, (539) 525-0821 for the indoor field — used the field number here. No hours or pricing published on the site.",
   },
   {
     id: "t1-airsoft",
@@ -3461,8 +3191,6 @@ const fields = [
     status: "active",
     dataSource: "website + Yelp (updated September 2026)",
     lastScraped: "2026-09-10",
-    notes:
-      "Hours: daily 10am-5pm per Yelp; not stated on the site itself. A separate Yelp listing for \"T1 Airsoft\" at 1002 SW 104th St (a different part of the city) also exists, updated April 2026 — likely a retail/pro-shop location rather than the field itself; used the field's own address instead. No admission pricing published on the site.",
   },
   {
     id: "jtc-tactical",
@@ -3499,7 +3227,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Pro shop (retail only, not the field) is a separate address: 1427 S 4th Street, Chickasha, OK 73018.",
   },
   {
     id: "alexandria-airsoft-adventures",
@@ -3517,7 +3244,6 @@ const fields = [
     status: "active",
     dataSource: "website + local news (KALB) + Yelp (updated July 2026) + business directories",
     lastScraped: "2026-09-10",
-    notes: "This is the real field behind the 'Alexandria Air-Soft Adventures' lead that surfaced (and was excluded) during the Kansas research batch via a syndicated Wichita TV video — confirmed here as a genuine, currently-operating Louisiana field.",
   },
   {
     id: "bayou-games-usa",
@@ -3536,7 +3262,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Hours: Sat 10am-6pm, Sun 11am-6pm (check-in by 4pm both days), weekdays by appointment only.",
   },
   {
     id: "ironsight-airsoft",
@@ -3553,7 +3278,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 + Facebook + Instagram + Yahoo Local (its own site's robots.txt blocked automated verification, but address/phone/hours corroborate across all of these)",
     lastScraped: "2026-09-10",
-    notes: "Hours: Mon-Fri 9am-5pm, Sat-Sun 9:30am-3:30pm per AirsoftC3. No pricing found published anywhere.",
   },
   {
     id: "paintball-command",
@@ -3570,7 +3294,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-10",
-    notes: "Hours: Sat-Sun 8:30am-4:30pm, weekdays by appointment. Airsoft is a scheduled sub-offering (1st/3rd Sundays), not daily like the paintball side — flagging so expectations are set correctly.",
   },
   {
     id: "ts-extreme-airsoft-wars",
@@ -3583,7 +3306,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "AirsoftC3 + Facebook business page — no owned website found",
     lastScraped: "2026-09-10",
-    notes: "Hours: daily 9am-5pm per AirsoftC3. No exact street number found for the Bayou Blue Road address; no pricing published anywhere found.",
   },
   {
     id: "splat-em",
@@ -3596,8 +3318,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "AirsoftC3 + Yelp (updated January 2026) + a recent Facebook event post — no owned website found",
     lastScraped: "2026-09-10",
-    notes:
-      "Hours per AirsoftC3: Mon-Fri 9am-5pm, Sat-Sun 9am-4pm. Also known informally as 'Mr. & Mrs. Splat' on its Facebook page. Airsoft Board lists this field as 'unclaimed' (operator hasn't set up an account there) and recommends confirming directly before visiting — noting that caveat rather than treating pricing/hours as fully current.",
   },
   {
     id: "mk-airsoft-clarksburg",
@@ -3617,8 +3337,6 @@ const fields = [
     status: "active",
     dataSource: "website (mkairsoft.com) + Facebook + Instagram + local news (WBOY, WDTV, Connect-Bridgeport)",
     lastScraped: "2026-09-11",
-    notes:
-      "Hours: Tue-Fri 5pm-10pm, Sat-Sun 10am-6pm per the chain site (may shift seasonally). Runs under the same MKAirsoft brand/YouTube/Discord as the Ohio locations.",
   },
   {
     id: "tri-state-airsoft-club",
@@ -3634,8 +3352,6 @@ const fields = [
     dataSource:
       "AirsoftC3 + Airsoft Society forum thread + YouTube videos — the club's own site (tristateasc.com) exists but could not be independently fetched/verified (robots.txt error)",
     lastScraped: "2026-09-11",
-    notes:
-      "AirsoftC3's listing was last updated in 2023 and no more recent independent confirmation of hours/pricing was found — the weakest-verified of the two WV entries; worth confirming directly before treating hours/pricing as current. Contact email on file is a personal gmail (tristateasc@gmail.com), not a domain-matched address, so no ownerEmailDomain is set.",
   },
   {
     id: "ballahack-airsoft",
@@ -3655,7 +3371,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Instagram + YouTube",
     lastScraped: "2026-09-11",
-    notes: "Hours: closed Mon-Thu, Fri 11am-7pm, Sat-Sun 9am-5pm.",
   },
   {
     id: "north-40-airsoft",
@@ -3672,7 +3387,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Yelp/Tripadvisor + Visit Southwest Virginia tourism listing",
     lastScraped: "2026-09-11",
-    notes: "Contact is a personal gmail (north40airsoft@gmail.com), not a domain-matched address, so no ownerEmailDomain is set. Hours not published; check Facebook for open-play dates.",
   },
   {
     id: "new-kent-paintball-airsoft",
@@ -3689,7 +3403,6 @@ const fields = [
     status: "active",
     dataSource: "website",
     lastScraped: "2026-09-11",
-    notes: "Standard walk-on hours 9am-5pm; times vary by season. Players must bring their own airsoft gear for the public walk-on games.",
   },
   {
     id: "augusta-airsoft",
@@ -3707,7 +3420,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Instagram",
     lastScraped: "2026-09-11",
-    notes: "Hours: Sat-Sun, 12:30pm staging / 1-5pm play. No pricing published on the site.",
   },
   {
     id: "swamp-fun-park",
@@ -3724,7 +3436,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Instagram + YouTube + Yelp",
     lastScraped: "2026-09-11",
-    notes: "AirsoftC3 lists the city as Gloucester Point, but the business's own site, Yelp, and Yellow Pages listings all use Hayes, VA — same general Gloucester County area, flagging the discrepancy rather than guessing which is more precise.",
   },
   {
     id: "roanoke-airsoft-battlefield",
@@ -3742,7 +3453,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Instagram + Discord + AllEvents",
     lastScraped: "2026-09-11",
-    notes: "Listed on AirsoftC3 under an older name, \"RATAC Battlefield\" — same field/organization at the same address; current branding is \"Roanoke Airsoft & Battlefield.\" Retail shop hours: Sat 10am-5pm, Sun 1pm-5pm.",
   },
   {
     id: "pevs-paintball-airsoft",
@@ -3761,7 +3471,6 @@ const fields = [
     status: "active",
     dataSource: "website + Facebook + Instagram + Tripadvisor + Yelp",
     lastScraped: "2026-09-11",
-    notes: "Hours (spring through June 30): Sat-Sun check-in 9:30am-3pm, park open 10am-5pm; weekdays reservation-only. No airsoft-specific pricing found published.",
   },
   {
     id: "cz-airsoft",
@@ -3780,8 +3489,6 @@ const fields = [
     status: "active",
     dataSource: "website (czairsoft.com + a parallel czairsoft.wixsite.com site) + Facebook group + Twitter + Instagram + YouTube + Yelp",
     lastScraped: "2026-09-11",
-    notes:
-      "AirsoftC3 lists the city as Fredericksburg, but the field's actual town is Rhoadesville, VA (~25 miles southwest, in Orange County) — corrected here. Contact email on file is a personal comcast.net address, not domain-matched, so no ownerEmailDomain is set. Hours: Sat 8:30am-3:30pm, Sun 12pm-4pm on scheduled dates — check its event calendar.",
   },
   {
     id: "falling-river-airsoft",
@@ -3796,7 +3503,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "AirsoftC3 + Facebook + Instagram — no dedicated website found beyond a bare, contentless Wix placeholder page",
     lastScraped: "2026-09-11",
-    notes: "The field's own materials describe it as \"open for sporadic weekend engagements\" — check its Facebook events before visiting. No phone number or pricing published anywhere found.",
   },
   {
     id: "bethel-battlefield",
@@ -3811,8 +3517,6 @@ const fields = [
     status: "active",
     dataSource: "website (chain) + AirsoftC3 + AllEvents (Friday Night Airsoft Game listing) + Visit Hampton tourism listing",
     lastScraped: "2026-09-11",
-    notes:
-      "General admission hours: Sat-Sun 9:30am-4pm, weekdays by reservation only. Airsoft is a scheduled evening sub-offering here, not the park's primary daily activity — flagging so expectations are set correctly, same as Louisiana's Paintball Command entry.",
   },
   {
     id: "tactical-airsoft-arena-manassas",
@@ -3831,7 +3535,6 @@ const fields = [
     status: "active",
     dataSource: "website (shared chain site) + Facebook + Instagram + YouTube + Yelp/Tripadvisor (4.7 stars, 273 reviews) + industry press (RGK Airsoft)",
     lastScraped: "2026-09-11",
-    notes: "Hours: Wed & Fri 6pm-11pm, Sat 2pm-10pm, Sun 11am-7pm. The shared website (tacticalairsoftarena.com) primarily surfaces the Rockville, MD address — Manassas-specific pricing wasn't independently found. The Rockville, MD flagship location is now also seeded separately as part of the Maryland batch.",
   },
   {
     id: "valhalla-tactical-airsoft",
@@ -3847,8 +3550,6 @@ const fields = [
     dataSource:
       "AirsoftC3 + Instagram (@valhallatacticalrva) + Nextdoor + a commercial real-estate lease record (Valhalla Tactical Training LLC, 16,036 sq ft at this address) — the site itself (valhallatacticalrva.com) could not be fetched directly due to a persistent robots.txt/DNS error, despite many of its subpages (waiver, rules, schedule, FAQ, pricing) being independently indexed",
     lastScraped: "2026-09-11",
-    notes:
-      "Richmond's indoor-airsoft scene has a confusing history worth knowing before relying on this entry: the original Valhalla Tactical (owned by the late Anders Smith) closed after his death; his shop manager, Alicia Clift, reopened the community's field under a new name, River City Airsoft, in July 2023 at a different nearby address (711 Hospital St). That operation's own site/event calendar has been stale since April 2024, while current listings (AirsoftC3, Instagram, and this 2020s-era commercial lease) point back to the \"Valhalla Tactical\" name and brand at 1727 Rhoadmiller St — treating that as the current operating entity here, but a direct call/visit is worth doing before relying on hours or pricing. Note: a same-named \"River City Airsoft\" at 832 Moscow Rd, Hamlin, NY is a completely unrelated, same-name-different-state business that surfaced during this research — not Richmond's.",
   },
   // ---- Alaska (added 2026-09-14) -------------------------------------
   {
@@ -3866,8 +3567,6 @@ const fields = [
     status: "active",
     dataSource: "website (907airsoft.com: home, /faq) + Yahoo Local + Facebook + Yelp + AirsoftC3",
     lastScraped: "2026-09-14",
-    notes:
-      "Also seen under the alaskanairsoftbattlegrounds.com domain. Yahoo Local gives a slightly different zip (99701, vs. 99703 on the business's own site) and a slightly different Sunday closing time (9pm vs. 10pm) -- went with the business's own site as the primary source for both. No ownerEmailDomain set -- the site uses a contact form rather than a published email address.",
   },
   {
     id: "interior-alaska-airsoft",
@@ -3882,8 +3581,6 @@ const fields = [
     dataSource:
       "Facebook + Instagram + AirsoftC3 + Airsoft Goat directory + Alaska ComiCon exhibitor page + OpenCorporates / Alaska Company Directory (LLC registration)",
     lastScraped: "2026-09-14",
-    notes:
-      "No dedicated business website found -- treated as facebook_only, same pattern as other low-verification entries in this file (e.g. Big Lake Tactical Wargames, KDK Airsoft). Registered as Interior Alaska Airsoft LLC per OpenCorporates/Alaska Company Directory, but that registration currently shows a \"Non-Compliant\" standing -- common for small LLCs that miss a biennial filing, not by itself evidence of closure, but worth a direct check before treating as fully current. The LLC's on-file addresses (a Fairbanks street address and a North Pole PO Box) are registration/mailing addresses, not necessarily the field's physical location, so no street address is set here -- the field itself is only ever described as \"off Repp Road, between Fairbanks and North Pole.\" Some directories file this field under North Pole rather than Fairbanks; used Fairbanks per its own \"Fairbanks Airsoft Field\" branding on the Boise Gun Club directory.",
   },
   {
     id: "alaska-family-airsoft",
@@ -3897,8 +3594,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Facebook + AirsoftC3 + Airsoft Goat directory",
     lastScraped: "2026-09-14",
-    notes:
-      "No dedicated business website, phone number, or street address found anywhere -- the thinnest-verified of the three new Alaska entries. Treated as facebook_only per this file's usual pattern. Indoor/outdoor was never explicitly stated by any source -- assumed outdoor based on \"field use\" phrasing typical of this type of listing; worth confirming directly if it's ever in question.",
   },
   // ---- Arizona (added 2026-09-14) ------------------------------------
   {
@@ -3919,8 +3614,6 @@ const fields = [
     status: "active",
     dataSource: "website (freedomairsofttucson.com) + Facebook + Instagram + Yelp (updated June 2026)",
     lastScraped: "2026-09-14",
-    notes:
-      "Site notes Sunday afternoon sessions were discontinued starting July 2025 due to low turnout in summer heat -- worth confirming current Sunday availability directly, especially outside peak season.",
   },
   {
     id: "vipairsoft-gilbert",
@@ -3939,8 +3632,6 @@ const fields = [
     status: "active",
     dataSource: "website (vipairsoft.net) + Yelp + Facebook + Instagram + Chamber of Commerce directory",
     lastScraped: "2026-09-14",
-    notes:
-      "Two-location business -- see also VIPAirsoft Phoenix, seeded separately. Pricing is shared across both locations per the site's own pricing page; no location-specific pricing found.",
   },
   {
     id: "vipairsoft-phoenix",
@@ -3959,8 +3650,6 @@ const fields = [
     status: "active",
     dataSource: "website (vipairsoft.net) + Yelp + AirsoftC3 + business directories",
     lastScraped: "2026-09-14",
-    notes:
-      "See also VIPAirsoft Gilbert (same ownership/brand, separate address and phone).",
   },
   {
     id: "american-paintball-coliseum-phoenix",
@@ -3977,8 +3666,6 @@ const fields = [
     status: "active",
     dataSource: "website (americanpaintballcoliseum.com/phoenix-arizona-airsoft-field) + Facebook + Instagram + YouTube",
     lastScraped: "2026-09-14",
-    notes:
-      "No street address published on the site's own Phoenix page -- recommend confirming directly before treating as fully bookable, same caveat used for airsoft-atlanta before its address was later resolved.",
   },
   {
     id: "fightertown-paintball-airsoft",
@@ -3995,8 +3682,6 @@ const fields = [
     status: "active",
     dataSource: "website (fightertownpaintballpark.com) + AirsoftC3",
     lastScraped: "2026-09-14",
-    notes:
-      "No Facebook or Instagram link found on the site itself, unusual for an active field of this size -- worth a follow-up check if it's ever in question.",
   },
   {
     id: "az-battle-zone",
@@ -4015,8 +3700,6 @@ const fields = [
     status: "active",
     dataSource: "website (azbattlezone.com, /airsoft) + Facebook + Instagram + Boise Gun Club directory",
     lastScraped: "2026-09-14",
-    notes:
-      "Included on the same paintball-primary-but-airsoft-included basis as other entries in this file (e.g. Action Park Paintball, IN) -- airsoft is a distinct, separately-priced, separately-scheduled offering on the operator's own site, not an incidental mention.",
   },
   {
     id: "tactical-fun-house-phoenix",
@@ -4033,8 +3716,6 @@ const fields = [
     status: "active",
     dataSource: "website (tacticalfunhouse.com) + Boise Gun Club directory",
     lastScraped: "2026-09-14",
-    notes:
-      "Stale-directory trap: Yelp shows a \"CLOSED\" tag (last updated Feb 2026), but the business's own live site shows current weekend hours and pricing plus a weekday private-booking policy -- included as active despite the Yelp tag, same treatment as The Combat Zone (Bloomingdale, GA) in an earlier batch.",
   },
   {
     id: "disruptive-paintball-airsoft",
@@ -4052,8 +3733,6 @@ const fields = [
     dataSource:
       "Facebook + Yelp (updated February 2026, 32 reviews) + Discover Marana chamber directory + Tucson Weekly community listing",
     lastScraped: "2026-09-14",
-    notes:
-      "No dedicated business website found (only Facebook and third-party directories) -- treated as facebook_only per this file's usual pattern, though the February 2026 Yelp update and steady review count are decent recency evidence.",
   },
   {
     id: "argonauts-arena",
@@ -4069,8 +3748,6 @@ const fields = [
     dataSource:
       "Facebook + Chino Valley Area Chamber of Commerce directory + AirsoftC3 + business review aggregators (updated as recently as July 2025)",
     lastScraped: "2026-09-14",
-    notes:
-      "Recency is the open question here: the field's own web page still references 2022-era assets and an undated recurring game schedule, and the clearest independent activity signal found is a Chamber of Commerce membership plus aggregator listings updated as recently as July 2025 -- no confirmed 2026 activity found either way. Included as facebook_only / include-with-caution rather than excluded outright, since nothing found indicates it has actually closed. Worth a direct check before treating hours or current operation as certain.",
   },
   {
     id: "cordes-junction-private-field",
@@ -4084,8 +3761,6 @@ const fields = [
     status: "active",
     dataSource: "AirsoftC3 only -- could not independently corroborate via Facebook, Yelp, Instagram, or other directories in this pass",
     lastScraped: "2026-09-14",
-    notes:
-      "Low confidence -- include with caution, same treatment as other single-source AirsoftC3-only entries in this file. No website, social media, or independent review presence found; the phone number given is the only contact method. Recommend a direct call to confirm this still operates before treating as fully current.",
   },
   // ---- California (added 2026-09-14) ---------------------------------
   {
@@ -4106,8 +3781,6 @@ const fields = [
     status: "active",
     dataSource: "website (combatzonecqc.com) + Yelp (104 reviews, updated July 2026) + Evike ticketing pages + Boise Gun Club directory",
     lastScraped: "2026-09-14",
-    notes:
-      "Resolves a name-collision heads-up flagged back during the Georgia batch (The Combat Zone, Bloomingdale, GA) -- this is that 'unrelated California business called Gamepod Combat Zone.' Not to be confused with combat-zone-sports (FL) or the-combat-zone (GA), both separate, unrelated businesses.",
   },
   {
     id: "airsoft-extreme-santa-clara",
@@ -4128,8 +3801,6 @@ const fields = [
     status: "active",
     dataSource: "website (airsoftextreme.com)",
     lastScraped: "2026-09-14",
-    notes:
-      "One of two Airsoft Extreme locations in this batch -- see also the indoor Rancho Cordova / Sacramento arena (airsoft-arena-rancho-cordova), same parent brand and phone number, separate physical field.",
   },
   {
     id: "playland-707-petaluma",
@@ -4146,8 +3817,6 @@ const fields = [
     status: "active",
     dataSource: "website (playland707.com/airsoft) + AirsoftC3",
     lastScraped: "2026-09-14",
-    notes:
-      "No phone number or Facebook link independently captured -- site references social specials but the URL wasn't confirmed.",
   },
   {
     id: "tag-adventure-park-hollister",
@@ -4167,8 +3836,6 @@ const fields = [
     status: "active",
     dataSource: "website (tagadventurepark.com, incl. /faq-airsoft) + Yelp (176 reviews, updated June 2026) + Instagram",
     lastScraped: "2026-09-14",
-    notes:
-      "The airsoft-specific offering also runs under the branding \"AO13\"/\"TAG Airsoft\" on a separate Facebook/Instagram (facebook.com/AO13HCA, instagram.com/ao13_hca) at this same address -- treated as one facility, not a separate field, to avoid a duplicate entry.",
   },
   {
     id: "west-coast-adventure-park-hollister",
@@ -4187,8 +3854,6 @@ const fields = [
     status: "active",
     dataSource: "website (westcoastadventurepark.com, current 2025 copyright, live booking system) + Facebook (WCAP916)",
     lastScraped: "2026-09-14",
-    notes:
-      "Stale-directory trap: Yelp, Yellowpages, Nextdoor, and Tripadvisor all still show this business as CLOSED at its old address (7101 Ione Rd, Sloughhouse, CA, near Sacramento). The business's own live, currently-updated website and Facebook page confirm it has relocated to 1533 Shore Rd, Hollister, CA and is actively operating there -- used the current Hollister address; the Sloughhouse listing is the defunct one.",
   },
   {
     id: "airsoft-arena-rancho-cordova",
@@ -4209,8 +3874,6 @@ const fields = [
     status: "active",
     dataSource: "own website (airsoftarenarc.com) + co-branded airsoftextreme.com/service/sacramento-arena listing",
     lastScraped: "2026-09-14",
-    notes:
-      "Same physical facility also markets as \"Airsoft Extreme -- Sacramento Arena\" under the parent Airsoft Extreme brand (two co-branded domains for one location) -- kept as a single entry rather than duplicated. See also airsoft-extreme-santa-clara, a separate physical field under the same parent brand.",
   },
   {
     id: "capital-edge-paintball-sacramento",
@@ -4229,8 +3892,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "website (capitaledgepaintball.com, paintball confirmed active) + Facebook + one dated YouTube video (airsoft component only)",
     lastScraped: "2026-09-14",
-    notes:
-      "Include with caution on the airsoft side specifically: capitaledgeairsoft.com would not resolve past a redirect loop during research, and no current airsoft pricing or schedule could be independently confirmed beyond social media -- the paintball operation itself is clearly active, but the airsoft offering's current status is genuinely uncertain. Worth a direct call before treating airsoft as bookable here.",
   },
   {
     id: "sac-county-airsoft-training",
@@ -4249,8 +3910,6 @@ const fields = [
     status: "active",
     dataSource: "own website (saccountyairsoft.com, live current hours/pricing) + Facebook + Instagram",
     lastScraped: "2026-09-14",
-    notes:
-      "Stale-directory trap: Yelp shows this business as CLOSED (updated September 2026) at the identical Kent St address the business's own live, currently-updated site uses -- looks like a Yelp mis-tag rather than a genuine closure. Treated as active; flagging the discrepancy for anyone cross-checking Yelp.",
   },
   {
     id: "all-patriot-airsoft-galt",
@@ -4268,8 +3927,6 @@ const fields = [
     status: "active",
     dataSource: "own website (allpatriotairsoft.com, thin content but confirms name/description) + Yelp cross-check across three historical business names at the identical address",
     lastScraped: "2026-09-14",
-    notes:
-      "Name-collision/rebrand cluster: this single field has operated under three names over time -- Ukau's Airsoft Field, then America Airsoft, now All Patriot Airsoft -- all at the identical Galt address; consolidated into this one entry rather than creating duplicates. Separately, do NOT confuse this with the unrelated \"American Airsoft\" field in Kerman, CA (Fresno metro, fresno-airsoft-kerman below) -- confusingly similar name, different business, different region. Also possibly related to a 'Patriot Airsoft' that closed in Newbury Park/Thousand Oaks, CA (Ventura County) -- that Southern California business ran a 'Save Patriot Airsoft' Kickstarter before shutting down, suggesting a possible relocation/rebrand connection, though this isn't confirmed.",
   },
   {
     id: "airsoft-ministry-roseville",
@@ -4289,8 +3946,6 @@ const fields = [
     status: "active",
     dataSource: "own website (airsoftministry.com, incl. /sunday-play)",
     lastScraped: "2026-09-14",
-    notes:
-      "Address is per Yelp, not stated directly on the business's own site. Yelp categorizes this oddly as \"Community Service/Non-Profit,\" reflecting its ministry structure rather than any closure signal.",
   },
   {
     id: "us-airsoft-world-anderson",
@@ -4306,8 +3961,6 @@ const fields = [
     status: "active",
     dataSource: "Yellowpages business listing (address/phone/hours match) + Airsoft Society forum references + Tripadvisor -- own domain (usairsoftfield.com) exists but returned mostly JS shell content on direct fetch",
     lastScraped: "2026-09-14",
-    notes:
-      "Also referred to informally as \"Redding Airsoft\" / \"Redding Area Airsoft\" in community Facebook groups -- likely one field with multiple colloquial/directory aliases, consolidated as this one entry at the Anderson, CA address.",
   },
   {
     id: "gorilla-airsoft-bakersfield",
@@ -4327,8 +3980,6 @@ const fields = [
     status: "active",
     dataSource: "own website (gorillaairsoft.com)",
     lastScraped: "2026-09-14",
-    notes:
-      "The address given is the retail storefront; the actual game field (Poso Creek) is a separate nearby location not independently pinned down to an exact street address. Also listed on some directories as \"Poso Creek Airsoft Field by Gorilla Airsoft\" -- same operation.",
   },
   {
     id: "cqb-city-stockton",
@@ -4345,8 +3996,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Yelp (102 reviews, updated July 2026) + Giftly + Roadtrippers -- own domain exists but returned only a robots.txt block on direct fetch",
     lastScraped: "2026-09-14",
-    notes:
-      "A 'Closed Now' label on one aggregator reflects being outside open hours at time of check, not a permanent closure -- three independent sources agree on identical address/phone, supporting current operation despite the unreachable own site.",
   },
   {
     id: "hill-559-clovis",
@@ -4359,8 +4008,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Facebook + Yelp (28 photos, updated June 2026) + Boise Gun Club directory + bstairsoft.com field listing",
     lastScraped: "2026-09-14",
-    notes:
-      "No dedicated business website found -- included on the strength of multiple independent, address-consistent directory listings rather than a single source.",
   },
   {
     id: "fresno-airsoft-kerman",
@@ -4374,8 +4021,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Yelp (as 'Fresno Airsoft Arena,' 10 reviews, updated June 2026) + Facebook + Instagram + highspeedbbs store directory + AirsoftC3",
     lastScraped: "2026-09-14",
-    notes:
-      "A Yelp listing for \"American Airsoft\" also appears at this exact address, suggesting a rebrand or co-located renamed business -- treated as the same single field here. Do NOT confuse this with \"All Patriot Airsoft\" in Galt, CA (Sacramento metro, all-patriot-airsoft-galt above), which was also previously called \"America Airsoft\" -- two different fields in different regions with confusingly similar names.",
   },
   {
     id: "specops-live-play-oakdale",
@@ -4388,8 +4033,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Facebook + Instagram + LinkedIn + AirsoftC3 -- own site (specopsliveplay.com) exists but could not be directly verified for pricing/hours",
     lastScraped: "2026-09-14",
-    notes:
-      "No street address independently confirmed. Lower confidence than most entries in this batch -- recommend a direct check of specopsliveplay.com before treating pricing/hours as current.",
   },
   {
     id: "mike-force-airsoft-salinas",
@@ -4407,8 +4050,6 @@ const fields = [
     status: "active",
     dataSource: "own website (mikeforceairsoft.org)",
     lastScraped: "2026-09-14",
-    notes:
-      "Directories variously place this in Salinas, Prunedale, or Moss Landing -- all neighboring small towns in the same Monterey County area; the address on the club's own site places it near Salinas.",
   },
   {
     id: "fort-ord-airsoft-field-marina",
@@ -4421,8 +4062,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Facebook + Instagram location tag + Popular Airsoft article reference + AirsoftC3 + business directory listings",
     lastScraped: "2026-09-14",
-    notes:
-      "No dedicated website, precise street address, or confirmed current (2025-2026) game schedule/pricing found -- included for its historical prominence and multiple independent corroborating listings, but recommend direct outreach before treating pricing as current. Some listings suggest informal/unpermitted use of former base land, worth flagging for a booking product.",
   },
   {
     id: "gladiator-paintball-park-slo",
@@ -4442,8 +4081,6 @@ const fields = [
     status: "active",
     dataSource: "own website (gladiatorpb.com)",
     lastScraped: "2026-09-14",
-    notes:
-      "Included per this file's convention for paintball-primary venues with an explicit, separately-priced airsoft offering (parallel to Action Park Paintball, IN). The airsoft offering appears to be recurring-event-based (night sessions) rather than daily/weekly regular play -- worth noting for booking-cadence purposes.",
   },
   {
     id: "warped-ops-castaic",
@@ -4463,7 +4100,6 @@ const fields = [
     status: "active",
     dataSource: "own website (warpedops.com) + AirsoftC3 + Airsoft Gateway + airsoftnmore + RedWolf blog",
     lastScraped: "2026-09-14",
-    notes: "none significant",
   },
   {
     id: "combat-paintball-park-castaic",
@@ -4483,8 +4119,6 @@ const fields = [
     status: "active",
     dataSource: "own website (playcpp.com/airsoft)",
     lastScraped: "2026-09-14",
-    notes:
-      "An older aggregator (airsoftspecops.com) lists this same address under a prior name, 'California Paintball Park' (thecaliforniapaintballpark.com) -- same physical site, not a separate business.",
   },
   {
     id: "hollywood-sports-bellflower",
@@ -4505,7 +4139,6 @@ const fields = [
     status: "active",
     dataSource: "own website (hollywoodsports.com/pages/airsoft)",
     lastScraped: "2026-09-14",
-    notes: "none significant",
   },
   {
     id: "project-n1-el-monte",
@@ -4523,8 +4156,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Yelp (122 reviews, not closed) + airsoftnmore.com pricing page + Battleonix directory",
     lastScraped: "2026-09-14",
-    notes:
-      "Own website exists (n1airsoft.com) but is a JS-rendered app that automated fetch could not read past metadata -- recommend a direct visit to confirm current hours/pricing before treating this as fully verified.",
   },
   {
     id: "true-edge-airsoft-simi-valley",
@@ -4537,8 +4168,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "Yelp (44 reviews, updated June 2026, not closed) + Yellow Pages + mallscenters.com + opengovus",
     lastScraped: "2026-09-14",
-    notes:
-      "Address conflict across sources: older directories (opengovus, unilocal) list 2273 Tapo St instead, which is actually the address of a separate retail/repair shop, 'Valley Airsoft' -- used the more recently-updated Yelp source's mall address instead. Possibly related to or rebranded from Valley Airsoft given the overlapping older address, but this isn't confirmed as the same legal entity. Recommend a direct phone confirmation before treating either address as certain.",
   },
   {
     id: "tac-city-airsoft-fullerton",
@@ -4559,8 +4188,6 @@ const fields = [
     status: "active",
     dataSource: "own website (taccityairsoft.com)",
     lastScraped: "2026-09-14",
-    notes:
-      "Appears to be the only dedicated standalone airsoft field physically located in Orange County proper -- OC players otherwise travel to Inland Empire (SC Village / Code Red / Wildlands) or LA County fields.",
   },
   {
     id: "sc-village-chino",
@@ -4579,8 +4206,6 @@ const fields = [
     status: "active",
     dataSource: "own website (scvillage.com)",
     lastScraped: "2026-09-14",
-    notes:
-      "Some older/secondary directory sources mis-list this business's city as 'Corona' instead of Chino -- Chino is correct per the operator's own site. See also sc-village-lakeside, a separate physical location in San Diego County under the same operator/brand.",
   },
   {
     id: "code-red-airsoft-park-perris",
@@ -4599,8 +4224,6 @@ const fields = [
     status: "active",
     dataSource: "Yelp (58 reviews, updated through June 2026, not closed) + Tripadvisor + airsoftnmore.com + Instagram",
     lastScraped: "2026-09-14",
-    notes:
-      "Own domain kept redirect-looping during automated verification -- recommend a manual browser check to confirm current pricing/hours before treating as fully current.",
   },
   {
     id: "wildlands-airsoft-lake-elsinore",
@@ -4620,8 +4243,6 @@ const fields = [
     status: "active",
     dataSource: "own website (wildlandsairsoft.com)",
     lastScraped: "2026-09-14",
-    notes:
-      "Same-site collision to flag: this address also hosts \"Jungle Island Paintball, Airsoft, & Gel Blaster Park,\" a sister paintball/gel-blaster brand under the same operator at the identical address -- Wildlands is the airsoft-specific brand and is the one listed here rather than duplicating the same physical site under both names. An older aggregator also calls this \"Jungle Island Airsoft Park\" -- same place, different historical name.",
   },
   {
     id: "661-airsoft-palmdale",
@@ -4636,8 +4257,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "RedWolf Airsoft blog + Yelp (18 photos, updated September 2026, not closed) + Visit Palmdale tourism directory + Giftly + Roadtrippers",
     lastScraped: "2026-09-14",
-    notes:
-      "No working dedicated website found (661airsoft.com returns 404). Two separate-looking Facebook business pages exist for this name -- likely a duplicate/legacy page rather than a different business. No independently verifiable phone number or fixed hours found -- lower confidence despite the decent source count.",
   },
   {
     id: "rampant-lion-field-victorville",
@@ -4653,8 +4272,6 @@ const fields = [
     status: "active",
     dataSource: "own page (desertratsairsoft.com/pages/rampant-lion-field.php) + Facebook",
     lastScraped: "2026-09-14",
-    notes:
-      "No street address exists for this field -- per the operator's own site, the property is unincorporated desert land with no formal address. Genuinely irregular/event-driven operation with no fixed hours; flagged as a non-standard listing type given the unusual venue format.",
   },
   {
     id: "san-diego-airsoft-arena-el-cajon",
@@ -4672,7 +4289,6 @@ const fields = [
     status: "active",
     dataSource: "own website (airsoftx.net)",
     lastScraped: "2026-09-14",
-    notes: "none significant",
   },
   {
     id: "sc-village-lakeside",
@@ -4692,8 +4308,6 @@ const fields = [
     status: "active",
     dataSource: "own website (scvillage.com/pages/lakeside) + Yelp (not closed) + Facebook/Instagram under the legacy 'Giant San Diego' name",
     lastScraped: "2026-09-14",
-    notes:
-      "Brand-transition flag: this physical site's social media is still entirely under the older \"Giant San Diego Paintball and Airsoft Park\" name/handles, while the current operator's own website brands it \"SC Village -- Lakeside\" -- treated as one physical field with two coexisting brand identities, not two separate businesses. Shares a phone number with sc-village-chino under the same parent operator.",
   },
   {
     id: "paintball-park-camp-pendleton",
@@ -4711,8 +4325,6 @@ const fields = [
     status: "active",
     dataSource: "mybaseguide.com + a Patch.com news article on the airsoft arena's opening + Facebook",
     lastScraped: "2026-09-14",
-    notes:
-      "Include with caution, same treatment as Fort Benning Airsoft Field (GA): this field sits on an active Marine Corps base. Civilian access requires the base's \"Trusted Traveler\" program -- an escort by a uniformed service member or government CAC holder, or a military retiree/family member with a valid DOD ID. This is NOT a walk-up-and-play venue for the general public -- flag prominently before treating as normally bookable. Site itself (camppendleton.thepaintballpark.com) had SSL/robots issues blocking direct verification; details sourced from the secondary references above.",
   },
   {
     id: "ambush-paintball-airsoft-moorpark",
@@ -4733,7 +4345,6 @@ const fields = [
     status: "active",
     dataSource: "own website (ambushpaintballpark.com)",
     lastScraped: "2026-09-14",
-    notes: "none significant",
   },
   {
     id: "stryker-paintball-airsoft-santa-paula",
@@ -4753,7 +4364,6 @@ const fields = [
     status: "active",
     dataSource: "own website (strykerpa.com)",
     lastScraped: "2026-09-14",
-    notes: "none significant",
   },
   // ---- Colorado (added 2026-09-15) -----------------------------------
   {
@@ -4774,8 +4384,6 @@ const fields = [
     status: "active",
     dataSource: "own website (foxairsoft.com) + Tripadvisor 2026 reviews + active Instagram/Facebook accounts",
     lastScraped: "2026-09-15",
-    notes:
-      "AirsoftC3 still lists an older \"F.A.F. Flat Acres Farm Airsoft Field\" entry -- same venue, not a duplicate. FAF (Flat Acres Farm) is the field name; Fox Airsoft is the parent business/brand.",
   },
   {
     id: "goairheads-erie",
@@ -4794,7 +4402,6 @@ const fields = [
     status: "active",
     dataSource: "own website (goairheads.com), confirming a live Sept-Oct 2026 event schedule",
     lastScraped: "2026-09-15",
-    notes: "Markets itself as \"Denver\" in copy though physically located in Erie, CO -- Erie used as the city of record.",
   },
   {
     id: "republic-shooting-range-avondale",
@@ -4814,8 +4421,6 @@ const fields = [
     status: "active",
     dataSource: "own website (republicshootingrange.com) + Yelp (updated December 2025) + Google/Facebook presence",
     lastScraped: "2026-09-15",
-    notes:
-      "Stale/mislabeled-directory trap resolved -- AirsoftC3 separately lists a \"Republic Airsoft, Avondale, CO\" entry at the same address/phone pattern; this is the same business as Republic Shooting Range, not a separate venue, so it was not seeded twice.",
   },
   {
     id: "rocky-mountain-combat-parachute",
@@ -4834,8 +4439,6 @@ const fields = [
     status: "active",
     dataSource: "own website (rockymountaincombat.com), confirmed live with a 2026 tournament listing, + Yelp",
     lastScraped: "2026-09-15",
-    notes:
-      "Sole airsoft field option found in the western Colorado / Grand Junction-Glenwood Springs corridor. Also operates as \"Rocky Mountain Lasertag\" -- dual-branded, not a laser-tag-only venue.",
   },
   {
     id: "dynamic-paintball-airsoft-aurora",
@@ -4853,8 +4456,6 @@ const fields = [
     status: "active",
     dataSource: "own website (dynamicpaintball.com/airsoft) + Yelp (updated August 2026, 36 photos) + Tripadvisor 2026 reviews",
     lastScraped: "2026-09-15",
-    notes:
-      "The dedicated airsoft page's monthly-schedule text is dated to 2023, so treat the specific cadence as possibly stale even though the business itself is confirmed currently open via fresh 2026 activity -- verify the current airsoft schedule directly before publishing specific dates. Some directories/Facebook still tag the city as \"Watkins, CO\" (a legacy/mailing reference); the field address itself is in Aurora. A separate former \"Dynamic Paintball Pro Shop\" location (323 Airport Blvd, Aurora) is confirmed closed on Yelp -- not to be confused with this still-open field.",
   },
   {
     id: "american-paintball-coliseum-aurora",
@@ -4873,8 +4474,6 @@ const fields = [
     status: "active",
     dataSource: "own website (americanpaintballcoliseum.com), confirmed live, + active Yelp/Instagram",
     lastScraped: "2026-09-15",
-    notes:
-      "Rebrand/relocation resolved -- the company's original Denver location (5095 Peoria St) is confirmed closed on Yelp (updated August 2026); the business relocated/expanded to this current Aurora address per the operator's own blog post. The old Peoria St Denver address is not listed as a separate active entry.",
   },
   {
     id: "american-paintball-coliseum-colorado-springs",
@@ -4893,8 +4492,6 @@ const fields = [
     status: "active",
     dataSource: "own website (americanpaintballcoliseum.com), confirmed live, + Yelp",
     lastScraped: "2026-09-15",
-    notes:
-      "Same parent company/shared social accounts as the Aurora entry above, but a physically distinct indoor facility with its own address and phone -- seeded as a separate venue.",
   },
   {
     id: "blitz-paintball-airsoft-dacono",
@@ -4914,7 +4511,6 @@ const fields = [
     status: "active",
     dataSource: "own website (blitzpaintball.net), confirmed live with dedicated airsoft pages, + Yelp (updated August 2026, 47 reviews)",
     lastScraped: "2026-09-15",
-    notes: "Markets itself as \"Denver\" airsoft, but the physical address is Dacono, CO (Denver-metro adjacent) -- Dacono used as city of record.",
   },
   // ---- Connecticut (added 2026-09-16) ---------------------------------
   {
@@ -4935,8 +4531,6 @@ const fields = [
     dataSource:
       "own website (groundzeroairsoftusa.com, incl. /contact/ and /pricing/) + AirsoftC3 + Tripadvisor + Facebook + connecticutexplorer.com",
     lastScraped: "2026-09-16",
-    notes:
-      "Address discrepancy resolved: the field's own /contact/ page states 243 Wolcott Rd, Terryville, CT 06786 -- used here as the primary-source address. Third-party directories/Tripadvisor instead show a nearby \"1254 Wolcott Rd, Wolcott, CT\" address; Wolcott Rd runs through both Wolcott and the Terryville section of Plymouth, CT, so this is very likely one field with imprecise directory geocoding, not two separate fields. Pricing tiers on the own site look like unedited template copy -- verify current pricing before relying on it. Do not confuse with an unrelated same-named \"Ground Zero Airsoft\" venue in Ringwood, Hampshire, England.",
   },
   {
     id: "final-shot-paintball-voluntown",
@@ -4957,8 +4551,6 @@ const fields = [
     dataSource:
       "own website (finalshotpaintball.com) + Yelp (updated June 2026) + dedicated Facebook (finalshotairsoft) + Instagram",
     lastScraped: "2026-09-16",
-    notes:
-      "The operator's own site has templated \"Airsoft Paintball Arena\" landing pages for several unrelated states (AR, VT, PA, etc.) -- generic SEO boilerplate, not evidence of other physical locations; the single CT venue at Voluntown is independently corroborated via Yelp/Facebook/Instagram. Re-verify the \"Airsoft Sunday\" schedule is still current before publishing specific hours.",
   },
   // ---- Delaware (added 2026-09-17) -------------------------------------
   {
@@ -4980,8 +4572,6 @@ const fields = [
     dataSource:
       "own website (chaoscorpsairsoft.com -- home, calendar, services, field-rules, team pages) + corroborating 911airsoft.com closure notice pointing to the same location/date + Facebook/Instagram presence",
     lastScraped: "2026-09-17",
-    notes:
-      "Delaware's only strongly-verified, currently active dedicated airsoft operation. Minor discrepancy: Facebook page metadata lists \"Greenwood, DE\" while the field's own site gives the Georgetown address used here -- likely inherited branding/location tag from the 911 Airsoft predecessor, not a second location.",
   },
   {
     id: "airsoft-action-field-georgetown",
@@ -4996,8 +4586,6 @@ const fields = [
     dataSource:
       "AirsoftC3 field listing (self-reported, last updated 2023-08-30, still listed on AirsoftC3's current DE fields page) + Chamber of Commerce/Cylex/HighSpeedBBs directory mirrors (appear to derive from the same underlying data, not independent confirmations) + a standalone SBA/PPP business registration record",
     lastScraped: "2026-09-17",
-    notes:
-      "Low confidence -- include with caution. No fresh (2024-2026) reviews, social activity, or independent corroboration found; the listed phone number carries a California area code, which is unusual/possibly a reused or templated directory number. No evidence of closure either, and it still appears on AirsoftC3's current Delaware fields list. Same town (Georgetown) as the now-active Chaos Corps Airsoft -- possible this field has gone dormant or been effectively superseded. Recommend a direct phone/email confirmation before treating as fully current.",
   },
   {
     id: "consurgent-airsoft-field-laurel",
@@ -5010,8 +4598,6 @@ const fields = [
     dataSource:
       "AirsoftC3 field listing only -- still listed on AirsoftC3's current Delaware fields page; no independent website, address, phone, or social presence found anywhere else",
     lastScraped: "2026-09-17",
-    notes:
-      "Low confidence -- single-source, same treatment as other AirsoftC3-only entries elsewhere in this file. No address or phone found; likely a small, informal, team-run field rather than a full commercial venue. No evidence of closure. Recommend a direct contact to verify before treating as fully current.",
   },
   // ---- Hawaii (added 2026-09-18) ---------------------------------------
   {
@@ -5032,8 +4618,6 @@ const fields = [
     dataSource:
       "own website (alohapaintball.com, live, current pricing/hours) + Yelp under predecessor brand \"Extreme Sports Complex\" (updated July 2026, 58 reviews, not marked closed) + Facebook activity",
     lastScraped: "2026-09-18",
-    notes:
-      "Rebrand chain: this field has operated under at least two prior names at essentially the same Kapolei location -- \"Hawaii Extreme Paintball and Airsoft LLC\" (older references cite a 91-1041 Midway Rd address, not independently confirmed as the same site) -> \"Extreme Sports Complex\" (194 Mumba Street; Yelp/Facebook still show activity under this name) -> current \"Aloha Paintball & Airsoft\" (same 194 Mumba St address; the old extremesportscomplexhawaii.com domain now redirects to alohapaintball.com). Treated as one continuously-operating field, not multiple entries.",
   },
   {
     id: "k1-airsoft-kailua",
@@ -5054,7 +4638,6 @@ const fields = [
     dataSource:
       "own website (k1airsoft.com, live, current pricing/hours) + Yelp (updated July 2026, not marked closed) + Instagram (active)",
     lastScraped: "2026-09-18",
-    notes: "The clearest, most straightforwardly \"currently open\" dedicated field found in the state.",
   },
   {
     id: "epowersports-battlezone-honolulu",
@@ -5072,8 +4655,6 @@ const fields = [
     dataSource:
       "own website (epowersports.square.site, reachable) + Yelp (updated August 2026, 32 reviews, current address, not marked closed) + Yahoo Local/Wheree directory corroboration",
     lastScraped: "2026-09-18",
-    notes:
-      "Distinct from Epowersports' old Aiea retail storefront (99-115 Aiea Heights Dr), which Yelp explicitly marks closed -- that was a separate, now-defunct retail-only location, not this active Honolulu/Kalani St. retail-plus-CQB-arena site.",
   },
   {
     id: "garden-isle-airsoft-kalaheo",
@@ -5086,8 +4667,6 @@ const fields = [
     dataSource:
       "AirsoftC3 field directory (still listed on the current Hawaii fields page) + Facebook page existence (facebook.com/KauaiAirsoft) + Airsoft Society forum thread",
     lastScraped: "2026-09-18",
-    notes:
-      "Low confidence -- single-source/directory-corroborated only, same treatment as other thin AirsoftC3-only entries elsewhere in this file. No street address, phone, or recent posting activity could be independently confirmed, but no evidence of closure either. Recommend a direct check before treating as fully current.",
   },
   // ---- Idaho (added 2026-09-19) ----------------------------------------
   {
@@ -5109,8 +4688,6 @@ const fields = [
     dataSource:
       "own website (cqbunderground.com, live) + Bonners Ferry Herald 2021 feature + Yelp (updated July 2026, no closed tag) + AirsoftC3",
     lastScraped: "2026-09-19",
-    notes:
-      "This is the real, Idaho-based CQB Underground -- a same-named reference has repeatedly surfaced as a false lead during other states' research (e.g. Colorado, Delaware) with people confusing it for a local business; this one is genuinely headquartered here in Bonners Ferry.",
   },
   {
     id: "homestead-airsoft-bonners-ferry",
@@ -5127,8 +4704,6 @@ const fields = [
     dataSource:
       "AirsoftC3 listing (last updated 2023-08-30) + an independent yolasite.com site describing the same free/RSVP model at the same address + the group's own Facebook group",
     lastScraped: "2026-09-19",
-    notes:
-      "Low confidence -- include with caution. No dated recent posts found confirming 2025/2026 activity, though two independent sources agree on the free/RSVP model and address. The listed contact number carries a North Carolina area code, unusual for a small local field -- likely an organizer's personal cell rather than evidence of anything wrong, but worth noting. No evidence of closure.",
   },
   {
     id: "advantage-airsoft-rigby",
@@ -5147,8 +4722,6 @@ const fields = [
     dataSource:
       "own website (advprotraining.com, live product pages) + East Idaho News feature (Sept 2024) + a confirmed Aug 2025 event listing (AllEvents.in) + Boise Gun Club directory mirror (58 reviews, 5.0 stars)",
     lastScraped: "2026-09-19",
-    notes:
-      "Rebrand/domain trap resolved: the older branded domain advantage-airsoft.com now shows \"This site is Paused\" -- the business transacts through advprotraining.com today even though its social handles and directory listings still say \"Advantage Airsoft.\" A loosely organized community group, East Idaho Airsoft, has members who play here (and at Air Combat Battlefield below plus informal, non-commercial spots) but has no fixed venue of its own -- not seeded separately.",
   },
   {
     id: "reapers-den-airsoft-pocatello",
@@ -5165,8 +4738,6 @@ const fields = [
     dataSource:
       "Idaho State Journal news article (2025-01-27) + Pocatello-Chubbuck Chamber of Commerce (listed under LS Armory) + TikTok/Instagram + Boise Gun Club directory mirror",
     lastScraped: "2026-09-19",
-    notes:
-      "The business's own domain (reapersdenairsoft.com) returns a 404 on direct fetch despite being search-indexed -- treated as facebook_only rather than active since no reachable own-website primary source exists, matching this project's usual convention, though the real newspaper feature and Chamber of Commerce listing give solid independent corroboration. Very recently opened (Jan 2025) so has a shorter track record than other entries -- recommend a direct confirmation before treating pricing/hours as fully current.",
   },
   {
     id: "air-combat-battlefield-burley",
@@ -5185,7 +4756,6 @@ const fields = [
     dataSource:
       "own website (aircombatbattlefield.com, live) + East Idaho Airsoft's own \"Fields\" page + YouTube gameplay footage + Boise Gun Club/Vymaps directory entries agreeing on address and phone",
     lastScraped: "2026-09-19",
-    notes: "Clearly distinguishes its airsoft offering from its own separate laser-tag offering.",
   },
   {
     id: "pyrrhic-tactical-sports-nampa",
@@ -5204,8 +4774,6 @@ const fields = [
     dataSource:
       "own website (pyrrhicpaintball.com / lasertagidaho.com) + Nampa Chamber of Commerce ribbon-cutting listing + strideevents.com booking integration",
     lastScraped: "2026-09-19",
-    notes:
-      "Same parent company and phone number as Pyrrhic Paintball (Caldwell) below -- seeded separately since they are two distinct bookable street addresses.",
   },
   {
     id: "pyrrhic-paintball-caldwell",
@@ -5224,8 +4792,6 @@ const fields = [
     dataSource:
       "own website (paintballboise.com / pyrrhicpaintball.com) + Yelp (updated September 2026, not marked closed) + Yellow Pages",
     lastScraped: "2026-09-19",
-    notes:
-      "Explicitly-priced, separately-scheduled airsoft offering confirmed (not just \"paintball guns allowed\"), satisfying this project's paintball-venue inclusion bar. Same parent company/phone number as Pyrrhic Tactical Sports (Nampa) above.",
   },
   // ---- Maine (added 2026-09-19) -----------------------------------------
   {
@@ -5242,8 +4808,6 @@ const fields = [
     dataSource:
       "own website (harrisairsoft.com, reachable, active dated 2026 events calendar through Sep 26, 2026) + Facebook",
     lastScraped: "2026-09-19",
-    notes:
-      "No published phone number found on own site or directories. Ticketing handled via a linked Square site (harrisairsoft.square.site); pricing not publicly visible without checkout.",
   },
   {
     id: "coles-farm-airsoft-dayton",
@@ -5259,8 +4823,6 @@ const fields = [
     dataSource:
       "own website (colesairsoft.com, reachable) + a dated \"D-Day 2025\" event page (June 6-7, 2025) + active Events list (Fall Swap Meet, ProLeague 05, and others) + Facebook",
     lastScraped: "2026-09-19",
-    notes:
-      "No published phone number or pricing found on own site. Confirmed as a genuinely separate business from Harris Farm Airsoft (different address, different independent website, different Facebook page, no shared-ownership statement found either way).",
   },
   {
     id: "sass-linneus",
@@ -5277,8 +4839,6 @@ const fields = [
     dataSource:
       "own website (saasmaine.com, reachable) + Bangor Daily News feature (Jun 30, 2024, on the field expanding) + The County newspaper feature (Jul 1, 2024) + Facebook",
     lastScraped: "2026-09-19",
-    notes:
-      "Paintball- and NERF-war programs are also offered alongside airsoft at this venue -- included per this project's paintball-venue inclusion bar since airsoft is a genuine, separately-marketed program, not just \"paintball guns allowed.\" Field fee $12 / rental fee $18 (plus field fee) per last-documented 2024-season pricing; reconfirm before treating as current.",
   },
   // ---- Michigan (additional field added 2026-09-19) --------------------
   {
@@ -5297,8 +4857,6 @@ const fields = [
     dataSource:
       "Michael (project owner) confirmed field is currently active as of 2026-09-19 + a documented June 29, 2025 fundraiser event (AllEvents.in) + the ranch's own Weebly site (confirms address, no airsoft program mentioned there -- airsoft appears to be a separately-branded program/Facebook page at the same physical property)",
     lastScraped: "2026-09-19",
-    notes:
-      "Facebook page (Fortify Ranch Airsoft) has not been updated since end of 2025 per Michael, but he confirmed the business is currently active as of this addition. No phone number or standing/current pricing found independently -- the $40 admission figure is from a specific 2025 one-off fundraiser event, not confirmed as ongoing open-play pricing.",
   },
   {
     id: "weekend-warriors-paintball-alpine",
@@ -5388,8 +4946,6 @@ const fields = [
     dataSource:
       "GoFundMe campaign (field improvement fundraiser, confirms address/phone/mission) + AllEvents.in listings for a dated 2025 community build day and a dated May 2026 milsim event + Facebook group",
     lastScraped: "2026-09-17",
-    notes:
-      "No website -- Facebook group is the field's primary online presence. Explicitly not-for-profit/veteran-owned, so may not be a standard Atlas-booking customer, but included per Michael's request regardless since it's a genuine, currently-active field.",
   },
   // ---- Maryland (added 2026-09-18) ---------------------------------------
   {
@@ -5409,8 +4965,6 @@ const fields = [
     dataSource:
       "supplied directly by Michael (address, hours, website) + Facebook/X/Instagram corroboration",
     lastScraped: "2026-09-18",
-    notes:
-      "Hours per Michael: Wed-Fri 6pm-10pm, Sat 3pm-10pm, Sun 3pm-9pm (closed Mon-Tue). Instagram profile still geo-tags the business as \"Glen Burnie, MD\" -- its prior address before the recent move to this Baltimore location; the current Eastern Ave address is per Michael and is a real, distinct commercial property (confirmed via commercial real-estate listings), not a stale-directory artifact. No phone number or exact admission pricing independently confirmed -- own site returned rate-limit (429) errors on repeated fetch attempts during this research.",
   },
   {
     id: "robinhood-adventure-park-havre-de-grace",
@@ -5427,8 +4981,6 @@ const fields = [
     dataSource:
       "own website (robinhoodadventurepark.com) + VisitMaryland listing + Patch news coverage of its opening + Facebook",
     lastScraped: "2026-09-18",
-    notes:
-      "An old prior domain (robinhoodpaintball.net) now hosts an unrelated hijacked gambling-spam site -- do not use or link that domain; robinhoodadventurepark.com is the only correct current site.",
   },
   {
     id: "southern-maryland-paintball-newburg",
@@ -5444,8 +4996,6 @@ const fields = [
     dataSource:
       "own website (dedicated /airsoft-at-smp/ page) + a 2026 summer camp/event listing (sportscarnival.com) + an Axcitement feature (May 2026)",
     lastScraped: "2026-09-18",
-    notes:
-      "Included per this project's paintball-venue inclusion bar since airsoft is a genuine, separately-marketed program, not just \"paintball guns allowed.\" Itemized airsoft pricing wasn't found on the page fetched.",
   },
   {
     id: "nr-adventure-park-taneytown",
@@ -5461,8 +5011,6 @@ const fields = [
     dataSource:
       "own website (nradventurepark.com) + Yelp (updated May 2026) + Tripadvisor (active 2026 reviews) + Facebook",
     lastScraped: "2026-09-18",
-    notes:
-      "Rebrand/consolidation chain -- do not separately list \"Paintball Adventure Park\"/\"Paintball Adventures Park\" (same address, now closed under that name) or Route 40 Paintball Park (White Marsh, closed, paintball-only) as distinct fields.",
   },
   {
     id: "north-east-adventure-paintball-airsoft",
@@ -5477,7 +5025,6 @@ const fields = [
     status: "active",
     dataSource: "own website (neapaintball.com) + Facebook",
     lastScraped: "2026-09-18",
-    notes: "",
   },
   {
     id: "tactical-airsoft-arena-rockville",
@@ -5497,8 +5044,6 @@ const fields = [
     dataSource:
       "own website (tacticalairsoftarena.com, shared chain site) + Yelp (updated August 2026, 75 reviews) + CBS Baltimore feature + Facebook/Instagram",
     lastScraped: "2026-09-18",
-    notes:
-      "Two distinct id-separate physical locations under one brand/shared website, same multi-location-chain pattern used throughout this project. See tactical-airsoft-arena-manassas for the VA sister location.",
   },
   {
     id: "outdoor-xtreme-chesapeake-city",
@@ -5515,8 +5060,6 @@ const fields = [
     dataSource:
       "own website (oxcc.com, confirmed reachable) + Yelp (updated June 2026) + Tripadvisor (active 2026 listing) + YouTube",
     lastScraped: "2026-09-18",
-    notes:
-      "Own site returned an intermittent 503 error on a first fetch attempt but loaded cleanly on retry -- confirmed reachable, not a dead domain.",
   },
 
   // ---- Outdoor Xtreme chain, remaining locations (added 2026-09-20) -------
@@ -5538,7 +5081,6 @@ const fields = [
     status: "active",
     dataSource: "own website (oxangelica.com) + Yelp + Tripadvisor + Facebook",
     lastScraped: "2026-09-20",
-    notes: "",
   },
   {
     id: "outdoor-xtreme-orlando",
@@ -5556,7 +5098,6 @@ const fields = [
     status: "active",
     dataSource: "own website (oxorlando.com) + Yelp + Tripadvisor",
     lastScraped: "2026-09-20",
-    notes: "",
   },
   {
     id: "outdoor-xtreme-hudson",
@@ -5574,7 +5115,6 @@ const fields = [
     status: "active",
     dataSource: "own website (oxhudson.com) + Yelp + Battleonix",
     lastScraped: "2026-09-20",
-    notes: "",
   },
   {
     id: "outdoor-xtreme-seven-points",
@@ -5592,7 +5132,6 @@ const fields = [
     status: "active",
     dataSource: "own website (oxsevenpoints.com) + Facebook (formerly Whatz-Up Paintball) + Trip.com",
     lastScraped: "2026-09-20",
-    notes: "",
   },
   {
     id: "outdoor-xtreme-charleston",
@@ -5610,7 +5149,6 @@ const fields = [
     status: "active",
     dataSource: "own website (oxcharleston.com) + Facebook (formerly Paintball Charleston)",
     lastScraped: "2026-09-20",
-    notes: "City listed as Moncks Corner (the actual municipality) rather than Charleston, which the brand name references but is a different, more distant city.",
   },
   {
     id: "paintball-sportsland-frederick",
@@ -5625,8 +5163,6 @@ const fields = [
     dataSource:
       "Yelp (updated May 2026) + Tripadvisor (active 2026 reviews) + Nextdoor + Facebook -- own website (paintball-sportsland.com) returned a 503 server error on every fetch attempt across multiple retries during this research",
     lastScraped: "2026-09-18",
-    notes:
-      "Set to facebook_only per this project's standing convention: when a business's own website cannot be confirmed reachable as a primary source, that status applies regardless of how much independent third-party corroboration exists (same treatment as KDK Airsoft/MO and Reaper's Den Airsoft/ID). Phone number found only inconsistently across sources; omitted rather than guessed.",
   },
   {
     id: "elite-gaming-delmarva-salisbury",
@@ -5642,8 +5178,6 @@ const fields = [
     dataSource:
       "live Square booking page (square.site/book/CJT148QDYXXR4/elite-gaming-delmarva-salisbury-md, shows current hours: Thu 6-10pm, Fri/Sat until midnight, Sun 12-10pm, closed Mon-Wed) + Facebook/X/YouTube -- own domain (elitegamingdelmarva.com) failed to resolve on every fetch attempt during this research",
     lastScraped: "2026-09-18",
-    notes:
-      "Set to facebook_only per this project's standing convention for an unreachable own domain, despite the live, current Square booking calendar as corroboration (same treatment as Reaper's Den Airsoft/ID). Suite number is inconsistent across third-party sources (Suite 10 vs. Suite 40 both appear) -- omitted from the address rather than guessed; recommend confirming directly before this becomes a claimable listing.",
   },
 
   // ---- Montana (added 2026-09-20) -----------------------------------------
@@ -5666,8 +5200,6 @@ const fields = [
     dataSource:
       "own website (montanaactionpaintball.com, dedicated /pages/airsoft page with schedule and pricing) + Facebook group + Instagram + Yelp/Tripadvisor",
     lastScraped: "2026-09-20",
-    notes:
-      "Paintball-primary venue with a genuine separate airsoft offering (dedicated schedule and pricing on its own site, not just a passing mention) -- included per this project's established pattern for such venues.",
   },
   {
     id: "wild-rose-paintball-airsoft-billings",
@@ -5688,8 +5220,6 @@ const fields = [
     dataSource:
       "own website (wildroseactioncenter.com) + Yelp + Tripadvisor + Facebook",
     lastScraped: "2026-09-20",
-    notes:
-      "Distinct from the separate indoor Wild Rose Action Center location at 529 24th St W, Billings, which houses \"Splat Attack Battle Arena\" -- a gel-blaster venue excluded from this dataset as gel blasters are not 6mm BB airsoft, consistent with this project's established scope. Exact zip code for the outdoor Mainwaring Rd address was inconsistent/unconfirmed across sources and omitted rather than guessed.",
   },
   {
     id: "electric-city-airsoft-great-falls",
@@ -5706,8 +5236,6 @@ const fields = [
     dataSource:
       "AirsoftC3 (listing last updated 04/26/2025, provides hours and email) + a long-standing, consistent phone/address record across many independent directory aggregators (Yellowpages, Superpages, Manta, CMac.ws, and others, spanning several years) + a Facebook page exists but is login-walled, so recent activity could not be independently confirmed -- no working own website found",
     lastScraped: "2026-09-20",
-    notes:
-      "Set to facebook_only per this project's standing convention: no confirmable own website, so classified as facebook_only despite the unusually long-standing and consistent business record across directories (same treatment as KDK Airsoft/MO, Reaper's Den Airsoft/ID, Paintball Sportsland/MD, and Elite Gaming Delmarva/MD). No evidence of closure was found in this research.",
   },
   {
     id: "21-mile-airsoft-billings",
@@ -5720,8 +5248,6 @@ const fields = [
     status: "active",
     dataSource: "supplied directly by Michael -- no independent website, Facebook page, phone number, directory listing, or any other corroborating source could be found for this field anywhere in this research",
     lastScraped: "2026-09-20",
-    notes:
-      "Extremely thin verification -- essentially no web footprint beyond Michael's own information, and the address has no house/lot number, only the road name. Likely a private or word-of-mouth field. Recommend confirming a phone number, exact address, and current activity directly with Michael or the field before treating this as a claimable, fully current listing.",
   },
   {
     id: "allout-airsoft-belgrade",
@@ -5736,8 +5262,6 @@ const fields = [
     dataSource:
       "supplied directly by Michael + Facebook (page + events) + third-party local-business directories (vymaps.com, findglocal.com) corroborating the Bozeman/Belgrade branding -- no own website found",
     lastScraped: "2026-09-20",
-    notes:
-      "Set to facebook_only per this project's standing convention for no confirmable own website. No evidence of closure found.",
   },
   {
     id: "trail-of-air-great-falls",
@@ -5751,8 +5275,6 @@ const fields = [
     status: "facebook_only",
     dataSource: "supplied directly by Michael + Facebook (page + events)",
     lastScraped: "2026-09-20",
-    notes:
-      "An earlier, independent research pass on Montana had already surfaced a bare AirsoftC3 entry named only \"toa\" with location listed as just \"MT\" and no other detail -- that was flagged at the time as too thin/unverifiable to include. Michael's address and Facebook link resolve that: same field, now includable with reasonable confidence. Set to facebook_only for no confirmable own website.",
   },
   {
     id: "magic-city-airsoft-billings",
@@ -5767,8 +5289,6 @@ const fields = [
     dataSource:
       "Facebook (page + events) -- confirmed by Michael as very active -- + TikTok (@magiccityairsoftsports) + YouTube + Montana LLC registration (Magic City Airsoft and Action Sports, LLC)",
     lastScraped: "2026-09-20",
-    notes:
-      "Initially excluded in this pass after its own domain (magiccityairsoft.com) failed to resolve at all and no recent activity turned up in web/TikTok searches -- Michael corrected this directly, confirming the business is very active on Facebook (a page this project's search tools cannot read directly due to Facebook's robots.txt restrictions). Reinstated as facebook_only per Michael's on-the-ground confirmation, consistent with how this project treats an unreachable own-domain business with a genuinely active Facebook presence.",
   },
 ];
 

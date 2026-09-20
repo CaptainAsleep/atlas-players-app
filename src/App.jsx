@@ -4657,11 +4657,27 @@ const LOADING_KEYFRAMES = `
 `;
 
 // Shared across every "waiting on auth/profile to resolve" gate in the App
-// shell — same three spots that used to just say "Loading…" as plain text.
+// shell — same spots that used to just say "Loading…" as plain text.
+//
+// Real report, 2026-09-20: a brand-new player (Android) installed the app,
+// opened it, and it sat on these dots forever — no crash, no error, just an
+// async subscription (Firebase Auth's onAuthStateChanged, or the profile
+// doc's onSnapshot) that apparently never fired on that device. Whatever
+// the underlying cause turns out to be, a silent infinite wait with zero
+// recovery path is the real bug here — this adds a timeout so a stuck
+// loader turns into something a player can actually get themselves out of,
+// regardless of what caused the hang.
 function LoadingScreen() {
   const { T, display, body, mono } = useTheme();
+  const [showRetry, setShowRetry] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowRetry(true), 8000);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
-    <div className="h-full flex items-center justify-center" style={{ backgroundColor: T.void }}>
+    <div className="h-full flex flex-col items-center justify-center gap-5 px-8" style={{ backgroundColor: T.void }}>
       <style>{LOADING_KEYFRAMES}</style>
       <div className="flex gap-2">
         {[0, 0.15, 0.3].map((delay) => (
@@ -4678,6 +4694,20 @@ function LoadingScreen() {
           />
         ))}
       </div>
+      {showRetry && (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>
+            This is taking longer than expected.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-2.5 text-[13px] font-semibold"
+            style={{ ...display, background: T.panel, color: T.ash, borderRadius: T.rPill, border: `1px solid ${T.line}` }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }
