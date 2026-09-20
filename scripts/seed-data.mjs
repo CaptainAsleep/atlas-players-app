@@ -5709,6 +5709,67 @@ const fields = [
     notes:
       "Set to facebook_only per this project's standing convention: no confirmable own website, so classified as facebook_only despite the unusually long-standing and consistent business record across directories (same treatment as KDK Airsoft/MO, Reaper's Den Airsoft/ID, Paintball Sportsland/MD, and Elite Gaming Delmarva/MD). No evidence of closure was found in this research.",
   },
+  {
+    id: "21-mile-airsoft-billings",
+    name: "21 Mile Airsoft",
+    city: "Billings, MT",
+    address: "21 Mile Rd, Billings, MT",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft field on 21 Mile Rd, supplied directly by Michael -- this is the field he originally asked about by the name \"21 Mile Field,\" which an earlier research pass could not locate under that name.",
+    status: "active",
+    dataSource: "supplied directly by Michael -- no independent website, Facebook page, phone number, directory listing, or any other corroborating source could be found for this field anywhere in this research",
+    lastScraped: "2026-09-20",
+    notes:
+      "Extremely thin verification -- essentially no web footprint beyond Michael's own information, and the address has no house/lot number, only the road name. Likely a private or word-of-mouth field. Recommend confirming a phone number, exact address, and current activity directly with Michael or the field before treating this as a claimable, fully current listing.",
+  },
+  {
+    id: "allout-airsoft-belgrade",
+    name: "Allout Airsoft",
+    city: "Belgrade, MT",
+    address: "2845 Amsterdam Rd, Belgrade, MT 59714",
+    facebook: "https://www.facebook.com/joulecreep.customgbbr.games",
+    indoorOutdoor: "outdoor",
+    about:
+      "Airsoft field in the Bozeman/Belgrade, MT area (Gallatin County) -- its Facebook page brands the location \"Bozeman, MT\" even though the listed address is in nearby Belgrade, consistent with how several other fields in this dataset straddle two close towns. The Facebook handle references custom GBBR (gas blowback rifle) builds, suggesting an enthusiast-run field or informal club that also hosts organized games.",
+    status: "facebook_only",
+    dataSource:
+      "supplied directly by Michael + Facebook (page + events) + third-party local-business directories (vymaps.com, findglocal.com) corroborating the Bozeman/Belgrade branding -- no own website found",
+    lastScraped: "2026-09-20",
+    notes:
+      "Set to facebook_only per this project's standing convention for no confirmable own website. No evidence of closure found.",
+  },
+  {
+    id: "trail-of-air-great-falls",
+    name: "Trail of Air (T.O.A.)",
+    city: "Great Falls, MT",
+    address: "4800 13th Ave S, Great Falls, MT",
+    facebook: "https://www.facebook.com/trailofair/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft field/team in Great Falls, MT, also known by the abbreviation \"T.O.A.\" or \"toa.\"",
+    status: "facebook_only",
+    dataSource: "supplied directly by Michael + Facebook (page + events)",
+    lastScraped: "2026-09-20",
+    notes:
+      "An earlier, independent research pass on Montana had already surfaced a bare AirsoftC3 entry named only \"toa\" with location listed as just \"MT\" and no other detail -- that was flagged at the time as too thin/unverifiable to include. Michael's address and Facebook link resolve that: same field, now includable with reasonable confidence. Set to facebook_only for no confirmable own website.",
+  },
+  {
+    id: "magic-city-airsoft-billings",
+    name: "Magic City Airsoft & Action Sports",
+    city: "Billings, MT",
+    address: "2839 Drury Lane, Billings, MT 59105",
+    facebook: "https://www.facebook.com/mcaasmontana/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft field and action-sports business in Billings, MT. The address happens to also correspond to a self-storage facility (A All Purpose Storage) in public records, but Michael confirmed the field itself is outdoor -- the address is correct.",
+    status: "facebook_only",
+    dataSource:
+      "Facebook (page + events) -- confirmed by Michael as very active -- + TikTok (@magiccityairsoftsports) + YouTube + Montana LLC registration (Magic City Airsoft and Action Sports, LLC)",
+    lastScraped: "2026-09-20",
+    notes:
+      "Initially excluded in this pass after its own domain (magiccityairsoft.com) failed to resolve at all and no recent activity turned up in web/TikTok searches -- Michael corrected this directly, confirming the business is very active on Facebook (a page this project's search tools cannot read directly due to Facebook's robots.txt restrictions). Reinstated as facebook_only per Michael's on-the-ground confirmation, consistent with how this project treats an unreachable own-domain business with a genuinely active Facebook presence.",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
