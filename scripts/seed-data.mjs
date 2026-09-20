@@ -1626,6 +1626,26 @@ const fields = [
     notes: "Supplied directly by Michael. Hours not published on the site (shown as \"closed\" with no schedule listed) — check its event calendar/socials for open-play dates.",
   },
   {
+    id: "arnies-army-airsoft-dandridge",
+    name: "Arnie's Army Airsoft",
+    city: "Dandridge, TN",
+    address: "1791 SR-139, Dandridge, TN 37725",
+    phone: "865-582-5532",
+    email: "armyairsoft83@gmail.com",
+    website: "https://www.airsoftarnie.com",
+    facebook: "https://www.facebook.com/profile.php?id=61585753484163",
+    instagram: "https://www.instagram.com/arniesarmyairsoft",
+    indoorOutdoor: "outdoor",
+    about:
+      "East Tennessee outdoor airsoft field in the Smoky Mountains region, serving the Dandridge, Sevierville, Pigeon Forge, Gatlinburg, and Knoxville area. Diverse terrain including woodland, urban structures, and bunkers. Offers weekend open play, weekday private bookings, rental packages, and safety training, plus birthday parties, bachelor parties, and corporate team-building events.",
+    status: "active",
+    dataSource:
+      "own website (airsoftarnie.com) — live Rates, Connect, Upcoming Events (an August 15, 2026 event listed), Safety Regulations, and Waiver pages all currently reachable — + Instagram + Facebook + exact address supplied directly by Michael",
+    lastScraped: "2026-09-20",
+    notes:
+      "Supplied directly by Michael, including the exact address (2026-09-20), confirming the earlier inference that Dandridge -- not Sevierville, Pigeon Forge, Gatlinburg, or Knoxville -- is the actual location; SR-139 and the 37725 zip both check out for Dandridge, TN. Still not listed on any third-party directory (AirsoftC3, Yelp, etc.) as of this research, but the own domain is live and current (2026 rates, a forward-dated August 2026 event), so set to active.",
+  },
+  {
     id: "the-battlegrounds",
     name: "The Battlegrounds",
     city: "Munhall, PA",
@@ -5530,6 +5550,70 @@ const fields = [
     lastScraped: "2026-09-18",
     notes:
       "Set to facebook_only per this project's standing convention for an unreachable own domain, despite the live, current Square booking calendar as corroboration (same treatment as Reaper's Den Airsoft/ID). Suite number is inconsistent across third-party sources (Suite 10 vs. Suite 40 both appear) -- omitted from the address rather than guessed; recommend confirming directly before this becomes a claimable listing.",
+  },
+
+  // ---- Montana (added 2026-09-20) -----------------------------------------
+  {
+    id: "montana-action-paintball-kalispell",
+    name: "Montana Action Paintball",
+    city: "Kalispell, MT",
+    address: "1717 Smith Lake Rd, Kalispell, MT 59901",
+    phone: "(406) 531-3607",
+    email: "MontanaActionPaintball@gmail.com",
+    website: "https://montanaactionpaintball.com",
+    facebook: "https://www.facebook.com/groups/982657759085591",
+    instagram: "https://www.instagram.com/montana_action_paintball",
+    indoorOutdoor: "outdoor",
+    admission:
+      "$20 self-equipped pass (field access, unlimited games, unlimited air fills) or $45 rental package (unlimited games, gun/mask rental, 900 BBs); optional $5 tactical vest/chest rig add-on",
+    about:
+      "Paintball-primary field in the Flathead Valley with a genuine, separately-scheduled airsoft offering (\"Tactical Mil-Sim Battle Arena\"): community walk-on games the 1st and 3rd Sunday of every month (times vary by season), plus occasional Saturday and night games. Accommodates private parties and casual drop-ins.",
+    status: "active",
+    dataSource:
+      "own website (montanaactionpaintball.com, dedicated /pages/airsoft page with schedule and pricing) + Facebook group + Instagram + Yelp/Tripadvisor",
+    lastScraped: "2026-09-20",
+    notes:
+      "Paintball-primary venue with a genuine separate airsoft offering (dedicated schedule and pricing on its own site, not just a passing mention) -- included per this project's established pattern for such venues.",
+  },
+  {
+    id: "wild-rose-paintball-airsoft-billings",
+    name: "Wild Rose Paintball & Airsoft",
+    city: "Billings, MT",
+    address: "6601 Mainwaring Rd, Billings, MT",
+    phone: "(406) 200-8955",
+    email: "Play@WildRosePaintball.com",
+    website:
+      "https://wildroseactioncenter.com/billings-mt-outdoor-wild-rose-paintball-airsoft/",
+    facebook: "https://www.facebook.com/wildrosepaintball/",
+    indoorOutdoor: "outdoor",
+    admission:
+      "$15 entry with own gear (plus ammo purchase) or $35 rental & entry package (includes 500 rounds, plus additional ammo purchase); party packages from $229",
+    about:
+      "The outdoor location of the larger Wild Rose Action Center family-entertainment complex, about ten minutes west of Billings off Zimmerman Trail (also referred to as the Acton, MT area in some directories). Genuine airsoft is offered alongside .50/.68 cal paintball across four fields, with over 100 rental sets available. Seasonal hours: Fri 4-8pm, Sat 10am-6pm, Sun 12-5pm, weather permitting, open through the end of October.",
+    status: "active",
+    dataSource:
+      "own website (wildroseactioncenter.com) + Yelp + Tripadvisor + Facebook",
+    lastScraped: "2026-09-20",
+    notes:
+      "Distinct from the separate indoor Wild Rose Action Center location at 529 24th St W, Billings, which houses \"Splat Attack Battle Arena\" -- a gel-blaster venue excluded from this dataset as gel blasters are not 6mm BB airsoft, consistent with this project's established scope. Exact zip code for the outdoor Mainwaring Rd address was inconsistent/unconfirmed across sources and omitted rather than guessed.",
+  },
+  {
+    id: "electric-city-airsoft-great-falls",
+    name: "Electric City Airsoft, LLC",
+    city: "Great Falls, MT",
+    address: "1441 NW Bypass, Great Falls, MT 59404",
+    phone: "(406) 771-6666",
+    email: "electriccityairsoft@yahoo.com",
+    facebook: "https://www.facebook.com/Electric-City-Airsoft-LLC-619204551429010/",
+    indoorOutdoor: "indoor",
+    about:
+      "Indoor airsoft arena with weekend-only hours (Sat-Sun 2pm-6pm per the most recently updated directory listing).",
+    status: "facebook_only",
+    dataSource:
+      "AirsoftC3 (listing last updated 04/26/2025, provides hours and email) + a long-standing, consistent phone/address record across many independent directory aggregators (Yellowpages, Superpages, Manta, CMac.ws, and others, spanning several years) + a Facebook page exists but is login-walled, so recent activity could not be independently confirmed -- no working own website found",
+    lastScraped: "2026-09-20",
+    notes:
+      "Set to facebook_only per this project's standing convention: no confirmable own website, so classified as facebook_only despite the unusually long-standing and consistent business record across directories (same treatment as KDK Airsoft/MO, Reaper's Den Airsoft/ID, Paintball Sportsland/MD, and Elite Gaming Delmarva/MD). No evidence of closure was found in this research.",
   },
 ];
 
