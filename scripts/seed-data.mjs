@@ -5510,13 +5510,107 @@ const fields = [
     indoorOutdoor: "outdoor",
     admission: "Airsoft walk-ons Saturday and Sunday; private parties available weekdays by arrangement",
     about:
-      "Outdoor venue in Cecil County offering paintball, airsoft, and GellyBall as genuinely separate activities, with rental equipment available. Part of the multi-state \"Outdoor Xtreme\" chain (see also Outdoor Xtreme Linglestown, PA).",
+      "Outdoor venue in Cecil County offering paintball, airsoft, and GellyBall as genuinely separate activities, with rental equipment available. Part of the multi-state \"Outdoor Xtreme\" chain (see also Outdoor Xtreme Hatfield & Linglestown, PA, and the other Outdoor Xtreme locations added below).",
     status: "active",
     dataSource:
       "own website (oxcc.com, confirmed reachable) + Yelp (updated June 2026) + Tripadvisor (active 2026 listing) + YouTube",
     lastScraped: "2026-09-18",
     notes:
       "Own site returned an intermittent 503 error on a first fetch attempt but loaded cleanly on retry -- confirmed reachable, not a dead domain.",
+  },
+
+  // ---- Outdoor Xtreme chain, remaining locations (added 2026-09-20) -------
+  // Michael flagged outdoorxtreme.com directly; PA (Hatfield, Linglestown) and
+  // MD (Chesapeake City) were already seeded above from earlier state batches.
+  {
+    id: "outdoor-xtreme-angelica",
+    name: "Outdoor Xtreme Angelica",
+    city: "Angelica, NY",
+    address: "5907 Van Allen Rd, Angelica, NY 14709",
+    phone: "585-808-3496",
+    email: "info@oxparks.com",
+    website: "https://www.oxangelica.com",
+    indoorOutdoor: "outdoor",
+    admission:
+      "$55 walk-on airsoft package (all-day admission, rental rifle/mask/red rag, 1,500 BBs), airsoft weekends are the 1st and 3rd of each month; private parties $400 weekend / $450 weekday for up to 10 players (2 hrs), additional players $40 + tax",
+    about:
+      "New York location of the multi-state Outdoor Xtreme paintball/airsoft chain (also operating in MD, PA x2, FL x2, SC, and TX). 30 acres with outdoor/woodsball and indoor fields.",
+    status: "active",
+    dataSource: "own website (oxangelica.com) + Yelp + Tripadvisor + Facebook",
+    lastScraped: "2026-09-20",
+    notes: "",
+  },
+  {
+    id: "outdoor-xtreme-orlando",
+    name: "Outdoor Xtreme Orlando",
+    city: "Orlando, FL",
+    address: "1251 S Co Rd 13, Orlando, FL 32833",
+    phone: "(772) 643-5498",
+    email: "info@oxparks.com",
+    website: "https://www.oxorlando.com",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Airsoft walk-on play Saturday-Sunday 10am-5pm (walk-on price not published on-site); private parties $400 weekend / $450 weekday for up to 10 players (2 hrs), additional players $40 + tax",
+    about:
+      "Florida location of the multi-state Outdoor Xtreme paintball/airsoft chain (also operating in NY, MD, PA x2, FL/Hudson, SC, and TX). 28-acre outdoor park.",
+    status: "active",
+    dataSource: "own website (oxorlando.com) + Yelp + Tripadvisor",
+    lastScraped: "2026-09-20",
+    notes: "",
+  },
+  {
+    id: "outdoor-xtreme-hudson",
+    name: "Outdoor Xtreme Hudson",
+    city: "Hudson, FL",
+    address: "11122 Houston Ave, Hudson, FL",
+    phone: "(727) 862-2222",
+    email: "info@oxparks.com",
+    website: "https://www.oxhudson.com",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Airsoft walk-ons every Saturday and Sunday (walk-on price not published on-site); private parties Sat/Sun (10am, 12:30pm, 3pm slots) $400 weekend / $450 weekday for up to 10 players (2 hrs, includes rental gun, mask, 600 BBs/player), additional players $40 + tax, ages 10+",
+    about:
+      "Second Florida location of the Outdoor Xtreme chain (also operating in NY, MD, PA x2, FL/Orlando, SC, and TX). 19 acres with a mounds field, woodsball, and hyper pipe.",
+    status: "active",
+    dataSource: "own website (oxhudson.com) + Yelp + Battleonix",
+    lastScraped: "2026-09-20",
+    notes: "",
+  },
+  {
+    id: "outdoor-xtreme-seven-points",
+    name: "Outdoor Xtreme Seven Points",
+    city: "Seven Points, TX",
+    address: "700 E Cedar Creek Pkwy, Seven Points, TX 75143",
+    phone: "(903) 284-2541",
+    email: "info@oxparks.com",
+    website: "https://www.oxsevenpoints.com",
+    indoorOutdoor: "outdoor",
+    admission:
+      "$25 all-day walk-on with own equipment / $55 with rental (rifle, mask, red rag, 1,500 BBs), walk-ons every Saturday and Sunday 10am-5pm; private parties $400 weekend / $450 weekday (+$50 weekday staffing surcharge) for up to 10 players (2 hrs), additional players $40 + tax, ages 10+",
+    about:
+      "Texas location of the multi-state Outdoor Xtreme chain (also operating in NY, MD, PA x2, FL x2, and SC), formerly known as Whatz-Up Paintball. 40+ acres; airsoft was newly added to this location.",
+    status: "active",
+    dataSource: "own website (oxsevenpoints.com) + Facebook (formerly Whatz-Up Paintball) + Trip.com",
+    lastScraped: "2026-09-20",
+    notes: "",
+  },
+  {
+    id: "outdoor-xtreme-charleston",
+    name: "Outdoor Xtreme Charleston",
+    city: "Moncks Corner, SC",
+    address: "239 Cypress Gardens Rd, Moncks Corner, SC 29461",
+    phone: "(843) 552-1115",
+    email: "info@oxparks.com",
+    website: "https://www.oxcharleston.com",
+    indoorOutdoor: "outdoor",
+    admission:
+      "Airsoft walk-ons Saturday or Sunday 9am-4pm (walk-on price not published on-site); an \"Airsoft VIP\" pass offers 12 admissions for $225, valid weekends; weekday private parties by reservation",
+    about:
+      "South Carolina location of the multi-state Outdoor Xtreme chain (also operating in NY, MD, PA x2, FL x2, and TX), formerly known as Paintball Charleston -- marketed as \"Charleston\" but physically located in Moncks Corner, SC. 20+ acres with 9 playing fields; a newly-acquired location per the chain's own site.",
+    status: "active",
+    dataSource: "own website (oxcharleston.com) + Facebook (formerly Paintball Charleston)",
+    lastScraped: "2026-09-20",
+    notes: "City listed as Moncks Corner (the actual municipality) rather than Charleston, which the brand name references but is a different, more distant city.",
   },
   {
     id: "paintball-sportsland-frederick",
