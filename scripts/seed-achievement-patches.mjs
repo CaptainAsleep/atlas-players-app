@@ -183,6 +183,9 @@ const achievementPatches = [
 
   { id: "big-sky-raptors", name: "Big Sky Raptors", imageFile: "bsr.png",
     details: "Member of Big Sky Raptors Airsoft, Billings, MT", trigger: null },
+
+  { id: "whitehorse-milsim", name: "WhiteHorse Milsim", imageFile: "whitehorsemilsim.png",
+    details: "Be a member of WhiteHorse Milsim", trigger: null },
 ];
 
 async function uploadAndSeed() {
