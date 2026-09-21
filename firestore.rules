@@ -441,9 +441,19 @@ service cloud.firestore {
           ||
           // Founding officer — only the team's own creator, only for their
           // own uid, only at the moment the team itself is created (checked
-          // via createdBy on the parent team doc).
+          // via createdBy on the parent team doc). Real bug, found
+          // 2026-09-21 via a live "permission-denied" report on team
+          // creation: createTeam() creates the team doc AND this founding
+          // member doc in the SAME writeBatch, but plain get() only ever
+          // sees the database state from BEFORE the batch's own writes are
+          // applied — so it could never see the team doc this same batch
+          // was in the middle of creating, and this clause could never
+          // actually pass for anyone. getAfter() is the function Firestore
+          // provides specifically for this — it reads a document's state
+          // once every write already staged in this same transaction/batch
+          // has been applied, but before the batch commits.
           (memberUid == request.auth.uid && request.resource.data.role == "officer"
-            && get(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid)
+            && getAfter(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid)
           ||
           // An existing officer adding/promoting someone.
           (exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))

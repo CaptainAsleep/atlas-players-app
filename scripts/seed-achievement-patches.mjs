@@ -2,9 +2,9 @@
 //   node scripts/seed-achievement-patches.mjs
 //
 // Requires the same scripts/serviceAccountKey.json as seed-data.mjs, plus
-// a local "patches" folder (sitting next to this project, one level above
-// the repo — adjust PATCHES_DIR below if yours lives somewhere else)
-// containing every image file referenced below by filename.
+// a local "patches" folder living directly inside this project (a sibling
+// of scripts/ and src/ — see PATCHES_DIR below) containing every image
+// file referenced below by filename.
 //
 // This uploads each image to Storage AND writes the Firestore catalog
 // entry in the same run — no separate manual upload-then-copy-URL step.
@@ -180,6 +180,9 @@ const achievementPatches = [
 
   { id: "ambassador", name: "Ambassador", imageFile: "ambassador.png",
     details: "Given to influencers who promote the Atlas app", trigger: null },
+
+  { id: "big-sky-raptors", name: "Big Sky Raptors", imageFile: "bsr.png",
+    details: "Member of Big Sky Raptors Airsoft, Billings, MT", trigger: null },
 ];
 
 async function uploadAndSeed() {
