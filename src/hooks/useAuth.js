@@ -32,10 +32,35 @@ export function useAuth() {
   }, []);
 
   // Once signed in, subscribe to that user's profile document.
+  //
+  // Real report, 2026-09-20/21: a prospective field owner set up his
+  // owner account fine, then opened the player app and it hung forever on
+  // the loading screen. Root cause: the owner and player apps share one
+  // Firebase project/Auth pool (see VITE_FIREBASE_PROJECT_ID in both
+  // apps' env config), so his owner email/password was already a valid
+  // Firebase Auth user by the time he tried the player app. Tapping
+  // "Sign In" there (rather than "Sign Up") authenticated him
+  // successfully via plain signIn() below, which — unlike signUp and
+  // signInWithGoogle, both of which already create a users/{uid} doc —
+  // never creates one. This listener then legitimately found no doc,
+  // called setProfile(null), and nothing else was ever going to create
+  // one, so `!profile` stayed true forever with no way out. Switching to
+  // an email that had never touched Atlas before worked because that
+  // went through the real signUp flow instead. Fixed the same way the
+  // owner app already self-heals its own equivalent case, and the same
+  // way this file's own signInWithGoogle already does: if the doc is
+  // missing, create it instead of leaving the account stranded.
   useEffect(() => {
     if (!user) return;
     const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
-      setProfile(snap.exists() ? snap.data() : null);
+      if (snap.exists()) {
+        setProfile(snap.data());
+      } else {
+        setProfile(null);
+        createPlayerDocs(user.uid, user.email, null, null).catch((err) =>
+          console.error("player profile backfill failed:", err)
+        );
+      }
     });
     return unsub;
   }, [user]);
