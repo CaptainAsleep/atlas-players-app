@@ -777,15 +777,29 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
   );
 }
 
-function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings }) {
+function HomeScreen({
+  onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings,
+  // Filter/view state below is owned by AppShell, not local to this screen
+  // — HomeScreen unmounts every time the player drills into a field/event
+  // (screen leaves "home") and remounts fresh on the way back, so a local
+  // useState here would silently reset every filter/view choice on every
+  // drill-down. See AppShell's "Explore filter/view state" block.
+  search, setSearch,
+  activeCat, setActiveCat,
+  viewMode, setViewMode,
+  activeTodayOnly, setActiveTodayOnly,
+  nearbyOnly, setNearbyOnly,
+  userLocation, setUserLocation,
+  locationStatus, setLocationStatus,
+  selectedState, setSelectedState,
+  stateDetectAttempted, setStateDetectAttempted,
+  dateFrom, setDateFrom,
+  dateTo, setDateTo,
+  maxPrice, setMaxPrice,
+  radiusMiles, setRadiusMiles,
+  sortBy, setSortBy,
+}) {
   const { T, display, body, mono, theme } = useTheme();
-  const [search, setSearch] = useState("");
-  const [activeCat, setActiveCat] = useState("Featured");
-  const [viewMode, setViewMode] = useState("list");
-  const [activeTodayOnly, setActiveTodayOnly] = useState(false);
-  const [nearbyOnly, setNearbyOnly] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
-  const [locationStatus, setLocationStatus] = useState("idle"); // idle | loading | error
 
   // Pull-to-refresh. Fields/events are already live via Firestore listeners
   // — nothing here is genuinely stale — so this is honestly about the
@@ -829,9 +843,6 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
   // doesn't trigger a second permission prompt), then falls back to
   // Michigan if detection fails or the browser has no geolocation at all.
   // A manual pick always overrides the auto-detected one.
-  const [selectedState, setSelectedState] = useState(null);
-  const [stateDetectAttempted, setStateDetectAttempted] = useState(false);
-
   const reverseGeocodeState = async (loc) => {
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${loc.lat}&lon=${loc.lng}`);
@@ -935,13 +946,11 @@ function HomeScreen({ onOpenEvent, onNavigate, events, eventsLoading, fields, pr
     );
   };
 
-  // Advanced filters (behind the sliders icon)
+  // Advanced filters (behind the sliders icon). dateFrom/dateTo/maxPrice/
+  // radiusMiles/sortBy are lifted to AppShell (see HomeScreen's props
+  // above); showFilters is just this panel's own open/closed UI state,
+  // which is fine to reset on every visit.
   const [showFilters, setShowFilters] = useState(false);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [maxPrice, setMaxPrice] = useState(null); // null = no cap
-  const [radiusMiles, setRadiusMiles] = useState(NEARBY_RADIUS_MILES);
-  const [sortBy, setSortBy] = useState("date"); // "date" | "price" | "distance"
   const advancedFiltersActive = dateFrom || dateTo || maxPrice !== null || radiusMiles !== NEARBY_RADIUS_MILES || sortBy !== "date";
   const clearAdvancedFilters = () => {
     setDateFrom("");
@@ -5010,6 +5019,28 @@ function AppShell() {
   const [activePlayerId, setActivePlayerId] = useState(null);
   const screen = stack[stack.length - 1];
 
+  // Explore (Home) screen filter/view state — owned here rather than
+  // inside HomeScreen, because HomeScreen unmounts whenever the player
+  // drills into a field or event (screen leaves "home") and remounts
+  // fresh on the way back. Living here means category, view mode
+  // (list/fields/map), state selector, nearby toggle, search text, and
+  // the advanced filters all survive drill-down navigation exactly like
+  // activeFieldId etc. already do above, instead of silently resetting.
+  const [homeSearch, setHomeSearch] = useState("");
+  const [homeActiveCat, setHomeActiveCat] = useState("Featured");
+  const [homeViewMode, setHomeViewMode] = useState("list");
+  const [homeActiveTodayOnly, setHomeActiveTodayOnly] = useState(false);
+  const [homeNearbyOnly, setHomeNearbyOnly] = useState(false);
+  const [homeUserLocation, setHomeUserLocation] = useState(null);
+  const [homeLocationStatus, setHomeLocationStatus] = useState("idle");
+  const [homeSelectedState, setHomeSelectedState] = useState(null);
+  const [homeStateDetectAttempted, setHomeStateDetectAttempted] = useState(false);
+  const [homeDateFrom, setHomeDateFrom] = useState("");
+  const [homeDateTo, setHomeDateTo] = useState("");
+  const [homeMaxPrice, setHomeMaxPrice] = useState(null);
+  const [homeRadiusMiles, setHomeRadiusMiles] = useState(NEARBY_RADIUS_MILES);
+  const [homeSortBy, setHomeSortBy] = useState("date");
+
   const openPlayer = (uid) => {
     setActivePlayerId(uid);
     push("player");
@@ -5190,6 +5221,20 @@ function AppShell() {
         onOpenEvent={openEvent}
         onOpenField={openField}
         onNavigate={goTab}
+        search={homeSearch} setSearch={setHomeSearch}
+        activeCat={homeActiveCat} setActiveCat={setHomeActiveCat}
+        viewMode={homeViewMode} setViewMode={setHomeViewMode}
+        activeTodayOnly={homeActiveTodayOnly} setActiveTodayOnly={setHomeActiveTodayOnly}
+        nearbyOnly={homeNearbyOnly} setNearbyOnly={setHomeNearbyOnly}
+        userLocation={homeUserLocation} setUserLocation={setHomeUserLocation}
+        locationStatus={homeLocationStatus} setLocationStatus={setHomeLocationStatus}
+        selectedState={homeSelectedState} setSelectedState={setHomeSelectedState}
+        stateDetectAttempted={homeStateDetectAttempted} setStateDetectAttempted={setHomeStateDetectAttempted}
+        dateFrom={homeDateFrom} setDateFrom={setHomeDateFrom}
+        dateTo={homeDateTo} setDateTo={setHomeDateTo}
+        maxPrice={homeMaxPrice} setMaxPrice={setHomeMaxPrice}
+        radiusMiles={homeRadiusMiles} setRadiusMiles={setHomeRadiusMiles}
+        sortBy={homeSortBy} setSortBy={setHomeSortBy}
       />
     );
   } else if (screen === "event") {
