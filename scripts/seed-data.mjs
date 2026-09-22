@@ -5343,6 +5343,40 @@ const fields = [
       "Facebook, Instagram (@aceairsoft), and a Twitter/X account (@aceairsoftlv1) all currently exist for this business, though this project's tools cannot read Facebook/Instagram content directly -- own domain (aceairsoft.com) would not resolve during this research, and third-party directory data on this field traces back to 2023, with no independently confirmed 2024-2026 activity found via web search",
     lastScraped: "2026-09-22",
   },
+
+  // ---- New Hampshire (added 2026-09-22) ------------------------------------
+  {
+    id: "rpc-airsoft-fremont",
+    name: "RPC Airsoft",
+    city: "Fremont, NH",
+    address: "197 Sandown Rd, Fremont, NH 03044",
+    phone: "(603) 760-0393",
+    website: "http://www.rpcairsoft.com/",
+    facebook: "https://www.facebook.com/rpcairsoftofficial/",
+    indoorOutdoor: "outdoor",
+    about:
+      "New Hampshire's oldest continuously-running outdoor airsoft field, in operation since around 2000. Offers year-round games, night games, and gas-gun leagues. The site was originally used for paintball and laser tag before transitioning fully to airsoft.",
+    status: "active",
+    dataSource:
+      "own website (rpcairsoft.com) + newhampshireairsoft.com directory + Facebook/X (recent 2025-2026 dated event activity) + corroborated by MoBros Airsoft's own game schedule, which hosts events here",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "feel-good-farm-airsoft-lyndeborough",
+    name: "Feel Good Farm (FGF) Airsoft",
+    city: "Lyndeborough, NH",
+    address: "52 Johnson Corner Rd, Lyndeborough, NH 03082",
+    phone: "(603) 654-2001",
+    website: "https://www.feelgoodfarminc.com/",
+    facebook: "https://www.facebook.com/FGFAirsoft/",
+    indoorOutdoor: "outdoor",
+    about:
+      "New Hampshire's largest outdoor airsoft field, spanning over 70 wooded acres with varied terrain and structures. Offers equipment rentals, on-site repairs, a pro shop, and food service on game days.",
+    status: "active",
+    dataSource:
+      "own website (feelgoodfarminc.com) + newhampshireairsoft.com directory + Facebook (FGFAirsoft + Feel Good Farm Inc. pages) + a 2022 local newspaper article covering the business's town planning-board permit renewal, confirming it as a legally operating, town-permitted business",
+    lastScraped: "2026-09-22",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
