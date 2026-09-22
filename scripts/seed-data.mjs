@@ -5290,6 +5290,59 @@ const fields = [
       "Facebook (page + events) -- confirmed by Michael as very active -- + TikTok (@magiccityairsoftsports) + YouTube + Montana LLC registration (Magic City Airsoft and Action Sports, LLC)",
     lastScraped: "2026-09-20",
   },
+
+  // ---- Nevada (added 2026-09-22) ------------------------------------------
+  {
+    id: "battle-lab-henderson",
+    name: "Battle Lab Las Vegas (Evike Outpost)",
+    city: "Henderson, NV",
+    address: "2893 N Green Valley Pkwy, Henderson, NV 89014",
+    phone: "(702) 433-3733",
+    website: "https://www.evike.com/store-locations/outpost-lasvegas/",
+    instagram: "https://www.instagram.com/battlelab.lasvegas",
+    indoorOutdoor: "indoor",
+    admission:
+      "Retail store + playable indoor airsoft arena combo; hosts ticketed events (e.g. Airsoft Royale)",
+    about:
+      "Indoor airsoft arena and retail store in the Las Vegas metro area, operated jointly by Evike and Battle Lab. Also marketed as \"Airsoft Las Vegas.\" Open Wed-Fri 5-10pm, Sat 11am-8pm, Sun 11am-6pm, closed Mon-Tue.",
+    status: "active",
+    dataSource:
+      "Evike.com store-locations page + Yelp (updated June 2026) + a forward-dated July 11, 2026 ticketed event listing (Airsoft Royale) confirming ongoing operation",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "sin-city-smash-las-vegas",
+    name: "Sin City Smash",
+    city: "Las Vegas, NV",
+    address: "6623 S Las Vegas Blvd, Suite 139, Las Vegas, NV 89119",
+    phone: "(702) 912-1344",
+    email: "contact@sincitysmash.com",
+    website: "https://www.sincitysmash.com/airsoft-range/",
+    instagram: "https://www.instagram.com/sincitysmash",
+    indoorOutdoor: "indoor",
+    admission: "3 games for $25",
+    about:
+      "Multi-activity entertainment venue (also offers axe throwing and splatter paint) with a genuine indoor 6mm airsoft \"Run-N-Gun\" timed course -- a solo/team timed-course format rather than a traditional open-field team skirmish. Open Mon-Thu 12-9pm, Fri-Sat 12-10pm, Sun 12-8pm.",
+    status: "active",
+    dataSource: "own website (sincitysmash.com) + Yelp (317 reviews, updated July 2026) + Instagram",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "ace-airsoft-boulder-city",
+    name: "ACE Airsoft (Adaptive Combat Experience)",
+    city: "Boulder City, NV",
+    address: "12801 US-95, Boulder City, NV 89005",
+    email: "infoacelv@gmail.com",
+    facebook: "https://www.facebook.com/AdaptiveCombatExp",
+    instagram: "https://www.instagram.com/aceairsoft/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor milsim-oriented airsoft field along US-95 outside Boulder City, marketed as an airsoft-exclusive field for Southern Nevada.",
+    status: "facebook_only",
+    dataSource:
+      "Facebook, Instagram (@aceairsoft), and a Twitter/X account (@aceairsoftlv1) all currently exist for this business, though this project's tools cannot read Facebook/Instagram content directly -- own domain (aceairsoft.com) would not resolve during this research, and third-party directory data on this field traces back to 2023, with no independently confirmed 2024-2026 activity found via web search",
+    lastScraped: "2026-09-22",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
