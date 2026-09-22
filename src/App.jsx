@@ -620,7 +620,21 @@ function FieldFacts({ field }) {
   const { T, display, body, mono } = useTheme();
   const hasRealAmenities = Array.isArray(field?.amenities) && field.amenities.length > 0;
   const hasRealRules = Array.isArray(field?.rules) && field.rules.length > 0;
-  const hasRealChrono = !!field?.chrono;
+  // field.chrono may be the current list shape (an array of { label, value }
+  // pairs an owner can now add to freely) or the older fixed { aeg, sniper,
+  // dmr } shape from before that flexibility existed — normalize to a list
+  // here so the rendering below doesn't need to care which shape a given
+  // field has.
+  const chronoItems = Array.isArray(field?.chrono)
+    ? field.chrono.filter((ch) => ch?.value)
+    : field?.chrono
+    ? [
+        { label: "AEG", value: field.chrono.aeg },
+        { label: "Sniper", value: field.chrono.sniper },
+        { label: "DMR", value: field.chrono.dmr },
+      ].filter((ch) => ch.value)
+    : [];
+  const hasRealChrono = chronoItems.length > 0;
 
   const demoAmenities = ["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"];
   const demoRules = [
@@ -672,19 +686,24 @@ function FieldFacts({ field }) {
           )}
         </div>
         <div className="grid grid-cols-2 gap-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
-          <div>
-            <div style={{ color: T.ashFaint }}>AEG</div>
-            <div style={{ ...mono, color: T.ash }}>{hasRealChrono ? field.chrono.aeg : "400 FPS max (0.20g)"}</div>
-          </div>
-          <div>
-            <div style={{ color: T.ashFaint }}>Sniper</div>
-            <div style={{ ...mono, color: T.ash }}>{hasRealChrono ? field.chrono.sniper : "500 FPS max (0.20g)"}</div>
-          </div>
-          {hasRealChrono && field.chrono.dmr && (
-            <div className="col-span-2">
-              <div style={{ color: T.ashFaint }}>DMR</div>
-              <div style={{ ...mono, color: T.ash }}>{field.chrono.dmr}</div>
-            </div>
+          {hasRealChrono ? (
+            chronoItems.map((ch, i) => (
+              <div key={`${ch.label}-${i}`}>
+                <div style={{ color: T.ashFaint }}>{ch.label || "Limit"}</div>
+                <div style={{ ...mono, color: T.ash }}>{ch.value}</div>
+              </div>
+            ))
+          ) : (
+            <>
+              <div>
+                <div style={{ color: T.ashFaint }}>AEG</div>
+                <div style={{ ...mono, color: T.ash }}>400 FPS max (0.20g)</div>
+              </div>
+              <div>
+                <div style={{ color: T.ashFaint }}>Sniper</div>
+                <div style={{ ...mono, color: T.ash }}>500 FPS max (0.20g)</div>
+              </div>
+            </>
           )}
         </div>
       </div>
