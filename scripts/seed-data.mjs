@@ -5377,6 +5377,102 @@ const fields = [
       "own website (feelgoodfarminc.com) + newhampshireairsoft.com directory + Facebook (FGFAirsoft + Feel Good Farm Inc. pages) + a 2022 local newspaper article covering the business's town planning-board permit renewal, confirming it as a legally operating, town-permitted business",
     lastScraped: "2026-09-22",
   },
+
+  // ---- New Mexico (added 2026-09-22) ---------------------------------------
+  {
+    id: "ruckus-paintball-airsoft-albuquerque",
+    name: "Ruckus Paintball + Airsoft",
+    city: "Albuquerque, NM",
+    address: "16001 Shooting Range Access Rd, Albuquerque, NM 87121",
+    phone: "(505) 999-9299",
+    website: "https://ruckuspaintball.com/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Albuquerque's largest airsoft field, located at the Albuquerque City Shooting Range Park. Primarily a paintball operation but offers airsoft as a genuine, dedicated-staff play option alongside paintball and low-impact paintball.",
+    status: "active",
+    dataSource:
+      "own website (ruckuspaintball.com, live) confirms airsoft as an offered format with address/contact info; site's domain has changed from an earlier ruckusairsoft.com (rebrand/consolidation, not a separate business) -- also listed on airsoftc3.com/us/nm/fields",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "alamogordo-tactical-range-alamogordo",
+    name: "Alamogordo Tactical Range",
+    city: "Alamogordo, NM",
+    address: "101 7th Street, Alamogordo, NM 88310",
+    phone: "(575) 495-2318",
+    website: "https://alamogordotacticalrange.com/",
+    indoorOutdoor: "indoor",
+    about:
+      "Indoor tactical/recreation facility offering airsoft alongside archery, axe throwing, and other activities. Hosts recurring Friday Night Airsoft open-play events; own equipment or rental gear available.",
+    status: "active",
+    dataSource:
+      "own website (alamogordotacticalrange.com, live) with a dedicated events page confirming a recurring weekly Friday Night Airsoft event, pricing, and velocity limits + Facebook/Instagram presence",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "black-site-airsoft-las-cruces",
+    name: "Black Site (Las Cruces Airsoft)",
+    city: "Las Cruces, NM",
+    address: "Outback Dr, Las Cruces, NM 88012",
+    phone: "(575) 312-4136",
+    website: "https://lcairsoft.square.site/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Player-run field on 5 acres of remote, access-controlled private land, built out with roughly 500 tires for obstacles and a speedball area. Run by the Las Cruces Airsoft club.",
+    status: "active",
+    dataSource:
+      "airsoftc3.com/black-site listing (address, hours, contact) corroborated by a live own-domain site for \"Las Cruces Airsoft club\" (lcairsoft.square.site)",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "sunland-park-airsoft-santa-teresa",
+    name: "Sunland Park Airsoft",
+    city: "Santa Teresa, NM",
+    phone: "(575) 323-9345",
+    website: "https://sunlandparkairsoft.com/",
+    facebook: "https://www.facebook.com/p/Sunland-Park-Airsoft-61573044640390/",
+    about:
+      "Community airsoft field serving the Sunland Park / Santa Teresa area, active enough to have marked its first anniversary with a community competition covered by the City of Sunland Park.",
+    status: "active",
+    dataSource:
+      "own website (sunlandparkairsoft.com, live, phone/email) + a City of Sunland Park government press release covering the field's first-anniversary community competition + Facebook page -- exact street address not published, only city-level location confirmed",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "d6-airsoft-hobbs",
+    name: "D6 Airsoft",
+    city: "Hobbs, NM",
+    address: "6723 North Davis Lane, Hobbs, NM 88242",
+    indoorOutdoor: "outdoor",
+    about: "Airsoft field serving the Hobbs, NM area.",
+    status: "facebook_only",
+    dataSource:
+      "single source: airsoftc3.com/d6-airsoft directory listing (specific address + detailed weekly hours) -- no independent corroboration found (no own website, no Facebook/Instagram page, no Yelp/Google reviews located); low-confidence single-source listing, include with caution",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "airsoft-santa-fe",
+    name: "Airsoft Santa Fe",
+    city: "Santa Fe, NM",
+    facebook: "https://www.facebook.com/sfnmairsoft/",
+    about: "Community airsoft group organizing games in the Santa Fe, NM area.",
+    status: "facebook_only",
+    dataSource:
+      "no own website found; Facebook page (@sfnmairsoft) exists with genuine posted gameplay content (e.g. a skirmish video), indicating real activity this project's tools cannot fully read directly -- no independently confirmed street address",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "operation-copperhead-playas",
+    name: "Operation Copperhead (Playas Training Center)",
+    city: "Playas, NM",
+    website: "https://www.americanmilsim.com/",
+    about:
+      "Playas Training Center hosts American MilSim's Operation Copperhead, a large-scale ticketed multi-day national milsim event -- not a walk-in/open-play field. Check American MilSim's event calendar for dates and tickets.",
+    status: "active",
+    dataSource:
+      "American MilSim's own event/tour listings for Operation Copperhead at Playas Training Center; this is a recurring touring event at a fixed site, not a standing local field with regular open play -- included as a site entry since it's a real, bookable, dated event location, flagged clearly in about text since this schema has no distinct 'event venue' type",
+    lastScraped: "2026-09-22",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
