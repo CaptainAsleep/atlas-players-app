@@ -5473,6 +5473,157 @@ const fields = [
       "American MilSim's own event/tour listings for Operation Copperhead at Playas Training Center; this is a recurring touring event at a fixed site, not a standing local field with regular open play -- included as a site entry since it's a real, bookable, dated event location, flagged clearly in about text since this schema has no distinct 'event venue' type",
     lastScraped: "2026-09-22",
   },
+
+  // ---- Oregon (added 2026-09-22) --------------------------------------------
+  {
+    id: "oregon-airsoft-arena-hillsboro",
+    name: "Oregon Airsoft Arena",
+    city: "Hillsboro, OR",
+    address: "1600 NE 25th Ave, Suite A, Hillsboro, OR 97124",
+    phone: "(503) 985-8326",
+    website: "https://oregon-airsoft.com/",
+    facebook: "https://www.facebook.com/oregonairsoftarena",
+    indoorOutdoor: "indoor",
+    about:
+      "Self-described as Oregon's only full-time, dedicated airsoft facility. Also runs Nerf, gellyball, laser tag, and archery, and is a retail dealer for G&G and Lancer Tactical, but airsoft is a core offering, not incidental.",
+    status: "active",
+    dataSource:
+      "own website (oregon-airsoft.com, live) + Instagram/Facebook + Yelp (37 reviews, updated Aug 2026) all matching address/phone",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "splat-action-paintball-airsoft-molalla",
+    name: "Splat Action Paintball & Airsoft",
+    city: "Molalla, OR",
+    address: "15706 OR-211, Molalla, OR",
+    phone: "(503) 989-5709",
+    website: "https://splataction.com/",
+    indoorOutdoor: "outdoor",
+    about:
+      "100+ acre outdoor field with 8 distinct playing fields. Genuine, dedicated weekly airsoft program (walk-on open play Saturdays and Sundays, year-round), full rental packages, and youth camps -- a first-class airsoft offering despite the dual paintball/airsoft branding.",
+    status: "active",
+    dataSource:
+      "own website (splataction.com, live) with a concrete recurring airsoft schedule and rates",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "extreme-velocity-eugene",
+    name: "Extreme Velocity (\"The Underground\")",
+    city: "Eugene, OR",
+    address: "2133 W 7th Ave, Eugene, OR 97402",
+    phone: "(458) 240-7597",
+    website: "https://extreme-velocity.com/",
+    facebook: "https://www.facebook.com/TheEVUnderground",
+    indoorOutdoor: "indoor",
+    about:
+      "A roughly 100-yard indoor airsoft field built into a converted basement/fallout shelter beneath the retail store, with an immersive sound and light system. Weekly open play (Friday evenings, twice on Saturdays).",
+    status: "active",
+    dataSource:
+      "own website (extreme-velocity.com, live) + Instagram (@extremevelocityeugene) + Yelp (updated March 2026)",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "extreme-velocity-salem",
+    name: "Extreme Velocity",
+    city: "Salem, OR",
+    address: "3046 Portland Rd NE, Salem, OR 97301",
+    phone: "(503) 581-1177",
+    website: "https://extreme-velocity.com/",
+    indoorOutdoor: "indoor",
+    about:
+      "Indoor airsoft, paintball, and laser tag venue. Same address and phone number as the earlier \"Warpaint International Paintball\" -- a rebrand/name change of the same continuous business, not two separate ones.",
+    status: "active",
+    dataSource:
+      "own website (extreme-velocity.com, live) + Yelp (still listing the legacy \"Warpaint International Paintball\" name at the same address/phone, updated July 2026, confirming the rebrand chain)",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "camp-r-and-r-gales-creek",
+    name: "Camp R&R",
+    city: "Gales Creek, OR",
+    address: "61635 NW Agaard Rd, Gales Creek, OR 97117",
+    website: "https://camprandr.com/",
+    facebook: "https://www.facebook.com/CampRandR",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor camping-and-airsoft field near the Tillamook State Forest.",
+    status: "active",
+    dataSource:
+      "own website is currently down (PHP/MySQL server error at time of research, though Google has a recently-indexed game-recap sub-page suggesting a possibly transient outage) -- corroborated by Facebook, a recent Yelp listing (updated May 2026), and an AirsoftSociety forum showcase thread; flagged for a follow-up check on the site outage before treating as fully confirmed",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "swamp-paintball-airsoft-lebanon",
+    name: "The Swamp (S&F Paintball and Airsoft)",
+    city: "Lebanon, OR",
+    address: "38488 Shady Oak Ln, Lebanon, OR 97355",
+    facebook: "https://www.facebook.com/Swamp.PB/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-primary field that also runs genuine, separately-dated airsoft games (e.g. an \"Airsoft Swamp Meet\" event dated January 2026) -- not just marketing language.",
+    status: "facebook_only",
+    dataSource:
+      "no independently-confirmed live own website (an old Webs.com page appears stale) -- Facebook (Swamp.PB) is the active presence, corroborated by a dated, ticketed \"Airsoft Swamp Meet\" event (Jan 31, 2026) found via a third-party events listing, confirming a genuine in-house airsoft program",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "action-acres-canby",
+    name: "Action Acres",
+    city: "Canby, OR",
+    address: "10381 S Mulino Rd, Canby, OR 97013",
+    facebook: "https://www.facebook.com/ActionAcresAirsoft",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-primary venue with a distinctly-branded, separately-run airsoft program (\"Action Acres Airsoft\"), evidenced by its own dedicated Facebook page and event-organizer listings, apart from the general paintball side of the business.",
+    status: "facebook_only",
+    dataSource:
+      "own domain (actionacrespb.com) currently fails TLS certificate validation (hostname mismatch) so could not be independently confirmed live -- two distinct Facebook pages exist (general \"Action Acres\" and \"Action Acres Airsoft\") plus an AllEvents organizer page for the airsoft program, and Yelp reviews continue through Feb 2026 -- NOTE: same name as an unrelated existing field, id 'action-acres', in New Richmond, OH (a sister field to Parker's Airsoft) -- confirmed different business, different state, genuine name collision",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "gold-hill-airsoft-grants-pass",
+    name: "Gold Hill Airsoft",
+    city: "Grants Pass, OR",
+    address: "7407 Highland Ave, Grants Pass, OR 97526",
+    facebook: "https://www.facebook.com/goldhillairsoft5",
+    about:
+      "Airsoft field serving the Grants Pass, OR area. Named \"Gold Hill\" but physically located in Grants Pass, not the separate town of Gold Hill, OR -- a naming/location mismatch worth keeping in mind.",
+    status: "facebook_only",
+    dataSource:
+      "no independently-confirmed own website (only directory/social listings) -- Yelp actively updated as recently as October 2025, not marked closed, plus Facebook, Groupon, and Chamber of Commerce listings",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "medford-airsoft-tactical-range",
+    name: "Airsoft Supply & Tactical Range",
+    city: "Medford, OR",
+    address: "1600 N Riverside Ave, Medford, OR",
+    website: "https://www.medfordairsoft.com/",
+    facebook: "https://www.facebook.com/medfordairsoft",
+    indoorOutdoor: "indoor",
+    about:
+      "Combined retail store and indoor tactical shooting range, with hourly bookings, punch cards, and memberships for play, plus group events and party packages. A genuine bookable indoor field, not a retail-only counter.",
+    status: "active",
+    dataSource:
+      "own website (medfordairsoft.com, live, Square-hosted) + a third-party business-directory listing independently confirming an actual indoor range with hourly/membership access (resolving an initial retail-vs-field ambiguity) + Instagram (@medfordairsoft) + Yelp (updated January 2026)",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "high-desert-scenario-bend",
+    name: "High Desert Scenario",
+    city: "Bend, OR",
+    address: "57415 Ft Rock Rd, Bend, OR 97702",
+    phone: "(458) 231-1734",
+    website: "https://www.hdspaintball.com/",
+    facebook: "https://www.facebook.com/HighDesertScenario",
+    indoorOutdoor: "outdoor",
+    about:
+      "Paintball-primary outdoor field that also genuinely hosts airsoft games, confirmed by local news coverage, not just marketing copy. Operated in partnership with Peak Airsoft, whose separate indoor Bend location (921 SE Armour Rd) has since closed -- this outdoor field is Peak Airsoft's current active venue.",
+    status: "active",
+    dataSource:
+      "own website (hdspaintball.com, live, header reads \"HDS Paintball & Airsoft\") + a 2022 KTVZ local news article specifically covering this field hosting airsoft games + Peak Airsoft's own current website (peakairsoft.com) listing this as its active venue -- Peak Airsoft's old indoor Armour Rd address is separately confirmed CLOSED per Yelp (updated Oct 2024), not included as its own entry",
+    lastScraped: "2026-09-22",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
