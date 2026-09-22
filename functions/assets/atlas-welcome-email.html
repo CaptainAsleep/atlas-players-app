@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<!--[if mso]>
+<noscript>
+<xml>
+<o:OfficeDocumentSettings>
+<o:PixelsPerInch>96</o:PixelsPerInch>
+</o:OfficeDocumentSettings>
+</xml>
+</noscript>
+<![endif]-->
+<title>Welcome to Atlas</title>
+<!--
+  ============================================================
+  BEFORE YOU SEND — read this, Michael:
+
+  1) The header ring, the badge icon, and the "A" mark are now real
+     hosted images (Firebase Storage), not base64 — that Outlook-
+     desktop-blocks-base64 problem from the first draft is resolved.
+  2) The spinning compass ring in the header is real CSS animation
+     (no image, no hosting needed) — it'll rotate in Apple Mail,
+     iOS Mail, and some Gmail contexts, and just sit there as a
+     still ring anywhere that doesn't support CSS animation (Outlook,
+     older Gmail). Either way it looks intentional, nothing breaks.
+  3) I also built you a separate animated GIF (atlas-radar-sweep.gif,
+     sent alongside this file) if you want guaranteed motion in every
+     client — most clients play GIFs natively, Outlook desktop shows
+     just the first frame, which still looks fine. Totally optional.
+  4) Find/replace [FIELD NAME] before sending, same placeholder your
+     existing welcome-email doc uses. (The send
+     script in atlas-email-sender/ does this for you via --field/--owner.)
+  ============================================================
+-->
+<style>
+  body, table, td { margin:0; padding:0; }
+  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode: bicubic; }
+  table { border-collapse: collapse !important; }
+  body { width:100% !important; height:100% !important; background:#F2F2ED; }
+  a { text-decoration:none; }
+
+  @media only screen and (max-width: 600px) {
+    .atlas-container { width:100% !important; }
+    .atlas-px { padding-left:22px !important; padding-right:22px !important; }
+    .atlas-stack { display:block !important; width:100% !important; }
+    .atlas-hide-mobile { display:none !important; }
+    .atlas-h1 { font-size:26px !important; line-height:1.2 !important; }
+  }
+
+  @keyframes atlasSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes atlasSpinRev {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+  }
+  @keyframes atlasPulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+  .atlas-ring-outer {
+    animation: atlasSpin 26s linear infinite;
+    transform-origin: 50% 50%;
+  }
+  .atlas-ring-inner {
+    animation: atlasSpinRev 18s linear infinite;
+    transform-origin: 50% 50%;
+  }
+  .atlas-dot {
+    animation: atlasPulse 2.4s ease-in-out infinite;
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background:#F2F2ED; width:100%;">
+<!-- preheader (hidden) -->
+<div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
+  [FIELD NAME] is live on Atlas — here's everything you need to get set up, from the website badge to what to say in your Discord.
+</div>
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">&#847; &zwnj; &nbsp; &#8199; &shy; &#8199; &nbsp; &zwnj; &#847;</div>
+
+<center style="width:100%; background:#F2F2ED;">
+<!--[if mso]>
+<table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td>
+<![endif]-->
+<table role="presentation" class="atlas-container" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; margin:0 auto; background:#FFFFFF;">
+
+  <!-- ============ HEADER ============ -->
+  <tr>
+    <td style="background:#002C48; padding:44px 40px 40px; text-align:center;" class="atlas-px">
+      <!-- animated compass ring -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 22px;">
+        <tr>
+          <td style="width:120px; height:120px; position:relative;">
+            <!--[if !mso]><!-->
+            <svg width="120" height="120" viewBox="0 0 120 120" style="display:block;">
+              <g class="atlas-ring-outer">
+                <circle cx="60" cy="60" r="56" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="1"/>
+                <circle cx="60" cy="60" r="2.4" fill="#7FB0EE" transform="translate(0,-56)" />
+                <circle cx="60" cy="60" r="2.4" fill="#7FB0EE" transform="translate(0,56)" />
+                <circle cx="60" cy="60" r="2.4" fill="#7FB0EE" transform="translate(-56,0)" />
+                <circle cx="60" cy="60" r="2.4" fill="#7FB0EE" transform="translate(56,0)" />
+              </g>
+              <g class="atlas-ring-inner">
+                <circle cx="60" cy="60" r="40" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1"/>
+              </g>
+              <circle cx="60" cy="60" r="24" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="1"/>
+              <circle class="atlas-dot" cx="60" cy="60" r="3" fill="#8FAFD9"/>
+            </svg>
+            <!--<![endif]-->
+            <!-- logo mark, centered over the rings -->
+            <img src="https://firebasestorage.googleapis.com/v0/b/atlas-players-app.firebasestorage.app/o/public%2Femail%2Fatlas-logo-mark.png?alt=media&token=cb9b5ff9-2a37-4b9f-9852-2aeffe13d7d4" alt="Atlas" width="52" height="52" style="display:block; position:relative; margin:-86px auto 0; border-radius:12px;">
+          </td>
+        </tr>
+      </table>
+
+      <div style="font-family:'IBM Plex Mono', 'Courier New', monospace; font-size:11px; font-weight:600; letter-spacing:0.18em; color:#7FB0EE; text-transform:uppercase; margin-bottom:10px;">
+        Welcome to the future of airsoft
+      </div>
+      <div class="atlas-h1" style="font-family:'Space Grotesk','Trebuchet MS',Helvetica,Arial,sans-serif; font-weight:700; font-size:30px; line-height:1.25; color:#FFFFFF;">
+        [FIELD NAME] is officially<br>on Atlas.
+      </div>
+    </td>
+  </tr>
+
+  <!-- ============ INTRO / GREETING ============ -->
+  <tr>
+    <td class="atlas-px" style="padding:40px 40px 8px; font-family:Helvetica,Arial,sans-serif;">
+      <p style="margin:0 0 16px; font-size:15px; line-height:1.65; color:#2A2E33;">Hey [FIELD NAME],</p>
+      <p style="margin:0 0 16px; font-size:15px; line-height:1.65; color:#2A2E33;">
+        You're all set up and ready to go. This email has everything you need to get rolling — a couple things to add to your website and Discord, two reference cards for the counter, and my direct line if anything comes up.
+      </p>
+      <p style="margin:0; font-size:15px; line-height:1.65; color:#2A2E33;">
+        One thing up front: there's no sales pitch buried in here. You've already got my personal contact info — reach out anytime, about anything. Atlas's roadmap from here is built around what you and your players actually run into, so the more you tell me, the faster this gets better for your field specifically.
+      </p>
+    </td>
+  </tr>
+
+  <!-- divider -->
+  <tr>
+    <td class="atlas-px" style="padding:32px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="border-top:1px solid #E4E4DC; font-size:0; line-height:0;">&nbsp;</td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- ============ STEP 1 — BADGE ============ -->
+  <tr>
+    <td class="atlas-px" style="padding:36px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="width:34px; vertical-align:top;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:28px; height:28px; background:#1554B8; border-radius:50%; text-align:center; vertical-align:middle;">
+            <span style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:13px; color:#FFFFFF; line-height:28px;">1</span>
+          </td></tr></table>
+        </td>
+        <td style="vertical-align:top; padding-left:8px;">
+          <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:17px; color:#002C48; padding-top:3px;">Add the Atlas badge to your website</div>
+        </td>
+      </tr></table>
+
+      <p style="margin:12px 0 18px; font-size:14px; line-height:1.6; color:#4E5257;">
+        A little trust signal for anyone checking out your site before they book — dark navy, white text, links straight to the player app. Just paste this wherever you want it to show up (footer, homepage, booking page):
+      </p>
+
+      <!-- live badge preview -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;"><tr>
+        <td style="background:#F2F2ED; border-radius:8px; padding:20px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="background:#002C48; border-radius:999px; padding:7px 14px 7px 7px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td style="width:20px; padding-right:8px;">
+                  <img src="https://firebasestorage.googleapis.com/v0/b/atlas-players-app.firebasestorage.app/o/public%2Femail%2Fatlas-badge-icon.png?alt=media&token=576be6fe-d45c-465c-b758-6670e1574480" alt="" width="20" height="20" style="display:block; border-radius:5px;">
+                </td>
+                <td style="font-family:Helvetica,Arial,sans-serif; font-size:13px; font-weight:500; color:#FFFFFF; white-space:nowrap;">Powered&nbsp;by&nbsp;<b>Atlas</b></td>
+              </tr></table>
+            </td>
+          </tr></table>
+        </td>
+      </tr></table>
+
+      <!-- code box -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="background:#0A2540; border-radius:8px; padding:18px 20px;">
+          <div style="font-family:'IBM Plex Mono','Courier New',monospace; font-size:9.5px; font-weight:600; letter-spacing:0.1em; color:#5B87C4; text-transform:uppercase; margin-bottom:10px;">Paste into your site's HTML</div>
+          <div style="font-family:'IBM Plex Mono','Courier New',monospace; font-size:11px; line-height:1.65; color:#D6E4F5; word-break:break-all; white-space:pre-wrap;">&lt;!-- Atlas badge — paste this wherever you want it to appear on your site --&gt;<br>&lt;a href=&quot;https://playerapp.airsoftatlas.app&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot;<br>   style=&quot;display:inline-flex;align-items:center;gap:8px;background:#002C48;color:#ffffff;<br>          text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,Roboto,Helvetica,Arial,sans-serif;<br>          font-size:13px;font-weight:500;line-height:1;padding:7px 14px 7px 7px;border-radius:999px;<br>          border:1px solid rgba(255,255,255,0.14);box-shadow:0 1px 2px rgba(0,0,0,0.15);&quot;&gt;<br>  &lt;img src=&quot;https://firebasestorage.googleapis.com/v0/b/atlas-players-app.firebasestorage.app/o/public%2Femail%2Fatlas-badge-icon.png?alt=media&amp;token=576be6fe-d45c-465c-b758-6670e1574480&quot;<br>       alt=&quot;&quot; width=&quot;20&quot; height=&quot;20&quot; style=&quot;display:block;border-radius:5px;flex-shrink:0;&quot;&gt;<br>  &lt;span style=&quot;white-space:nowrap;&quot;&gt;Powered&amp;nbsp;by&amp;nbsp;&lt;strong style=&quot;font-weight:700;&quot;&gt;Atlas&lt;/strong&gt;&lt;/span&gt;<br>&lt;/a&gt;<br></div>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- divider -->
+  <tr>
+    <td class="atlas-px" style="padding:32px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="border-top:1px solid #E4E4DC; font-size:0; line-height:0;">&nbsp;</td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- ============ STEP 2 — DISCORD / SOCIAL ============ -->
+  <tr>
+    <td class="atlas-px" style="padding:36px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="width:34px; vertical-align:top;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:28px; height:28px; background:#1554B8; border-radius:50%; text-align:center; vertical-align:middle;">
+            <span style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:13px; color:#FFFFFF; line-height:28px;">2</span>
+          </td></tr></table>
+        </td>
+        <td style="vertical-align:top; padding-left:8px;">
+          <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:17px; color:#002C48; padding-top:3px;">Tell your players</div>
+        </td>
+      </tr></table>
+
+      <p style="margin:12px 0 18px; font-size:14px; line-height:1.6; color:#4E5257;">
+        Three ready-to-go blurbs — drop these into your Discord, socials, or website whenever you're ready.
+      </p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:14px;"><tr>
+        <td style="background:#F2F2ED; border-left:3px solid #1554B8; border-radius:0 8px 8px 0; padding:18px 22px;">
+          <div style="font-family:'IBM Plex Mono','Courier New',monospace; font-size:10px; font-weight:600; letter-spacing:0.1em; color:#686C72; text-transform:uppercase; margin-bottom:10px;">Discord &amp; Facebook group</div>
+          <div style="font-family:Helvetica,Arial,sans-serif; font-size:13.5px; line-height:1.6; color:#2A2E33; font-style:italic;">
+            "Heads up &mdash; we're running bookings, waivers, and check-in through Atlas now. Book from your phone, sign your waiver right at checkout, and skip the paper at the gate. [link to your Atlas field page]"
+          </div>
+        </td>
+      </tr></table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:14px;"><tr>
+        <td style="background:#F2F2ED; border-left:3px solid #1554B8; border-radius:0 8px 8px 0; padding:18px 22px;">
+          <div style="font-family:'IBM Plex Mono','Courier New',monospace; font-size:10px; font-weight:600; letter-spacing:0.1em; color:#686C72; text-transform:uppercase; margin-bottom:10px;">Facebook &amp; Instagram</div>
+          <div style="font-family:Helvetica,Arial,sans-serif; font-size:13.5px; line-height:1.6; color:#2A2E33; font-style:italic;">
+            "[FIELD NAME] just switched to Atlas for bookings and check-in. Sign your waiver from your phone, book your next game in a couple taps, and skip the line at the gate. Link in bio / comments."
+          </div>
+        </td>
+      </tr></table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="background:#F2F2ED; border-left:3px solid #1554B8; border-radius:0 8px 8px 0; padding:18px 22px;">
+          <div style="font-family:'IBM Plex Mono','Courier New',monospace; font-size:10px; font-weight:600; letter-spacing:0.1em; color:#686C72; text-transform:uppercase; margin-bottom:10px;">For your website</div>
+          <div style="font-family:Helvetica,Arial,sans-serif; font-size:13.5px; line-height:1.6; color:#2A2E33; font-style:italic;">
+            "[FIELD NAME] now runs bookings, waivers, and check-in through Atlas. Book your spot and sign your waiver right from your phone &mdash; then just show your QR code at the gate. [link to your Atlas field page]"
+          </div>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- divider -->
+  <tr>
+    <td class="atlas-px" style="padding:32px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="border-top:1px solid #E4E4DC; font-size:0; line-height:0;">&nbsp;</td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- ============ STEP 3 — COUNTER ATTACHMENTS ============ -->
+  <tr>
+    <td class="atlas-px" style="padding:36px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="width:34px; vertical-align:top;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:28px; height:28px; background:#1554B8; border-radius:50%; text-align:center; vertical-align:middle;">
+            <span style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:13px; color:#FFFFFF; line-height:28px;">3</span>
+          </td></tr></table>
+        </td>
+        <td style="vertical-align:top; padding-left:8px;">
+          <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:17px; color:#002C48; padding-top:3px;">Keep these at the counter</div>
+        </td>
+      </tr></table>
+
+      <p style="margin:12px 0 18px; font-size:14px; line-height:1.6; color:#4E5257;">
+        Two reference cards are attached to this email — print them and keep them by the check-in tablet. They help guide you through how to handle situations that may arise at the gate.
+      </p>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="width:50%; vertical-align:top; padding-right:8px;" class="atlas-stack">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="background:#FFFFFF; border:1px solid #E4E4DC; border-radius:8px; padding:18px;">
+              <div style="width:34px; height:34px; background:#DCE8FB; border-radius:8px; text-align:center; margin-bottom:10px;">
+                <span style="font-size:16px; line-height:34px;">&#128203;</span>
+              </div>
+              <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:13.5px; color:#002C48; margin-bottom:4px;">Counter Cheat Sheet</div>
+              <div style="font-family:Helvetica,Arial,sans-serif; font-size:12px; line-height:1.5; color:#686C72;">Scan-in flow, plus what green &amp; red flashes mean.</div>
+            </td>
+          </tr></table>
+        </td>
+        <td style="width:50%; vertical-align:top; padding-left:8px;" class="atlas-stack">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="background:#FFFFFF; border:1px solid #E4E4DC; border-radius:8px; padding:18px;">
+              <div style="width:34px; height:34px; background:#DCE8FB; border-radius:8px; text-align:center; margin-bottom:10px;">
+                <span style="font-size:16px; line-height:34px;">&#128295;</span>
+              </div>
+              <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:13.5px; color:#002C48; margin-bottom:4px;">Quick Fix Card</div>
+              <div style="font-family:Helvetica,Arial,sans-serif; font-size:12px; line-height:1.5; color:#686C72;">Five things that come up at the gate, and the fix for each.</div>
+            </td>
+          </tr></table>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- divider -->
+  <tr>
+    <td class="atlas-px" style="padding:32px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="border-top:1px solid #E4E4DC; font-size:0; line-height:0;">&nbsp;</td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- ============ STEP 4 — TWO THINGS LEFT ============ -->
+  <tr>
+    <td class="atlas-px" style="padding:36px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="width:34px; vertical-align:top;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:28px; height:28px; background:#1554B8; border-radius:50%; text-align:center; vertical-align:middle;">
+            <span style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:13px; color:#FFFFFF; line-height:28px;">4</span>
+          </td></tr></table>
+        </td>
+        <td style="vertical-align:top; padding-left:8px;">
+          <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:17px; color:#002C48; padding-top:3px;">Two things left on your end</div>
+        </td>
+      </tr></table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;"><tr>
+        <td style="padding-bottom:14px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="width:22px; vertical-align:top; padding-top:6px;"><div style="width:6px; height:6px; border-radius:50%; background:#1554B8;"></div></td>
+            <td style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#2A2E33;">
+              <b>Set up payouts</b> so player payments land in your own account &mdash; it's in the Owners app, takes a few minutes. Atlas is $0/month, always; the only cost is a small per-ticket platform fee (3.5% + $1.30, capped at $5). First time you open the app after claiming your field, you'll pick whether that's added to the player's checkout or absorbed out of your payout &mdash; it's a one-time choice, so message me first if you want to talk through which makes more sense for [FIELD NAME].
+            </td>
+          </tr></table>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="width:22px; vertical-align:top; padding-top:6px;"><div style="width:6px; height:6px; border-radius:50%; background:#1554B8;"></div></td>
+            <td style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#2A2E33;">
+              <b>Get Atlas Owners on your counter device.</b> Open your login on the phone or tablet you'll actually keep at check-in &mdash; it'll walk you through adding it to the Home Screen right there, no App Store download needed. Everything else (event setup, your dashboard) works fine in a regular browser too.
+            </td>
+          </tr></table>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- ============ REACH OUT / DISCORD CTA ============ -->
+  <tr>
+    <td class="atlas-px" style="padding:44px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="background:#002C48; border-radius:12px; padding:34px 32px; text-align:center;">
+          <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:19px; color:#FFFFFF; margin-bottom:10px;">Questions? Feedback? Something broke?</div>
+          <div style="font-family:Helvetica,Arial,sans-serif; font-size:13.5px; line-height:1.65; color:#C7D2DE; max-width:420px; margin:0 auto 22px;">
+            Reach out anytime &mdash; Discord's fastest, especially during event hours. I built Atlas around what real fields run into, and that only works if you tell me what [FIELD NAME] runs into.
+          </div>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr>
+            <td style="background:#1554B8; border-radius:999px;">
+              <a href="https://discord.gg/hR8EntGsq" target="_blank" style="display:inline-block; padding:13px 30px; font-family:Helvetica,Arial,sans-serif; font-weight:700; font-size:14px; color:#FFFFFF;">Join the Atlas Discord &rarr;</a>
+            </td>
+          </tr></table>
+          <div style="font-family:'IBM Plex Mono','Courier New',monospace; font-size:11px; color:#5B87C4; margin-top:16px;">discord.gg/hR8EntGsq</div>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+
+  <!-- ============ SIGN OFF ============ -->
+  <tr>
+    <td class="atlas-px" style="padding:36px 40px 0; font-family:Helvetica,Arial,sans-serif;">
+      <p style="margin:0; font-size:15px; line-height:1.65; color:#2A2E33;">
+        Glad to have [FIELD NAME] on board.<br>&mdash; Michael, Founder of Airsoft Atlas
+      </p>
+    </td>
+  </tr>
+
+  <!-- ============ FOOTER ============ -->
+  <tr>
+    <td style="padding:44px 40px 36px; text-align:center;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 14px;"><tr>
+        <td style="width:26px; height:26px; background:#002C48; border-radius:7px; text-align:center;">
+          <img src="https://firebasestorage.googleapis.com/v0/b/atlas-players-app.firebasestorage.app/o/public%2Femail%2Fatlas-logo-mark.png?alt=media&token=cb9b5ff9-2a37-4b9f-9852-2aeffe13d7d4" alt="Atlas" width="18" height="18" style="display:block; margin:4px auto;">
+        </td>
+      </tr></table>
+      <div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; font-weight:700; font-size:13px; color:#002C48; letter-spacing:0.02em; margin-bottom:6px;">AIRSOFT ATLAS</div>
+      <div style="font-family:Helvetica,Arial,sans-serif; font-size:11.5px; color:#9A9D9F; line-height:1.6;">
+        Bookings, waivers, and check-in &mdash; built for real fields.<br>
+        <a href="https://airsoftatlas.app" style="color:#9A9D9F; text-decoration:underline;">airsoftatlas.app</a>
+      </div>
+    </td>
+  </tr>
+
+</table>
+<!--[if mso]>
+</td></tr></table>
+<![endif]-->
+</center>
+</body>
+</html>

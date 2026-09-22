@@ -16,9 +16,10 @@ initializeApp();
 // the separate atlas-email-sender CLI project.
 const resendApiKey = defineSecret("RESEND_API_KEY");
 
-// Player-facing emails are signed as Michael personally, not "The Atlas
-// team" — same sender identity already verified for the owner email.
-const PLAYER_EMAIL_FROM = "Michael @ Atlas <welcome@airsoftatlas.app>";
+// Every Atlas email (player-facing and field-owner-facing) is signed as
+// Michael personally, not "The Atlas team" — same sender identity used
+// everywhere across this pipeline.
+const ATLAS_EMAIL_FROM = "Michael @ Atlas <welcome@airsoftatlas.app>";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatesDir = path.join(__dirname, "templates");
@@ -1282,7 +1283,7 @@ export const sendPlayerWelcomeEmail = onDocumentUpdated(
     try {
       const resend = new Resend(resendApiKey.value());
       const { error } = await resend.emails.send({
-        from: PLAYER_EMAIL_FROM,
+        from: ATLAS_EMAIL_FROM,
         to: after.email,
         subject: `Welcome to Atlas, ${callsign} — here's the rundown before your first game`,
         html,
@@ -1387,7 +1388,7 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
     try {
       const resend = new Resend(resendApiKey.value());
       const { error } = await resend.emails.send({
-        from: PLAYER_EMAIL_FROM,
+        from: ATLAS_EMAIL_FROM,
         to: profile.email,
         subject,
         html,
@@ -1397,6 +1398,76 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
       }
     } catch (err) {
       console.error(`sendBookingConfirmationEmail: failed for ${userId}/${eventId}:`, err);
+    }
+  }
+);
+
+// ===========================================================================
+// Field owner welcome email — automatic version of atlas-email-sender/send.mjs
+// ===========================================================================
+// Fires the moment a field actually gets a real owner — covers all four ways
+// fields/{fieldId}.ownerId can go from unset to set (domain-verified instant
+// claim and unverified instant claim, both in
+// atlas-owners-app/src/hooks/useOwnerFields.js's claimField(); the
+// verifyWebsiteClaim Cloud Function above; and manual admin approval in
+// atlas-admin-portal) without touching any of those four write paths.
+// Reuses the exact same HTML template and PDF attachments send.mjs already
+// sends manually — that script stays available for one-off/manual sends
+// (e.g. Michael sending it personally while on a call with a new owner);
+// this just adds the automatic path alongside it.
+
+const ownerWelcomeTemplate = readFileSync(path.join(__dirname, "assets", "atlas-welcome-email.html"), "utf-8");
+const ownerWelcomeAttachments = [
+  { filename: "Atlas_Counter_Cheat_Sheet.pdf", path: path.join(__dirname, "assets", "Atlas_Counter_Cheat_Sheet.pdf") },
+  { filename: "Atlas_Quick_Fix_Card.pdf", path: path.join(__dirname, "assets", "Atlas_Quick_Fix_Card.pdf") },
+].map((a) => ({ filename: a.filename, content: readFileSync(a.path).toString("base64") }));
+
+export const sendFieldOwnerWelcomeEmail = onDocumentUpdated(
+  { document: "fields/{fieldId}", secrets: [resendApiKey] },
+  async (event) => {
+    const { fieldId } = event.params;
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    // Only a real "no owner yet" -> "now has an owner" transition — never
+    // fires on an already-owned field being edited, and (deliberately, see
+    // the plan this shipped from) doesn't re-fire on an unclaim-then-reclaim
+    // once ownerWelcomeEmailSentAt is set once.
+    if (before.ownerId || !after.ownerId) return;
+    if (after.ownerWelcomeEmailSentAt) return; // already sent
+
+    // Mark as sent before attempting the send — same reasoning as
+    // sendPlayerWelcomeEmail: a redelivered trigger can never double-send.
+    await event.data.after.ref.update({ ownerWelcomeEmailSentAt: FieldValue.serverTimestamp() });
+
+    const db = getFirestore();
+    const ownerSnap = await db.collection("owners").doc(after.ownerId).get();
+    const ownerEmail = ownerSnap.data()?.email;
+    if (!ownerEmail) {
+      console.warn(`sendFieldOwnerWelcomeEmail: skipping field ${fieldId} — owner ${after.ownerId} has no email on file.`);
+      return;
+    }
+
+    const fieldName = after.name || "your field";
+    const fieldLink = `https://playerapp.airsoftatlas.app/?field=${encodeURIComponent(fieldId)}`;
+    const html = fillTemplate(ownerWelcomeTemplate, {
+      "[FIELD NAME]": fieldName,
+      "[link to your Atlas field page]": fieldLink,
+    });
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: ATLAS_EMAIL_FROM,
+        to: ownerEmail,
+        subject: `Welcome to Atlas, ${fieldName} — here's everything you need`,
+        html,
+        attachments: ownerWelcomeAttachments,
+      });
+      if (error) {
+        console.error(`sendFieldOwnerWelcomeEmail: Resend error for field ${fieldId}:`, error);
+      }
+    } catch (err) {
+      console.error(`sendFieldOwnerWelcomeEmail: failed for field ${fieldId}:`, err);
     }
   }
 );
