@@ -5624,6 +5624,56 @@ const fields = [
       "own website (hdspaintball.com, live, header reads \"HDS Paintball & Airsoft\") + a 2022 KTVZ local news article specifically covering this field hosting airsoft games + Peak Airsoft's own current website (peakairsoft.com) listing this as its active venue -- Peak Airsoft's old indoor Armour Rd address is separately confirmed CLOSED per Yelp (updated Oct 2024), not included as its own entry",
     lastScraped: "2026-09-22",
   },
+
+  // ---- Rhode Island (added 2026-09-22) -------------------------------------
+  {
+    id: "warzone-paintball-airsoft-saunderstown",
+    name: "Warzone Paintball & Airsoft Park",
+    city: "Saunderstown, RI",
+    address: "320 Shermantown Rd, Saunderstown, RI 02874",
+    phone: "(401) 228-6366",
+    website: "https://warzonerhodeisland.com/",
+    facebook: "https://www.facebook.com/WarzonePaintballAirsoft",
+    indoorOutdoor: "outdoor",
+    about:
+      "Rhode Island's only outdoor paintball and airsoft field, roughly 35 wooded acres plus a dedicated airball field, operating since the late 1990s. Offers separate Airsoft Lite (ages 9+) and standard Airsoft (10+) programs alongside paintball. Runs an affiliated retail shop (RIPA, in Warwick) that is not itself a play field.",
+    status: "active",
+    dataSource:
+      "own website (warzonerhodeisland.com, live) + Yelp (11 reviews, updated June 2026) + TripAdvisor + Facebook -- NOTE: similar name to an existing unrelated field, id 'war-zone-airsoft' (\"War Zone Airsoft\"), Ocala, FL -- confirmed different business/state, used a disambiguated id",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "extreme-airsoft-south-kingstown",
+    name: "Extreme Airsoft",
+    city: "South Kingstown, RI",
+    address: "1425 Kingstown Rd, South Kingstown, RI 02879",
+    phone: "(401) 789-1987",
+    website: "https://extremeairsoftri.com/",
+    facebook: "https://www.facebook.com/ExtremeRI",
+    indoorOutdoor: "indoor",
+    about:
+      "Self-billed as a leading indoor airsoft arena in the US -- a modular CQB field with vehicles, towers, and themed builds that rotate roughly every two months, combined with a retail/repair shop. Also runs gel-blaster and Nerf parties alongside real airsoft play.",
+    status: "active",
+    dataSource:
+      "own website (extremeairsoftri.com, live) + Yelp (33 reviews, updated as recently as September 2026) + Instagram/Facebook/TikTok/YouTube",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "battlegroundz-lincoln",
+    name: "BattlegroundZ",
+    city: "Lincoln, RI",
+    address: "100 Higginson Ave, Lincoln, RI 02865",
+    phone: "(401) 305-3600",
+    website: "https://battlegroundz.net/",
+    facebook: "https://www.facebook.com/PlayAtBattlegroundZ",
+    indoorOutdoor: "indoor",
+    about:
+      "New England's largest indoor airsoft field (roughly 20,000 sq ft) inside a larger multi-activity entertainment complex that also has indoor paintball, laser tag, and an arcade. Themed CQB environments (hotel, jail, hospital, bus stop, vehicle intersection) with a bomb-defusal scenario mode; new game modes added weekly.",
+    status: "active",
+    dataSource:
+      "own website (battlegroundz.net, live, dedicated /airsoft/ page with current pricing) + Yelp (72 reviews, updated July 2026) + TripAdvisor + visitrhodeisland.com -- flagged as a multi-activity entertainment complex where airsoft is one of several offerings, not the sole focus",
+    lastScraped: "2026-09-22",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
