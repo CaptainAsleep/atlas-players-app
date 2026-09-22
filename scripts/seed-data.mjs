@@ -5674,6 +5674,66 @@ const fields = [
       "own website (battlegroundz.net, live, dedicated /airsoft/ page with current pricing) + Yelp (72 reviews, updated July 2026) + TripAdvisor + visitrhodeisland.com -- flagged as a multi-activity entertainment complex where airsoft is one of several offerings, not the sole focus",
     lastScraped: "2026-09-22",
   },
+
+  // ---- Utah (added 2026-09-22) ----------------------------------------------
+  {
+    id: "milsim-city-fairfield",
+    name: "MilSim City",
+    city: "Fairfield, UT",
+    website: "https://milsimcityairsoft.com/",
+    facebook: "https://www.facebook.com/milsimcity",
+    indoorOutdoor: "outdoor",
+    about:
+      "Utah's largest and most-referenced outdoor field, roughly 400,000 sq ft with engagement ranges from 200ft to CQB. Runs monthly game days, night-vision-enabled night ops, equipment rental, and milsim-style scenario events (Halloween, Christmas, an \"Escape From Tarkov\" crossover, an overnight \"Volga Flank\" event). Under recent new ownership per its own site, though operations have continued without interruption.",
+    status: "active",
+    dataSource:
+      "own website (milsimcityairsoft.com, live) with a dense events calendar of dated 2025-2026 games running through October 2026 -- independently re-confirmed by fetching the events page directly -- corroborated by airsoftc3.com, a Boise Gun Club UT directory listing, and the third-party utahairsoftevents.com hub site, which also lists it as an active host",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "801-airsoft-layton",
+    name: "801 Airsoft (Tactical Airsoft Supply)",
+    city: "Layton, UT",
+    address: "2981 North 400 West, Layton, UT 84041",
+    phone: "(801) 825-6652",
+    website: "https://801airsoft.com/",
+    facebook: "https://www.facebook.com/airsoft801",
+    indoorOutdoor: "indoor",
+    about:
+      "Billed as Utah's only indoor airsoft arena, in business since 2006. ADA compliant, with enforced face-protection/eye-pro and FPS-limit rules. This business also runs a retail-only storefront in Salt Lake City (355 East 3300 South) with no play field -- not modeled as a separate field entry.",
+    status: "active",
+    dataSource:
+      "own website (801airsoft.com, live) + Instagram (@801airsoft) + independently corroborated by a Boise Gun Club Utah directory listing with a matching address/phone",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "airsoft-mania-salt-lake-city",
+    name: "Airsoft Mania",
+    city: "Salt Lake City, UT",
+    address: "236 North 2200 West, Salt Lake City, UT 84116",
+    website: "https://airsoftmania.com/",
+    facebook: "https://www.facebook.com/61589207037118",
+    indoorOutdoor: "indoor",
+    about:
+      "Newest major Utah airsoft entrant, a 34,500 sq ft indoor field that opened around 2025-2026. Offers MilSim, Speedsoft, and a family-friendly \"Supersoft\" mode, with an on-site pro shop, VIP room, and spectator area.",
+    status: "active",
+    dataSource:
+      "own website (airsoftmania.com, live and detailed) + independent Instagram (@airsoft_maniaut) and YouTube (@UtahAirsoftMania) presence -- flagged as a very new business (site still shows grand-opening promo content), worth a pricing/hours recheck down the line",
+    lastScraped: "2026-09-22",
+  },
+  {
+    id: "sks-ranch-airsoft-fruitland",
+    name: "SKS Ranch (SKS Airsoft)",
+    city: "Fruitland, UT",
+    website: "https://www.sksairsoft.com/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Ranch property in Duchesne County that doubles as a campground and hosts organized airsoft games -- private bookings, team skirmishes, and larger hosted milsim-style events.",
+    status: "facebook_only",
+    dataSource:
+      "own website exists but looks stale (copyright footer stuck at 2022, no clear current-year event dates on the homepage) -- however I independently confirmed genuine, recent, dated activity elsewhere: a real Sept 2025 \"Red Creek Royale\" ticketed event, an Oct 2025 \"Operation High Desert 2.0\" event listed on the third-party utahairsoftevents.com hub, and TikTok posts referencing repeat events (\"Operation Clocktower,\" described as their biggest event yet) -- genuinely active despite the stale-looking own site",
+    lastScraped: "2026-09-22",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------
