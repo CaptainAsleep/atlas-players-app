@@ -122,6 +122,10 @@ const achievementPatches = [
     details: "Awarded exclusively to players who checked in at The Compound during the original pilot phase",
     trigger: { type: "filtered_checkin_count", count: 1, filter: { fieldId: "the-compound", dateRange: { start: "2026-08-27", end: "2026-11-01" } } } },
 
+  { id: "first-atlas-event", name: "First Atlas Event", imageFile: "firstatlasevent.png",
+    details: "Attend the first ever event run on Atlas at The Compound Airsoft in Auburn, MI on October 24th, 2026",
+    trigger: { type: "filtered_checkin_count", count: 1, filter: { fieldId: "the-compound", dateRange: { start: "2026-10-24", end: "2026-10-24" } } } },
+
   { id: "motorcity-regular", name: "Motorcity Regular", imageFile: "motorcityregular.png",
     details: "Unlocked after checking into 5 games at MotorCity Airsoft",
     trigger: { type: "field_checkin_count", fieldId: "motorcity-airsoft", count: 5 } },
