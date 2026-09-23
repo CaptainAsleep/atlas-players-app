@@ -21,6 +21,14 @@ const resendApiKey = defineSecret("RESEND_API_KEY");
 // everywhere across this pipeline.
 const ATLAS_EMAIL_FROM = "Michael @ Atlas <welcome@airsoftatlas.app>";
 
+// Booking confirmations use their own address (per Michael, Sep 2026) —
+// same "Michael @ Atlas" signature, same verified airsoftatlas.app
+// domain (Resend verifies per-domain, so no separate DNS/Resend setup
+// is needed for a new local part on an already-verified domain), just a
+// distinct From so booking receipts are visually distinguishable from
+// the welcome emails in a player's inbox.
+const BOOKING_EMAIL_FROM = "Michael @ Atlas <bookingconfirmation@airsoftatlas.app>";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatesDir = path.join(__dirname, "templates");
 const signupWelcomeTemplate = readFileSync(path.join(templatesDir, "signup-welcome.html"), "utf-8");
@@ -1467,7 +1475,7 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
     try {
       const resend = new Resend(resendApiKey.value());
       const { error } = await resend.emails.send({
-        from: ATLAS_EMAIL_FROM,
+        from: BOOKING_EMAIL_FROM,
         to: profile.email,
         subject,
         html,

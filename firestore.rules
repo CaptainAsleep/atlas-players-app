@@ -173,7 +173,16 @@ service cloud.firestore {
         // one place that can't be, since it's enforced regardless of what
         // code actually calls it.
         allow delete: if request.auth != null && request.auth.uid == uid
-          && resource.data.paid != true;
+          // .get() with a default, not a bare field access — a free
+          // booking never had `paid` written at all (bookFreeEvent
+          // omits it entirely rather than writing paid: false), and
+          // reading a field that doesn't exist via dot notation is a
+          // rules-evaluation error here, not a null — which silently
+          // denies the whole allow expression. That's what was
+          // breaking self-cancel for every free-event booking: the
+          // uid/ownership check was fine, this line just errored out
+          // before it ever got evaluated.
+          && resource.data.get('paid', false) != true;
         // Only the event's own field owner can mark a check-in, and only
         // the checkedIn/checkedInAt fields — narrow, same pattern as the
         // interestCount/bookedCount restriction on events itself. Reads
@@ -269,7 +278,16 @@ service cloud.firestore {
         // two needed was written, not what already existed. Worth being
         // careful not to repeat that here.
         allow delete: if request.auth != null && request.auth.uid == userId
-          && resource.data.paid != true;
+          // .get() with a default, not a bare field access — a free
+          // booking never had `paid` written at all (bookFreeEvent
+          // omits it entirely rather than writing paid: false), and
+          // reading a field that doesn't exist via dot notation is a
+          // rules-evaluation error here, not a null — which silently
+          // denies the whole allow expression. That's what was
+          // breaking self-cancel for every free-event booking: the
+          // uid/ownership check was fine, this line just errored out
+          // before it ever got evaluated.
+          && resource.data.get('paid', false) != true;
 
         allow update: if request.auth != null
           && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
