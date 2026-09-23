@@ -1980,7 +1980,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               <div className="flex-1">
                 <Eyebrow>Check-In Reward</Eyebrow>
                 <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{ev.checkInPatch.name}</div>
-                <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>You'll earn this by checking in here — check-in isn't available in the app yet.</p>
+                <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>You'll earn this automatically once you're checked in at this event.</p>
               </div>
             </div>
           )}
