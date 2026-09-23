@@ -122,12 +122,21 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId, location) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds) {
     const call = httpsCallable(functions, "createBookingCheckout");
     // Same best-effort { lat, lng } (or null) as bookEvent — carried
     // through Checkout Session metadata since the webhook that actually
     // creates the booking runs with no browser present at all.
-    const result = await call({ eventId, selectedChoiceId: selectedChoiceId || null, location: location || null });
+    // selectedRentalIds is just a list of rental item ids the player
+    // toggled on — the server looks up each one's real price itself
+    // (resolveRentalsTotal in functions/index.js), never trusting a price
+    // from here.
+    const result = await call({
+      eventId,
+      selectedChoiceId: selectedChoiceId || null,
+      location: location || null,
+      selectedRentalIds: selectedRentalIds && selectedRentalIds.length > 0 ? selectedRentalIds : null,
+    });
     return result.data.url;
   }
 

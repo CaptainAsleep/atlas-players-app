@@ -1523,6 +1523,18 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const selectedChoice = priceOptions?.choices?.find((c) => c.id === selectedChoiceId) || null;
   const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0);
   const choiceMissing = !!priceOptions?.required && !selectedChoice;
+  // Rental gear selection — an owner-defined catalog on the field itself
+  // (field.rentals), not the event. On/off only (no quantity): rentals
+  // have no stock/inventory concept today, just a free-text "availability
+  // note", so letting a player pick a quantity would silently invite
+  // overselling gear with no way to detect it. Only items with a real
+  // priceCents (set by the owner app at save time) are selectable — an
+  // item saved before this feature shipped, with no priceCents yet, isn't
+  // offered here until its owner re-saves it.
+  const rentalOptions = (field?.rentals || []).filter((r) => typeof r.priceCents === "number" && r.priceCents > 0);
+  const [selectedRentalIds, setSelectedRentalIds] = useState([]);
+  const toggleRental = (id) => setSelectedRentalIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const rentalsCents = rentalOptions.filter((r) => selectedRentalIds.includes(r.id)).reduce((sum, r) => sum + r.priceCents, 0);
   const [showPatchViewer, setShowPatchViewer] = useState(false);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -1571,7 +1583,11 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     // booking itself only gets created server-side once payment succeeds,
     // not here. A free event (no real price set) keeps the original,
     // instant flow, since there's no payment to wait on at all.
-    const isPaidEvent = entryPriceCents > 0;
+    // Combined, not entry-only — a free event with a rental selected still
+    // needs real payment, so it routes to Stripe checkout too, exactly
+    // like a normally-priced event. See createBookingCheckout's own
+    // combined chargeableCents guard on the Cloud Function side.
+    const isPaidEvent = entryPriceCents + rentalsCents > 0;
     // Grabbed once, up front, for either path — best-effort only (resolves
     // to null rather than blocking or failing booking if location isn't
     // available or granted). The server decides whether it's actually
@@ -1581,7 +1597,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
     const location = await getQuickLocation();
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds);
         // Opens in a genuinely separate tab rather than navigating this
         // app's own window away — a real, confirmed WebKit bug can
         // corrupt this PWA's own rendering after returning from an
@@ -1866,6 +1882,28 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
               {choiceMissing && (
                 <p className="text-[11px] mt-2" style={{ ...body, color: T.accent }}>Choose one to continue.</p>
               )}
+            </div>
+          )}
+
+          {rentalOptions.length > 0 && !myBooking && !isPast && !ev.canceled && !usingVoucher && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+              <Eyebrow>Rental Gear (optional)</Eyebrow>
+              <div className="flex flex-wrap gap-2">
+                {rentalOptions.map((r) => {
+                  const picked = selectedRentalIds.includes(r.id);
+                  const priceLabel = r.priceCents % 100 === 0 ? `$${r.priceCents / 100}` : `$${(r.priceCents / 100).toFixed(2)}`;
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => toggleRental(r.id)}
+                      className="px-3 py-2 text-[12px] font-semibold"
+                      style={{ ...body, color: picked ? T.inverse : T.ashDim, background: picked ? T.cta : T.panelAlt, borderRadius: 999 }}
+                    >
+                      {r.name} — {priceLabel}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

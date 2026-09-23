@@ -218,6 +218,31 @@ function resolveEntryPrice(eventData, selectedChoiceId) {
   return { entryPriceCents: basePriceCents + (selectedChoice?.priceCents || 0), selectedChoice };
 }
 
+// Shared validation for a player's rental-item picks, same trust model as
+// resolveEntryPrice above: the client sends only ids (which rentals it
+// wants), never a price, and this looks up each one's authoritative
+// priceCents straight from the field's own saved rental catalog
+// (fieldData.rentals — already fetched by createBookingCheckout, no extra
+// read). A rental with no priceCents (saved before this feature existed,
+// or a blank/zero price) is treated as unavailable to select rather than
+// ever trusting a client-supplied number. Only createBookingCheckout calls
+// this — bookFreeEvent never reaches it, since a free event with a rental
+// selected has a nonzero total and routes to checkout instead.
+function resolveRentalsTotal(fieldData, selectedRentalIds) {
+  const ids = Array.isArray(selectedRentalIds) ? selectedRentalIds : [];
+  if (ids.length === 0) return { rentalsCents: 0, selectedRentalDetails: [] };
+  const catalog = Array.isArray(fieldData.rentals) ? fieldData.rentals : [];
+  const selectedRentalDetails = ids.map((id) => {
+    const rental = catalog.find((r) => r.id === id && typeof r.priceCents === "number" && r.priceCents > 0);
+    if (!rental) {
+      throw new HttpsError("invalid-argument", "One of the selected rental items isn't available for this field anymore.");
+    }
+    return { id: rental.id, name: rental.name, priceCents: rental.priceCents };
+  });
+  const rentalsCents = selectedRentalDetails.reduce((sum, r) => sum + r.priceCents, 0);
+  return { rentalsCents, selectedRentalDetails };
+}
+
 // Atlas Standard's platform fee: 3.5% + $1.30, capped at $5.00 total.
 // Whether the player pays this on top (feeModel "pass_to_player", the
 // default) or it's deducted from the field's payout (feeModel "absorb")
@@ -321,7 +346,13 @@ export const createBookingCheckout = onCall(
     }
 
     const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
-    if (!entryPriceCents || entryPriceCents <= 0) {
+    const { rentalsCents, selectedRentalDetails } = resolveRentalsTotal(fieldData, request.data?.selectedRentalIds);
+    // Combined, not entry-only — this is what lets a free event become a
+    // real checkout the moment a paid rental is added, and what makes
+    // Atlas's platform fee below grow with rentals the same way it
+    // already does with Price Options.
+    const chargeableCents = entryPriceCents + rentalsCents;
+    if (!chargeableCents || chargeableCents <= 0) {
       throw new HttpsError("failed-precondition", "This event doesn't have a valid price set.");
     }
 
@@ -341,9 +372,16 @@ export const createBookingCheckout = onCall(
     // (should be impossible to reach here without one, since the owner
     // app gates further access on picking a fee model, but this keeps
     // the math sane rather than throwing if that ever changes).
-    const bookingFeeCents = computeStandardFee(entryPriceCents);
+    const bookingFeeCents = computeStandardFee(chargeableCents);
     const passFeeToPlayer = ownerData.feeModel !== "absorb";
-    const totalCents = passFeeToPlayer ? entryPriceCents + bookingFeeCents : entryPriceCents;
+    // Only the entry line item's own price carries the fee (exactly as
+    // before) — a rental's cost is a real, hard cost, never something an
+    // owner "absorbs" the way Atlas's own fee can be. Each rental gets its
+    // own separate Stripe line item below, at its plain, unmarked-up
+    // price; the session's total (and therefore amountPaidCents on the
+    // eventual booking) ends up as entry + rentals + fee (if passed to
+    // the player) automatically, with no separate total to keep in sync.
+    const entryLineItemCents = passFeeToPlayer ? entryPriceCents + bookingFeeCents : entryPriceCents;
 
     // A deterministic key, not a random one — the whole point is that a
     // second call for the same player + event (impatient re-tap after the
@@ -358,19 +396,32 @@ export const createBookingCheckout = onCall(
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: request.auth.token?.email,
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: eventData.title,
-            description: selectedChoice
-              ? `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name} — ${selectedChoice.label}`
-              : `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name}`,
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: eventData.title,
+              description: selectedChoice
+                ? `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name} — ${selectedChoice.label}`
+                : `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name}`,
+            },
+            unit_amount: entryLineItemCents,
           },
-          unit_amount: totalCents,
+          quantity: 1,
         },
-        quantity: 1,
-      }],
+        // One line item per selected rental, itemized on the receipt at
+        // its own real price — see resolveRentalsTotal above for where
+        // that price actually comes from (never the client).
+        ...selectedRentalDetails.map((r) => ({
+          price_data: {
+            currency: "usd",
+            product_data: { name: `Rental: ${r.name}` },
+            unit_amount: r.priceCents,
+          },
+          quantity: 1,
+        })),
+      ],
       payment_intent_data: {
         application_fee_amount: bookingFeeCents,
         transfer_data: { destination: ownerData.stripeConnectAccountId },
@@ -384,6 +435,11 @@ export const createBookingCheckout = onCall(
         // Stripe metadata values are strings only — "true"/absent, not a
         // real boolean.
         ...(walkOnNearField ? { walkOnNearField: "true" } : {}),
+        // Read back by the webhook below and written onto the booking doc
+        // as-is. Stripe caps each metadata value at 500 characters — a
+        // realistic handful of rental picks stays comfortably under that;
+        // this isn't built to scale to a field with dozens of rentals.
+        ...(selectedRentalDetails.length > 0 ? { selectedRentals: JSON.stringify(selectedRentalDetails) } : {}),
       },
       success_url: "https://playerapp.airsoftatlas.app/?booking=success",
       cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
@@ -997,7 +1053,22 @@ export const stripeWebhook = onRequest(
           const session = event.data.object;
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals } = session.metadata;
+            // Written by createBookingCheckout as a JSON string (Stripe
+            // metadata values are strings only) — parsed back out here the
+            // same defensive way selectedChoiceLabel/Cents are trusted:
+            // this function wrote it moments earlier off server-validated
+            // data, never anything the player's browser could shape
+            // directly, but a malformed/missing value still degrades to
+            // "no rentals" rather than failing the whole webhook.
+            let parsedRentals = [];
+            if (selectedRentals) {
+              try {
+                parsedRentals = JSON.parse(selectedRentals);
+              } catch {
+                parsedRentals = [];
+              }
+            }
             const eventRef = db.collection("events").doc(eventId);
             const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
             const bookingRef = eventRef.collection("bookings").doc(uid);
@@ -1052,6 +1123,14 @@ export const stripeWebhook = onRequest(
                 // Price Options group at all.
                 selectedChoiceLabel: selectedChoiceLabel || null,
                 selectedChoicePriceCents: selectedChoicePriceCents != null ? Number(selectedChoicePriceCents) : null,
+                // Which rental items (if any) this player picked at
+                // checkout — [] rather than omitted when none, so the
+                // owner app's Roster screen and any future query can
+                // always assume the field is an array. amountPaidCents
+                // above already includes their cost (each rental was its
+                // own Stripe line item), so no separate rentals-total
+                // field is needed for the money side of this.
+                selectedRentals: parsedRentals,
                 ...walkOnFields,
               });
               t.set(userBookingRef, {
