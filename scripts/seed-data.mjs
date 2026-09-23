@@ -5232,10 +5232,10 @@ const fields = [
     indoorOutdoor: "indoor",
     about:
       "Indoor airsoft arena with weekend-only hours (Sat-Sun 2pm-6pm per the most recently updated directory listing).",
-    status: "facebook_only",
+    status: "closed",
     dataSource:
-      "AirsoftC3 (listing last updated 04/26/2025, provides hours and email) + a long-standing, consistent phone/address record across many independent directory aggregators (Yellowpages, Superpages, Manta, CMac.ws, and others, spanning several years) + a Facebook page exists but is login-walled, so recent activity could not be independently confirmed -- no working own website found",
-    lastScraped: "2026-09-20",
+      "AirsoftC3 (listing last updated 04/26/2025, provides hours and email) + a long-standing, consistent phone/address record across many independent directory aggregators (Yellowpages, Superpages, Manta, CMac.ws, and others, spanning several years) + a Facebook page exists but is login-walled, so recent activity could not be independently confirmed -- no working own website found. Correction (2026-09-23, per Michael, sourced from a local resident): field has closed. Directory listings hadn't been updated to reflect this.",
+    lastScraped: "2026-09-23",
   },
   {
     id: "21-mile-airsoft-billings",
@@ -5376,6 +5376,25 @@ const fields = [
     dataSource:
       "own website (feelgoodfarminc.com) + newhampshireairsoft.com directory + Facebook (FGFAirsoft + Feel Good Farm Inc. pages) + a 2022 local newspaper article covering the business's town planning-board permit renewal, confirming it as a legally operating, town-permitted business",
     lastScraped: "2026-09-22",
+  },
+  {
+    id: "delta-action-sports-rindge",
+    name: "Delta Action Sports",
+    city: "Rindge, NH",
+    address: "15.5 Fieldstone Lane, Rindge, NH 03461",
+    phone: "(978) 602-7649",
+    email: "Deltaactionsports@gmail.com",
+    website: "https://deltaactionsports.com/",
+    facebook: "https://www.facebook.com/delta.action.sports",
+    instagram: "https://www.instagram.com/deltaactionsports/",
+    youtube: "https://www.youtube.com/@deltaactionsports",
+    indoorOutdoor: "outdoor",
+    about:
+      "140-acre Vietnam War-themed milsim/LARP field across forested terrain, swamps, and waterways, with multiple faction options (US Army, Navy, Marines, ANZAC vs. Viet Cong/NVA), radio-comms and vehicle-interaction scenarios.",
+    status: "active",
+    dataSource:
+      "own website (deltaactionsports.com, live 2026 event schedule) + active Instagram/YouTube/Facebook. Publishes only a Gmail contact address, so the domain-match owner-claim trick won't work for this one. Added 2026-09-23 -- missed in the original New Hampshire seeding pass; caught when Michael asked directly whether it had been included.",
+    lastScraped: "2026-09-23",
   },
 
   // ---- New Mexico (added 2026-09-22) ---------------------------------------
