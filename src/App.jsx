@@ -13,7 +13,7 @@ import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
-import { useAllTeams, useTeam, useTeamActions } from "./hooks/useTeams";
+import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
@@ -3180,8 +3180,9 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
   );
 }
 
-function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavigate, fields, onOpenPlayer,
-  joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember }) {
+function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
+  joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
+  requestOfficer, deleteOfficerRequest, approveOfficerRequest }) {
   const { T, display, body, mono } = useTheme();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -3192,6 +3193,7 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
   const [patchUploading, setPatchUploading] = useState(false);
   const [showFieldPicker, setShowFieldPicker] = useState(false);
   const [fieldSearch, setFieldSearch] = useState("");
+  const [officerRequestBusy, setOfficerRequestBusy] = useState(false);
 
   const myMembership = members.find((m) => m.uid === user?.uid);
   const isOfficer = myMembership?.role === "officer";
@@ -3251,6 +3253,51 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
       onBack();
     } catch (err) {
       setActionError("Couldn't leave — try again.");
+    }
+  };
+
+  const handleRequestOfficer = async () => {
+    setActionError("");
+    setOfficerRequestBusy(true);
+    try {
+      await requestOfficer(team.id, user.uid, profile);
+    } catch (err) {
+      setActionError("Couldn't send request — try again.");
+    } finally {
+      setOfficerRequestBusy(false);
+    }
+  };
+
+  const handleCancelOfficerRequest = async () => {
+    setActionError("");
+    setOfficerRequestBusy(true);
+    try {
+      await deleteOfficerRequest(team.id, user.uid);
+    } catch (err) {
+      setActionError("Couldn't cancel your request — try again.");
+    } finally {
+      setOfficerRequestBusy(false);
+    }
+  };
+
+  // Shared by every officer acting on someone else's request — approve
+  // (promotes + clears the request) and deny (just clears it) both read
+  // as "resolve this request," so one busy/error path covers both.
+  const handleApproveOfficerRequest = async (uid) => {
+    setActionError("");
+    try {
+      await approveOfficerRequest(team.id, uid);
+    } catch (err) {
+      setActionError("Couldn't approve — try again.");
+    }
+  };
+
+  const handleDenyOfficerRequest = async (uid) => {
+    setActionError("");
+    try {
+      await deleteOfficerRequest(team.id, uid);
+    } catch (err) {
+      setActionError("Couldn't deny — try again.");
     }
   };
 
@@ -3408,6 +3455,45 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
           </div>
         )}
 
+        {isOfficer && officerRequests.length > 0 && (
+          <>
+            <Eyebrow>Pending Officer Requests ({officerRequests.length})</Eyebrow>
+            <div className="flex flex-col gap-2 mb-5">
+              {officerRequests.map((r) => (
+                <div key={r.uid} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                  {r.avatarUrl ? (
+                    <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${r.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+                  ) : (
+                    <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                      {r.callsign.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.callsign}</div>
+                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Requesting Officer</div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => handleApproveOfficerRequest(r.uid)}
+                      className="px-2 py-1 text-[10px] font-semibold"
+                      style={{ ...body, background: T.cta, color: T.inverse, borderRadius: T.rPill }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleDenyOfficerRequest(r.uid)}
+                      className="px-2 py-1 text-[10px] font-semibold"
+                      style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: T.rPill }}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         <Eyebrow>Roster ({members.length})</Eyebrow>
         <div className="flex flex-col gap-2 mb-5">
           {members.map((m) => (
@@ -3446,6 +3532,23 @@ function TeamScreen({ team, members, teamLoading, profile, user, onBack, onNavig
             </div>
           ))}
         </div>
+
+        {isMember && !isOfficer && (
+          <button
+            onClick={myOfficerRequest ? handleCancelOfficerRequest : handleRequestOfficer}
+            disabled={officerRequestBusy}
+            className="w-full py-3 font-medium text-[14px] mb-3"
+            style={{
+              ...body,
+              border: `1px solid ${T.line}`,
+              color: myOfficerRequest ? T.ashFaint : T.accent,
+              borderRadius: T.rPill,
+              opacity: officerRequestBusy ? 0.6 : 1,
+            }}
+          >
+            {officerRequestBusy ? "…" : myOfficerRequest ? "Officer Request Pending — Cancel" : "Request Officer"}
+          </button>
+        )}
 
         {isMember && (
           <button
@@ -5041,7 +5144,20 @@ function AppShell() {
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
-  const { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership } = useTeamActions();
+  const {
+    createTeam,
+    joinTeam,
+    leaveTeam,
+    updateTeamInfo,
+    setHomeField,
+    updateTeamPatch,
+    setMemberRole,
+    removeMember,
+    reconcileMembership,
+    requestOfficer,
+    deleteOfficerRequest,
+    approveOfficerRequest,
+  } = useTeamActions();
   const { profiles: allPublicProfiles } = useAllPublicProfiles();
   const { friends, friendsLoading } = useFriends(user?.uid);
   const { requests: incomingRequests } = useIncomingRequests(user?.uid);
@@ -5220,6 +5336,8 @@ function AppShell() {
     push("team");
   };
   const { team: activeTeam, members: activeTeamMembers, teamLoading: activeTeamLoading } = useTeam(activeTeamId);
+  const { myOfficerRequest: activeTeamMyOfficerRequest } = useMyOfficerRequest(activeTeamId, user?.uid);
+  const { officerRequests: activeTeamOfficerRequests } = useOfficerRequests(activeTeamId);
 
   // If an officer removed this player since their last visit, their own
   // profile still points at that team — correct it once, quietly, whenever
@@ -5400,6 +5518,8 @@ function AppShell() {
         team={activeTeam}
         members={activeTeamMembers}
         teamLoading={activeTeamLoading}
+        myOfficerRequest={activeTeamMyOfficerRequest}
+        officerRequests={activeTeamOfficerRequests}
         profile={profile}
         user={user}
         onBack={pop}
@@ -5413,6 +5533,9 @@ function AppShell() {
         updateTeamPatch={updateTeamPatch}
         setMemberRole={setMemberRole}
         removeMember={removeMember}
+        requestOfficer={requestOfficer}
+        deleteOfficerRequest={deleteOfficerRequest}
+        approveOfficerRequest={approveOfficerRequest}
       />
     );
   } else if (screen === "profile") {

@@ -9,7 +9,9 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -69,6 +71,60 @@ export function useTeam(teamId) {
   }, [teamId]);
 
   return { team, members, teamLoading: loading };
+}
+
+// A member's own pending "request officer" ask for a team, if any — gates
+// the Request Officer button between its "Request" and "Request Pending"
+// states. Doc id is the same {teamId}_{uid} convention the write side
+// uses, so this is a single doc read, not a query.
+export function useMyOfficerRequest(teamId, uid) {
+  const [request, setRequest] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!teamId || !uid) {
+      setRequest(null);
+      setLoading(false);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, "officerRequests", `${teamId}_${uid}`), (snap) => {
+      setRequest(snap.exists() ? snap.data() : null);
+      setLoading(false);
+    });
+    return unsub;
+  }, [teamId, uid]);
+
+  return { myOfficerRequest: request, myOfficerRequestLoading: loading };
+}
+
+// Every pending officer-role request for a team — the officer-side queue,
+// shown on TeamScreen only to current officers (same as the roster's own
+// promote/demote controls).
+export function useOfficerRequests(teamId) {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!teamId) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
+    const unsub = onSnapshot(
+      query(collection(db, "officerRequests"), where("teamId", "==", teamId)),
+      (snap) => {
+        setRequests(snap.docs.map((d) => d.data()));
+        setLoading(false);
+      },
+      (err) => {
+        console.error("useOfficerRequests error:", err);
+        setLoading(false);
+      }
+    );
+    return unsub;
+  }, [teamId]);
+
+  return { officerRequests: requests, officerRequestsLoading: loading };
 }
 
 export function useTeamActions() {
@@ -168,6 +224,41 @@ export function useTeamActions() {
     await deleteDoc(doc(db, "teams", teamId, "members", memberUid));
   }
 
+  // A plain member asking their team's officers to promote them. Doc id
+  // is {teamId}_{uid} — the rules only allow a create here when no doc
+  // already exists at that id, so this can never stack up a second
+  // pending request for the same team (a re-attempt while one's pending
+  // hits an existing doc, which Firestore treats as an update, and
+  // updates are denied outright).
+  async function requestOfficer(teamId, uid, profile) {
+    await setDoc(doc(db, "officerRequests", `${teamId}_${uid}`), {
+      teamId,
+      uid,
+      callsign: profile?.callsign || "Player",
+      avatarUrl: profile?.avatarUrl || null,
+      requestedAt: serverTimestamp(),
+    });
+  }
+
+  // Deletes a pending officer-role request. Used two ways: the requester
+  // cancelling their own ask, and an officer denying someone else's — same
+  // write either way (the rules gate who's allowed to call it), same
+  // "decline = delete, no denial record kept" idiom friendRequests already
+  // uses (per Michael, 2026-09-23).
+  async function deleteOfficerRequest(teamId, uid) {
+    await deleteDoc(doc(db, "officerRequests", `${teamId}_${uid}`));
+  }
+
+  // Officer approving a pending request — promotes the requester and
+  // clears the request doc in one atomic batch, so a request can never be
+  // left dangling after its outcome is already decided.
+  async function approveOfficerRequest(teamId, uid) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "teams", teamId, "members", uid), { role: "officer" });
+    batch.delete(doc(db, "officerRequests", `${teamId}_${uid}`));
+    await batch.commit();
+  }
+
   // Run once, cheaply, whenever a player with a teamId opens the Social tab.
   // If an officer removed them since their last visit, their own profile
   // still says they're on that team (an officer's removal can't touch the
@@ -183,5 +274,18 @@ export function useTeamActions() {
     }
   }
 
-  return { createTeam, joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember, reconcileMembership };
+  return {
+    createTeam,
+    joinTeam,
+    leaveTeam,
+    updateTeamInfo,
+    setHomeField,
+    updateTeamPatch,
+    setMemberRole,
+    removeMember,
+    reconcileMembership,
+    requestOfficer,
+    deleteOfficerRequest,
+    approveOfficerRequest,
+  };
 }

@@ -487,5 +487,39 @@ service cloud.firestore {
         );
       }
     }
+
+    // Officer role requests — a member asking their team's officers to
+    // promote them, and any officer approving or denying that ask. One
+    // doc per (team, requesting member) pair; existence of the doc IS
+    // "pending" — no status field, no denial record kept, same
+    // "decline = delete" idiom friendRequests already uses above. The
+    // predictable {teamId}_{uid} doc id is what stops a member from
+    // stacking up multiple pending requests for the same team: a second
+    // attempt while one's already pending hits an existing document,
+    // which Firestore rules evaluate as an update (not a create) — and
+    // update is hard-denied below.
+    match /officerRequests/{requestId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.uid
+        || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer")
+      );
+      // Only a genuine current member (not already an officer) can
+      // request for themselves, and only under the doc id this team/uid
+      // pair is supposed to use — keeps the id predictable for the
+      // "already pending" check above, and lets approve/deny address the
+      // doc directly with no query needed.
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid
+        && requestId == request.resource.data.teamId + '_' + request.resource.data.uid
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/members/$(request.auth.uid)).data.role == "member";
+      allow update: if false; // no in-place edits — approve is a batch (role flip elsewhere + delete here), deny is just a delete
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.uid // the requester cancelling their own ask
+        || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer") // an officer denying, or approving (paired with the role-change write)
+      );
+    }
   }
 }
