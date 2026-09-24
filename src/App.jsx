@@ -2620,23 +2620,33 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
   const interested = events
     .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const past = events
-    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
-    .sort((a, b) => b.date.localeCompare(a.date));
-  // Real bookings now — shown regardless of date (a past booking is a real
-  // record worth keeping visible, not just an expired interest signal),
-  // cross-referenced against the live events list so capacity/details stay
-  // current. Filters out any booking whose event no longer exists.
-  const booked = myBookings
+  // Real bookings, cross-referenced against the live events list so
+  // capacity/details stay current. Filters out any booking whose event no
+  // longer exists. Carries the booking's own checkedIn flag onto the event
+  // object — it lives on the booking, not the event, but this list is the
+  // one place a player would want to see it reflected.
+  const bookedAll = myBookings
     .map((b) => {
       const ev = events.find((e) => e.id === b.eventId);
-      // Carries the booking's own checkedIn flag onto the event object —
-      // it lives on the booking, not the event, but this list is the one
-      // place a player would want to see it reflected.
       return ev ? { ...ev, checkedIn: b.checkedIn } : null;
     })
-    .filter(Boolean)
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .filter(Boolean);
+  // Reserved is strictly upcoming, per Michael — a reserved game that's
+  // already happened belongs in Past, not lingering here with a "PAST" tag.
+  const booked = bookedAll
+    .filter((ev) => (ev.endDate || ev.date) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const bookedPast = bookedAll.filter((ev) => (ev.endDate || ev.date) < today);
+  // Past = anything that's over and was either favorited or actually
+  // reserved, deduped by event id so a game that was both doesn't show up
+  // twice — the booked copy wins when both exist, since it carries the
+  // real checkedIn status a plain favorite never has.
+  const pastMap = new Map();
+  events
+    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
+    .forEach((ev) => pastMap.set(ev.id, ev));
+  bookedPast.forEach((ev) => pastMap.set(ev.id, ev));
+  const past = [...pastMap.values()].sort((a, b) => b.date.localeCompare(a.date));
 
   const TABS = [
     { key: "booked", label: "Reserved" },
@@ -2699,7 +2709,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
                 Reserve an event from its detail page and it'll show up here — separate from what you're just interested in.
               </p>
             </div>
-          ) : renderList(booked, "auto")
+          ) : renderList(booked, false)
         )}
 
         {tab === "interested" && (
@@ -2726,7 +2736,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
         {tab === "past" && (
           past.length === 0 ? (
             <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
-              Events you've favorited will move here once they're over. Looking for a game you actually reserved? That lives in the Reserved tab instead, past or upcoming.
+              Events you've favorited or reserved will move here once they're over.
             </p>
           ) : renderList(past, true)
         )}
