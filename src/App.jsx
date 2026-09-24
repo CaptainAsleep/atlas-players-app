@@ -508,6 +508,16 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
             {displayPrice(ev.price)}
           </div>
         )}
+        {ev.checkInPatch?.imageUrl && (
+          <div
+            className="absolute bottom-2.5 right-3 flex items-center gap-1.5 pl-1 pr-2.5 py-1"
+            style={{ background: "rgba(10,10,11,0.8)", borderRadius: T.rPill }}
+            title={`Check-in reward: ${ev.checkInPatch.name}`}
+          >
+            <img src={ev.checkInPatch.imageUrl} alt="" className="w-6 h-6 flex-shrink-0" style={{ objectFit: "contain", borderRadius: 999 }} />
+            <span className="text-[11px] font-semibold" style={{ ...mono, color: "#fff" }}>Patch</span>
+          </div>
+        )}
       </div>
       <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
       <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
@@ -1158,7 +1168,18 @@ function HomeScreen({
               )
             )}
           </div>
-          <div className="font-semibold text-[17px]" style={{ ...display, color: T.ash }}>{nextGame.title}</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-semibold text-[17px]" style={{ ...display, color: T.ash }}>{nextGame.title}</div>
+            {nextGame.checkInPatch?.imageUrl && (
+              <img
+                src={nextGame.checkInPatch.imageUrl}
+                alt={nextGame.checkInPatch.name}
+                title={`Check-in reward: ${nextGame.checkInPatch.name}`}
+                className="w-8 h-8 flex-shrink-0"
+                style={{ objectFit: "contain", borderRadius: 999, background: T.panelAlt, border: `1px solid ${T.line}` }}
+              />
+            )}
+          </div>
           <div className="text-[12px] mb-4" style={{ ...body, color: T.ashDim }}>
             {nextGame.fieldName} — {formatDate(nextGame.date, nextGame.endDate)}{nextGame.startTime ? ` · ${formatTimeStr(nextGame.startTime)}` : ""}
           </div>
@@ -1523,6 +1544,23 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   const selectedChoice = priceOptions?.choices?.find((c) => c.id === selectedChoiceId) || null;
   const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0);
   const choiceMissing = !!priceOptions?.required && !selectedChoice;
+  // Booking-bar price label. basePriceCents/entryPriceCents already treat
+  // any non-numeric ev.price (blank, or owner text with no digits) as $0 —
+  // but $0 is ambiguous on its own: it could mean "genuinely free" or "no
+  // price text was ever set, we don't actually know." Only call it "Free"
+  // once nothing is left unresolved (no required Price Options still
+  // needing a pick) and ev.price isn't owner-authored ambiguous text like
+  // "Price varies" (has no digits, but isn't empty either).
+  const priceTextHasDigits = /\d/.test(String(ev.price || ""));
+  const priceIsAmbiguousText = !!ev.price && !priceTextHasDigits;
+  const formattedEntryPrice = entryPriceCents % 100 === 0 ? `$${entryPriceCents / 100}` : `$${(entryPriceCents / 100).toFixed(2)}`;
+  const priceDisplayText = choiceMissing
+    ? (ev.price || field?.admission || "Choose an option above")
+    : entryPriceCents > 0
+      ? formattedEntryPrice
+      : priceIsAmbiguousText
+        ? ev.price
+        : "Free";
   // Rental gear selection — an owner-defined catalog on the field itself
   // (field.rentals), not the event. On/off only (no quantity): rentals
   // have no stock/inventory concept today, just a free-text "availability
@@ -2009,11 +2047,7 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         <div>
           <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
           <div className="text-[18px] font-semibold" style={{ ...mono, color: usingVoucher ? T.good : T.ash }}>
-            {usingVoucher
-              ? "$0 (voucher)"
-              : selectedChoice
-                ? (entryPriceCents % 100 === 0 ? `$${entryPriceCents / 100}` : `$${(entryPriceCents / 100).toFixed(2)}`)
-                : (ev.price || field?.admission || "See listing")}
+            {usingVoucher ? "$0 (voucher)" : priceDisplayText}
           </div>
           {typeof ev.maxCapacity === "number" && (
             <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
@@ -2426,6 +2460,16 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
                       <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{s.title}</div>
                       <div className="text-[11px]" style={{ ...mono, color: T.ashFaint }}>{formatDate(s.date, s.endDate)}</div>
                     </div>
+                    {s.checkInPatch?.imageUrl && (
+                      <div
+                        className="flex items-center gap-1 pl-1 pr-2 py-0.5 flex-shrink-0"
+                        style={{ background: T.panelAlt, borderRadius: T.rPill }}
+                        title={`Check-in reward: ${s.checkInPatch.name}`}
+                      >
+                        <img src={s.checkInPatch.imageUrl} alt="" className="w-4 h-4" style={{ objectFit: "contain", borderRadius: 999 }} />
+                        <span className="text-[10px] font-semibold" style={{ ...mono, color: T.ashDim }}>Patch</span>
+                      </div>
+                    )}
                     {s.price && <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{displayPrice(s.price)}</div>}
                   </button>
                 ))}
