@@ -514,7 +514,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
             style={{ background: "rgba(10,10,11,0.8)", borderRadius: T.rPill }}
             title={`Check-in reward: ${ev.checkInPatch.name}`}
           >
-            <img src={ev.checkInPatch.imageUrl} alt="" className="w-6 h-6 flex-shrink-0" style={{ objectFit: "contain", borderRadius: 999 }} />
+            <img src={ev.checkInPatch.imageUrl} alt="" className="w-6 h-6 flex-shrink-0" style={{ objectFit: "cover", borderRadius: 999 }} />
             <span className="text-[11px] font-semibold" style={{ ...mono, color: "#fff" }}>Patch</span>
           </div>
         )}
@@ -1176,7 +1176,7 @@ function HomeScreen({
                 alt={nextGame.checkInPatch.name}
                 title={`Check-in reward: ${nextGame.checkInPatch.name}`}
                 className="w-8 h-8 flex-shrink-0"
-                style={{ objectFit: "contain", borderRadius: 999, background: T.panelAlt, border: `1px solid ${T.line}` }}
+                style={{ objectFit: "cover", borderRadius: 999, background: T.panelAlt, border: `1px solid ${T.line}` }}
               />
             )}
           </div>
@@ -2024,8 +2024,8 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
           {ev.checkInPatch?.imageUrl && (
             <div className="p-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-              <button onClick={() => setShowPatchViewer(true)} className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: T.rPill }}>
-                <img src={ev.checkInPatch.imageUrl} alt={ev.checkInPatch.name} className="w-full h-full" style={{ objectFit: "contain", padding: 4 }} />
+              <button onClick={() => setShowPatchViewer(true)} className="w-14 h-14 flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ background: T.panelAlt, borderRadius: T.rPill }}>
+                <img src={ev.checkInPatch.imageUrl} alt={ev.checkInPatch.name} className="w-full h-full" style={{ objectFit: "cover" }} />
               </button>
               <div className="flex-1">
                 <Eyebrow>Check-In Reward</Eyebrow>
@@ -2478,7 +2478,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
                         style={{ background: T.panelAlt, borderRadius: T.rPill }}
                         title={`Check-in reward: ${s.checkInPatch.name}`}
                       >
-                        <img src={s.checkInPatch.imageUrl} alt="" className="w-4 h-4" style={{ objectFit: "contain", borderRadius: 999 }} />
+                        <img src={s.checkInPatch.imageUrl} alt="" className="w-4 h-4" style={{ objectFit: "cover", borderRadius: 999 }} />
                         <span className="text-[10px] font-semibold" style={{ ...mono, color: T.ashDim }}>Patch</span>
                       </div>
                     )}
