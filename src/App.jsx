@@ -1652,12 +1652,24 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         setBookingBusy(false);
       }
     } catch (err) {
-      // The friendly message stays generic on purpose, but logging the
-      // real error means it's actually visible in dev tools rather than
-      // silently swallowed — the difference between "permission-denied"
-      // and something else is the whole ballgame for debugging this.
+      // Every HttpsError createBookingCheckout/bookFreeEvent actually
+      // throw (failed-precondition, already-exists, not-found,
+      // invalid-argument, unauthenticated) is already a complete,
+      // player-facing sentence — "This field hasn't finished payment
+      // setup yet.", "This event is full.", "Waiver must be signed
+      // before booking.", etc. Surfacing those beats a one-size-fits-all
+      // "try again" that can't tell a player whether retrying will ever
+      // help. Only truly unexpected failures (offline, functions/internal,
+      // functions/unavailable, or anything with no message at all) fall
+      // back to the generic text, since those aren't written to be shown.
+      const errCode = String(err.code || "").replace(/^functions\//, "");
+      const knownFriendlyCode = ["failed-precondition", "already-exists", "not-found", "invalid-argument", "unauthenticated"].includes(errCode);
       console.error("booking failed:", err.code || err.message || err);
-      setBookingError(isPaidEvent ? "Couldn't start checkout — try again." : "Couldn't reserve this event — try again.");
+      setBookingError(
+        knownFriendlyCode && err.message
+          ? err.message
+          : (isPaidEvent ? "Couldn't start checkout — try again." : "Couldn't reserve this event — try again.")
+      );
       setBookingBusy(false);
     }
   };
