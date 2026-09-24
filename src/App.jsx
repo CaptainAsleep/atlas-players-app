@@ -2607,9 +2607,13 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOp
   );
 }
 
-function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings, myBookingsLoading }) {
+function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings, myBookingsLoading, tab, setTab }) {
   const { T, display, body, mono } = useTheme();
-  const [tab, setTab] = useState("interested"); // booked | interested | past
+  // tab (booked | interested | past) now lives in AppShell as scheduleTab,
+  // passed down as a prop — see the homeSearch/homeActiveCat/etc. pattern
+  // above for why: this component only renders while screen === "schedule",
+  // so a local useState here would reset every time a player opened an
+  // event from this list and came back.
   const today = localDateStr();
   const savedEventIds = favorites.filter((f) => f.type === "event").map((f) => f.refId);
 
@@ -2734,9 +2738,13 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
 
 
 function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, teams, teamsLoading, createTeam,
-  allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend }) {
+  allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend,
+  tab, setTab }) {
   const { T, display, body, mono } = useTheme();
-  const [tab, setTab] = useState("friends"); // friends | teams
+  // tab (friends | teams) now lives in AppShell as socialTab, passed down
+  // as a prop — same fix as scheduleTab/homeSearch etc. above: this
+  // component only renders while screen === "inbox", so a local useState
+  // here would reset every time a player opened a friend/team and came back.
 
   return (
     <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
@@ -5269,6 +5277,8 @@ function AppShell() {
   const [homeMaxPrice, setHomeMaxPrice] = useState(null);
   const [homeRadiusMiles, setHomeRadiusMiles] = useState(NEARBY_RADIUS_MILES);
   const [homeSortBy, setHomeSortBy] = useState("date");
+  const [scheduleTab, setScheduleTab] = useState("interested"); // booked | interested | past — see ScheduleScreen
+  const [socialTab, setSocialTab] = useState("friends"); // friends | teams — see SocialScreen
 
   const openPlayer = (uid) => {
     setActivePlayerId(uid);
@@ -5530,7 +5540,7 @@ function AppShell() {
       />
     );
   } else if (screen === "schedule") {
-    content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} myBookings={myBookings} myBookingsLoading={myBookingsLoading} />;
+    content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} myBookings={myBookings} myBookingsLoading={myBookingsLoading} tab={scheduleTab} setTab={setScheduleTab} />;
   } else if (screen === "inbox") {
     content = (
       <SocialScreen
@@ -5551,6 +5561,8 @@ function AppShell() {
         acceptRequest={acceptRequest}
         declineRequest={declineRequest}
         cancelOrUnfriend={cancelOrUnfriend}
+        tab={socialTab}
+        setTab={setSocialTab}
       />
     );
   } else if (screen === "player" && activePlayerId) {
