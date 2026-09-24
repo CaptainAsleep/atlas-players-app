@@ -736,7 +736,7 @@ function FieldFacts({ field }) {
             ))}
           </div>
           <p className="text-[11px] mt-3" style={{ ...body, color: T.ashFaint }}>
-            Shown for reference — selecting and paying for rentals happens at checkout, once booking is available.
+            Selecting and paying for rentals happens during checkout.
           </p>
         </div>
       )}
