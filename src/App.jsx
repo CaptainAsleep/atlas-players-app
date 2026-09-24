@@ -2623,7 +2623,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOp
   );
 }
 
-function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings, myBookingsLoading, tab, setTab }) {
+function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings, myBookingsLoading, tab, setTab, fields }) {
   const { T, display, body, mono } = useTheme();
   // tab (booked | interested | past) now lives in AppShell as scheduleTab,
   // passed down as a prop — see the homeSearch/homeActiveCat/etc. pattern
@@ -2681,7 +2681,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
             className="p-3 flex items-center gap-3 text-left w-full"
             style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, opacity: isPastEv ? 0.65 : 1 }}
           >
-            <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
+            <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl || fields.find((f) => f.id === ev.fieldId)?.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
             <div className="flex-1">
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
               <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
@@ -5566,7 +5566,7 @@ function AppShell() {
       />
     );
   } else if (screen === "schedule") {
-    content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} myBookings={myBookings} myBookingsLoading={myBookingsLoading} tab={scheduleTab} setTab={setScheduleTab} />;
+    content = <ScheduleScreen onNavigate={goTab} favorites={favorites} events={events} onOpenEvent={openEvent} myBookings={myBookings} myBookingsLoading={myBookingsLoading} tab={scheduleTab} setTab={setScheduleTab} fields={fields} />;
   } else if (screen === "inbox") {
     content = (
       <SocialScreen
