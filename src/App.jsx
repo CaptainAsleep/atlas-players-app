@@ -13,6 +13,7 @@ import { useEvents } from "./hooks/useEvents";
 import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
+import { useSWUpdate } from "./hooks/useSWUpdate";
 import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
@@ -5035,6 +5036,46 @@ function WelcomeSplashScreen({ onContinue }) {
 // never feels like a wall of clutter. Advances through the stack and
 // marks each patch seen as it's dismissed; naturally disappears once
 // there's nothing left unseen.
+// Deliberately a small dismissable-by-ignoring floating bar, not a modal
+// like CancellationNoticeModal below or a full takeover like
+// PatchUnlockedOverlay — a new build being ready is never urgent enough
+// to block whatever the player is doing (booking, checking in, mid a
+// live Stripe redirect), so this never force-reloads on its own. It only
+// reloads when the player themselves taps Refresh. Sits above BottomNav's
+// own floating pill (zIndex 1000) on screens that have one, below the
+// two full-screen overlays (zIndex 2500) so a cancellation notice or a
+// patch unlock still takes priority if both happen to be showing.
+function UpdateAvailableToast({ onRefresh }) {
+  const { T, display, body } = useTheme();
+  return (
+    <div
+      className="fixed left-4 right-4 flex items-center justify-between gap-3 px-4 py-3"
+      style={{
+        bottom: 84,
+        background: T.glassFill,
+        backdropFilter: T.glassBlur,
+        WebkitBackdropFilter: T.glassBlur,
+        border: T.glassBorder,
+        borderRadius: T.rFloat,
+        boxShadow: T.shadowFloat,
+        zIndex: 1800,
+      }}
+    >
+      <p className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>
+        A new version of Atlas is ready.
+      </p>
+      <button
+        onClick={onRefresh}
+        className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-semibold flex-shrink-0"
+        style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill }}
+      >
+        <RefreshCw size={13} />
+        Refresh
+      </button>
+    </div>
+  );
+}
+
 // One-at-a-time popup for "an event you reserved was canceled" —
 // useCancellationNotices already narrows this down to the single oldest
 // unacknowledged notice, so this component just has to render it and
@@ -5173,6 +5214,7 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
 
 function AppShell() {
   const { T, display, body, mono } = useTheme();
+  const { needRefresh, refreshNow } = useSWUpdate();
   // The same proven fix from the owner app, ported over rather than
   // rediscovered — a real WebKit bug can corrupt this PWA's own
   // window.innerHeight/visualViewport.height after visiting an external
@@ -5692,6 +5734,7 @@ function AppShell() {
       {user && profile && !installGate && noticeToShow && (
         <CancellationNoticeModal notice={noticeToShow} onDismiss={() => acknowledgeNotice(noticeToShow.id)} />
       )}
+      {needRefresh && <UpdateAvailableToast onRefresh={refreshNow} />}
     </div>
   );
 }

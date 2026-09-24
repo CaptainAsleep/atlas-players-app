@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate", // service worker checks for a new version and swaps in silently, no manual "reload to update" prompt needed at this stage
+      registerType: "prompt", // don't auto-swap a new SW in silently — with live Stripe checkouts possibly in progress, updates are surfaced via useSWUpdate + a tap-to-refresh toast instead (see src/hooks/useSWUpdate.js)
       includeAssets: ["apple-touch-icon.png", "favicon-32.png", "favicon-16.png", "logo.jpg"],
       manifest: {
         name: "Atlas",
