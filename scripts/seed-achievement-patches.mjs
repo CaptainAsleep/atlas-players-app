@@ -188,6 +188,10 @@ const achievementPatches = [
   { id: "big-sky-raptors", name: "Big Sky Raptors", imageFile: "bsr.png",
     details: "Member of Big Sky Raptors Airsoft, Billings, MT", trigger: null },
 
+  { id: "bsr-oct-27-game", name: "BSR October 27 Game", imageFile: "bsroct27game.png",
+    details: "Check in to the Big Sky Raptors game at 21 Mile Airsoft on October 27th, 2026",
+    trigger: { type: "filtered_checkin_count", count: 1, filter: { fieldId: "21-mile-airsoft-billings", dateRange: { start: "2026-10-27", end: "2026-10-27" } } } },
+
   { id: "whitehorse-milsim", name: "WhiteHorse Milsim", imageFile: "whitehorsemilsim.png",
     details: "Be a member of WhiteHorse Milsim", trigger: null },
 ];
