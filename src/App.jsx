@@ -1833,6 +1833,22 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
         </div>
 
         <div className="px-5 mt-4 flex flex-col gap-3">
+          {!ev.canceled && ev.bookingOpensAt && (
+            localDateStr() < ev.bookingOpensAt ? (
+              <div className="p-4" style={{ background: "rgba(21,84,184,0.08)", border: `1px solid ${T.accent}`, borderRadius: 6 }}>
+                <p className="text-[13px] font-medium" style={{ ...body, color: T.accent }}>
+                  Bookings will begin starting {formatDate(ev.bookingOpensAt)}.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 flex items-center gap-2" style={{ background: "rgba(52,211,153,0.08)", border: `1px solid ${T.good}`, borderRadius: 6 }}>
+                <Check size={15} color={T.good} />
+                <p className="text-[13px] font-medium" style={{ ...body, color: T.good }}>
+                  Bookings are now open for this event.
+                </p>
+              </div>
+            )
+          )}
           {ev.canceled && (
             <div className="p-4" style={{ background: "rgba(188,51,39,0.1)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
               <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.alert }}>This event has been canceled</div>
