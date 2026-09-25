@@ -141,12 +141,26 @@ function parsePrice(str) {
   const m = (str || "").match(/[\d.]+/);
   return m ? parseFloat(m[0]) : null;
 }
+// True when an event's raw price string carries no real information —
+// unset, whitespace, or just a leftover currency symbol with nothing
+// after it. The owner app's event editor used to (and, for events saved
+// before that was fixed, still may) default a brand-new event's price
+// field to the literal text "$" rather than leaving it blank, so a
+// player would otherwise see a bare "$" instead of the free event it
+// actually is (resolveEntryPrice in functions/index.js already treats
+// this exact case as $0 — this just makes the display agree). Real
+// owner-authored non-numeric text ("Price varies", "Donation based")
+// still has a non-$/non-space character in it, so it's never caught here.
+function isBlankPriceText(price) {
+  return !price || !/[^\s$]/.test(price);
+}
 // A bare "varies" reads as a typo or unfinished UI out of context (event
 // cards, lists) — spelling out "Price varies" only where there's no
 // surrounding label to make that clear. The event's own detail page already
 // has "Entry Cost" right above it, so it stays as the raw value there.
 function displayPrice(price) {
-  return price && price.trim().toLowerCase() === "varies" ? "Price varies" : price;
+  if (isBlankPriceText(price)) return "Free";
+  return price.trim().toLowerCase() === "varies" ? "Price varies" : price;
 }
 // Haversine formula — straight-line distance between two lat/lng points,
 // accurate enough for "how far is this field" without needing a routing API.
@@ -501,14 +515,12 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
           {ev.type && <Tag>{ev.type}</Tag>}
           {isToday && <Tag tone="live">TODAY</Tag>}
         </div>
-        {ev.price && (
-          <div
-            className="absolute bottom-2.5 left-3 text-[13px] font-semibold px-2.5 py-1.5"
-            style={{ ...mono, background: "rgba(21,84,184,0.85)", color: "#fff", borderRadius: T.rPill }}
-          >
-            {displayPrice(ev.price)}
-          </div>
-        )}
+        <div
+          className="absolute bottom-2.5 left-3 text-[13px] font-semibold px-2.5 py-1.5"
+          style={{ ...mono, background: "rgba(21,84,184,0.85)", color: "#fff", borderRadius: T.rPill }}
+        >
+          {displayPrice(ev.price)}
+        </div>
         {ev.checkInPatch?.imageUrl && (
           <div
             className="absolute bottom-2.5 right-3 flex items-center gap-1.5 pl-1 pr-2.5 py-1"
@@ -1551,9 +1563,13 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
   // price text was ever set, we don't actually know." Only call it "Free"
   // once nothing is left unresolved (no required Price Options still
   // needing a pick) and ev.price isn't owner-authored ambiguous text like
-  // "Price varies" (has no digits, but isn't empty either).
+  // "Price varies" (has no digits, but isn't empty either). A leftover "$"
+  // — what a brand-new event's price field used to default to if the owner
+  // never touched it — doesn't count as ambiguous text; isBlankPriceText
+  // treats it exactly like a genuinely blank price, so it falls through to
+  // "Free" below instead of printing the bare "$".
   const priceTextHasDigits = /\d/.test(String(ev.price || ""));
-  const priceIsAmbiguousText = !!ev.price && !priceTextHasDigits;
+  const priceIsAmbiguousText = !isBlankPriceText(ev.price) && !priceTextHasDigits;
   const formattedEntryPrice = entryPriceCents % 100 === 0 ? `$${entryPriceCents / 100}` : `$${(entryPriceCents / 100).toFixed(2)}`;
   const priceDisplayText = choiceMissing
     ? (ev.price || field?.admission || "Choose an option above")
@@ -2499,7 +2515,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
                         <span className="text-[10px] font-semibold" style={{ ...mono, color: T.ashDim }}>Patch</span>
                       </div>
                     )}
-                    {s.price && <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{displayPrice(s.price)}</div>}
+                    <div className="text-[13px] font-semibold" style={{ ...mono, color: T.accent }}>{displayPrice(s.price)}</div>
                   </button>
                 ))}
               </div>
