@@ -4047,8 +4047,38 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
 // Data is computed once by the caller (computePlayerYearStats) from
 // state AppShell already has loaded (myBookings, patches) — no new
 // Firestore reads for this screen at all.
+// Fixed blue treatment regardless of the player's own light/dark theme
+// setting — same deliberate exception the home-screen banner already
+// makes, so this feels like its own special-occasion moment (matching
+// the owner app's identical recap) rather than just another themed
+// screen. The gradient position animates slowly so the backdrop feels
+// alive even on the intro/closing cards, which have no number to pop.
+const YEAR_IN_REVIEW_KEYFRAMES = `
+@keyframes yirBgShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes yirCardIn {
+  0% { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes yirNumberPop {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes yirGlow {
+  0%, 100% { text-shadow: 0 0 18px rgba(255,255,255,0.25); }
+  50% { text-shadow: 0 0 34px rgba(255,255,255,0.55); }
+}
+@keyframes yirDotFill {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+`;
+
 function YearInReviewScreen({ onBack, year, stats }) {
-  const { T, display, body } = useTheme();
+  const { display, body } = useTheme();
   const [index, setIndex] = useState(0);
 
   const cards = [
@@ -4075,10 +4105,26 @@ function YearInReviewScreen({ onBack, year, stats }) {
   const card = cards[index];
 
   return (
-    <div className="h-full w-full relative overflow-hidden" style={{ backgroundColor: T.void }}>
+    <div
+      className="h-full w-full relative overflow-hidden"
+      style={{ background: "linear-gradient(135deg, #1554B8, #0B2E5C, #1554B8)", backgroundSize: "200% 200%", animation: "yirBgShift 10s ease-in-out infinite" }}
+    >
+      <style>{YEAR_IN_REVIEW_KEYFRAMES}</style>
       <div className="absolute top-6 left-6 right-16 flex gap-1.5 z-20">
         {cards.map((_, i) => (
-          <div key={i} className="flex-1 h-1" style={{ borderRadius: 999, background: i <= index ? "#FFFFFF" : "rgba(255,255,255,0.25)" }} />
+          <div key={i} className="flex-1 h-1 overflow-hidden" style={{ borderRadius: 999, background: "rgba(255,255,255,0.25)" }}>
+            <div
+              key={i === index ? `active-${index}` : i < index ? "done" : "todo"}
+              className="h-full w-full"
+              style={{
+                borderRadius: 999,
+                background: "#FFFFFF",
+                transformOrigin: "left",
+                transform: i <= index ? "scaleX(1)" : "scaleX(0)",
+                animation: i === index ? "yirDotFill 0.4s ease-out" : "none",
+              }}
+            />
+          </div>
         ))}
       </div>
       <button
@@ -4092,11 +4138,15 @@ function YearInReviewScreen({ onBack, year, stats }) {
       <button onClick={goPrev} className="absolute left-0 top-0 bottom-0 w-1/3 z-10" aria-label="Previous" style={{ background: "transparent" }} />
       <button onClick={goNext} className="absolute right-0 top-0 bottom-0 w-2/3 z-10" aria-label="Next" style={{ background: "transparent" }} />
 
-      <div className="h-full w-full flex flex-col items-center justify-center px-8 text-center relative z-0" style={{ pointerEvents: "none" }}>
+      <div
+        key={index}
+        className="h-full w-full flex flex-col items-center justify-center px-8 text-center relative z-0"
+        style={{ pointerEvents: "none", animation: "yirCardIn 0.4s ease-out" }}
+      >
         {card.intro && (
           <>
             <div className="text-[15px] font-semibold uppercase mb-2" style={{ ...body, color: "rgba(255,255,255,0.6)", letterSpacing: "0.08em" }}>Atlas</div>
-            <div className="text-[56px] font-bold leading-none mb-3" style={{ ...display, color: "#FFFFFF" }}>{card.title}</div>
+            <div className="text-[56px] font-bold leading-none mb-3" style={{ ...display, color: "#FFFFFF", animation: "yirNumberPop 0.55s cubic-bezier(0.34,1.56,0.64,1)" }}>{card.title}</div>
             <div className="text-[18px]" style={{ ...body, color: "rgba(255,255,255,0.85)" }}>{card.subtitle}</div>
           </>
         )}
@@ -4108,13 +4158,24 @@ function YearInReviewScreen({ onBack, year, stats }) {
         )}
         {!card.intro && !card.closing && (
           <>
-            <div className="text-[72px] font-bold leading-none mb-3" style={{ ...display, color: "#FFFFFF" }}>{card.big}</div>
+            <div
+              className="text-[72px] font-bold leading-none mb-3"
+              style={{ ...display, color: "#FFFFFF", animation: "yirNumberPop 0.55s cubic-bezier(0.34,1.56,0.64,1), yirGlow 2.4s ease-in-out infinite 0.55s" }}
+            >
+              {card.big}
+            </div>
             <div className="text-[20px] font-semibold mb-2" style={{ ...display, color: "#FFFFFF" }}>{card.label}</div>
             {card.sub && <div className="text-[14px]" style={{ ...body, color: "rgba(255,255,255,0.7)" }}>{card.sub}</div>}
             {card.patchImages && card.patchImages.length > 0 && (
               <div className="flex items-center justify-center gap-2 mt-4 flex-wrap" style={{ maxWidth: 260 }}>
                 {card.patchImages.map((url, i) => (
-                  <img key={i} src={url} alt="" className="w-12 h-12" style={{ objectFit: "contain" }} />
+                  <img
+                    key={i}
+                    src={url}
+                    alt=""
+                    className="w-12 h-12"
+                    style={{ objectFit: "contain", animation: `yirNumberPop 0.5s cubic-bezier(0.34,1.56,0.64,1) ${0.1 + i * 0.06}s both` }}
+                  />
                 ))}
                 {card.patchOverflow > 0 && (
                   <div className="text-[13px]" style={{ ...body, color: "rgba(255,255,255,0.7)" }}>+{card.patchOverflow} more</div>
