@@ -174,6 +174,55 @@ function localDateStr(d = new Date()) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+// Which calendar year "Year in Review" covers right now. During January,
+// that's last year — just finished, still fresh. The rest of the year
+// it's this year so far, which is what most of the year actually looks
+// like and simply becomes the complete year by December — no special
+// first-year case needed, and no year picker either.
+function reviewYear() {
+  const now = new Date();
+  return now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+}
+
+// The unprompted home-screen banner only shows itself Dec 26 - Jan 31 —
+// newsworthy right after the holidays, through most of January. The
+// recap itself stays reachable year-round from the profile menu; this
+// only gates the nudge, never access to the screen.
+function isReviewWindow() {
+  const now = new Date();
+  const m = now.getMonth(); // 0-11
+  const d = now.getDate();
+  return (m === 11 && d >= 26) || (m === 0 && d <= 31);
+}
+
+// Pure — derives one player's Year in Review numbers for a given calendar
+// year from data the app has already loaded (myBookings, patches), no new
+// Firestore reads. "Attended" means checked in, not just booked — the
+// same real-attendance bar the rest of the app uses (see ProfileScreen's
+// own "Past Events" vs. real-attendance distinction).
+function computePlayerYearStats(myBookings, patches, year) {
+  const yearStr = String(year);
+  const attended = (myBookings || []).filter(
+    (b) => b.checkedIn && (b.endDate || b.date || "").slice(0, 4) === yearStr
+  );
+  const fieldCounts = {};
+  attended.forEach((b) => {
+    const key = b.fieldId || "unknown";
+    if (!fieldCounts[key]) fieldCounts[key] = { fieldId: b.fieldId, fieldName: b.fieldName || "Unknown field", count: 0 };
+    fieldCounts[key].count += 1;
+  });
+  const byField = Object.values(fieldCounts).sort((a, b) => b.count - a.count);
+  const patchesEarned = (patches || []).filter(
+    (p) => p.addedAt?.toDate && p.addedAt.toDate().getFullYear() === year
+  );
+  return {
+    eventsAttended: attended.length,
+    fieldsVisited: byField.length,
+    mostVisitedField: byField[0] || null,
+    patchesEarned,
+  };
+}
 function distanceMiles(lat1, lng1, lat2, lng2) {
   const R = 3958.8;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -820,7 +869,7 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
 }
 
 function HomeScreen({
-  onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings,
+  onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings, onOpenYearInReview,
   // Filter/view state below is owned by AppShell, not local to this screen
   // — HomeScreen unmounts every time the player drills into a field/event
   // (screen leaves "home") and remounts fresh on the way back, so a local
@@ -1142,6 +1191,20 @@ function HomeScreen({
           )}
         </button>
       </div>
+
+      {isReviewWindow() && (
+        <button
+          onClick={onOpenYearInReview}
+          className="mx-6 mb-4 p-4 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
+          style={{ background: "linear-gradient(135deg, #1554B8, #0B2E5C)", borderRadius: T.rCard, boxShadow: T.shadowMd }}
+        >
+          <div className="flex-1">
+            <div className="text-[13px] font-semibold" style={{ ...display, color: "#FFFFFF" }}>Your {reviewYear()} Year in Review is ready</div>
+            <div className="text-[11px]" style={{ ...body, color: "rgba(255,255,255,0.75)" }}>See what you got into this year — tap to open.</div>
+          </div>
+          <ChevronRight size={16} color="#FFFFFF" />
+        </button>
+      )}
 
       {nextGame ? (
         <div
@@ -3968,6 +4031,116 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
   );
 }
 
+// A once-a-year recap, Wrapped-style: one full-screen card per stat,
+// tapped or swiped through rather than shown all at once. Reuses
+// PatchesScreen's own lightbox idiom (dark full-bleed background, side
+// arrow buttons, X to close) instead of inventing a new visual language,
+// just as its own full screen rather than a lightbox over other content.
+// No real drag-swipe gesture — tap zones (left third = back, right
+// two-thirds = forward) plus visible arrow buttons, same trade-off as
+// everywhere else in this app that "swipes" today.
+//
+// Data is computed once by the caller (computePlayerYearStats) from
+// state AppShell already has loaded (myBookings, patches) — no new
+// Firestore reads for this screen at all.
+function YearInReviewScreen({ onBack, year, stats }) {
+  const { T, display, body } = useTheme();
+  const [index, setIndex] = useState(0);
+
+  const cards = [
+    { intro: true, title: String(year), subtitle: "Your Year in Review" },
+    { big: stats.eventsAttended, label: stats.eventsAttended === 1 ? "Event Attended" : "Events Attended" },
+    {
+      big: stats.fieldsVisited,
+      label: stats.fieldsVisited === 1 ? "Field Visited" : "Fields Visited",
+      sub: stats.mostVisitedField ? `Most often at ${stats.mostVisitedField.fieldName}` : null,
+    },
+    {
+      big: stats.patchesEarned.length,
+      label: stats.patchesEarned.length === 1 ? "Patch Earned" : "Patches Earned",
+      patchImages: stats.patchesEarned.slice(0, 6).map((p) => p.imageUrl).filter(Boolean),
+      patchOverflow: Math.max(0, stats.patchesEarned.length - 6),
+    },
+    { closing: true, title: "See You Out There", subtitle: `Here's to an even bigger ${year + 1}.` },
+  ];
+
+  const isFirst = index === 0;
+  const isLast = index === cards.length - 1;
+  const goNext = () => (isLast ? onBack() : setIndex((i) => i + 1));
+  const goPrev = () => { if (!isFirst) setIndex((i) => i - 1); };
+  const card = cards[index];
+
+  return (
+    <div className="h-full w-full relative overflow-hidden" style={{ backgroundColor: T.void }}>
+      <div className="absolute top-6 left-6 right-16 flex gap-1.5 z-20">
+        {cards.map((_, i) => (
+          <div key={i} className="flex-1 h-1" style={{ borderRadius: 999, background: i <= index ? "#FFFFFF" : "rgba(255,255,255,0.25)" }} />
+        ))}
+      </div>
+      <button
+        onClick={onBack}
+        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center z-20 transition-transform duration-100 active:scale-90"
+        style={{ background: "rgba(255,255,255,0.12)", borderRadius: 999 }}
+      >
+        <X size={18} color="#FFFFFF" />
+      </button>
+
+      <button onClick={goPrev} className="absolute left-0 top-0 bottom-0 w-1/3 z-10" aria-label="Previous" style={{ background: "transparent" }} />
+      <button onClick={goNext} className="absolute right-0 top-0 bottom-0 w-2/3 z-10" aria-label="Next" style={{ background: "transparent" }} />
+
+      <div className="h-full w-full flex flex-col items-center justify-center px-8 text-center relative z-0" style={{ pointerEvents: "none" }}>
+        {card.intro && (
+          <>
+            <div className="text-[15px] font-semibold uppercase mb-2" style={{ ...body, color: "rgba(255,255,255,0.6)", letterSpacing: "0.08em" }}>Atlas</div>
+            <div className="text-[56px] font-bold leading-none mb-3" style={{ ...display, color: "#FFFFFF" }}>{card.title}</div>
+            <div className="text-[18px]" style={{ ...body, color: "rgba(255,255,255,0.85)" }}>{card.subtitle}</div>
+          </>
+        )}
+        {card.closing && (
+          <>
+            <div className="text-[26px] font-bold mb-3" style={{ ...display, color: "#FFFFFF" }}>{card.title}</div>
+            <div className="text-[16px]" style={{ ...body, color: "rgba(255,255,255,0.85)" }}>{card.subtitle}</div>
+          </>
+        )}
+        {!card.intro && !card.closing && (
+          <>
+            <div className="text-[72px] font-bold leading-none mb-3" style={{ ...display, color: "#FFFFFF" }}>{card.big}</div>
+            <div className="text-[20px] font-semibold mb-2" style={{ ...display, color: "#FFFFFF" }}>{card.label}</div>
+            {card.sub && <div className="text-[14px]" style={{ ...body, color: "rgba(255,255,255,0.7)" }}>{card.sub}</div>}
+            {card.patchImages && card.patchImages.length > 0 && (
+              <div className="flex items-center justify-center gap-2 mt-4 flex-wrap" style={{ maxWidth: 260 }}>
+                {card.patchImages.map((url, i) => (
+                  <img key={i} src={url} alt="" className="w-12 h-12" style={{ objectFit: "contain" }} />
+                ))}
+                {card.patchOverflow > 0 && (
+                  <div className="text-[13px]" style={{ ...body, color: "rgba(255,255,255,0.7)" }}>+{card.patchOverflow} more</div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {!isFirst && (
+        <button
+          onClick={goPrev}
+          className="absolute left-3 w-11 h-11 flex items-center justify-center z-20 transition-transform duration-100 active:scale-90"
+          style={{ background: "rgba(255,255,255,0.15)", borderRadius: 999, top: "50%", transform: "translateY(-50%)" }}
+        >
+          <ChevronLeft size={22} color="#FFFFFF" />
+        </button>
+      )}
+      <button
+        onClick={goNext}
+        className="absolute right-3 w-11 h-11 flex items-center justify-center z-20 transition-transform duration-100 active:scale-90"
+        style={{ background: "rgba(255,255,255,0.15)", borderRadius: 999, top: "50%", transform: "translateY(-50%)" }}
+      >
+        <ChevronRight size={22} color="#FFFFFF" />
+      </button>
+    </div>
+  );
+}
+
 function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAvatar, deleteAccount }) {
   const { T, display, body, mono } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
@@ -4180,7 +4353,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers }) {
   const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
@@ -4407,6 +4580,10 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
           </button>
           <button onClick={onOpenPatches} className="w-full flex items-center justify-between py-3.5">
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Patches</span>
+            <ChevronRight size={15} color={T.ashFaint} />
+          </button>
+          <button onClick={onOpenYearInReview} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Year in Review</span>
             <ChevronRight size={15} color={T.ashFaint} />
           </button>
           <button onClick={onOpenScanRedeem} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
@@ -5479,6 +5656,7 @@ function AppShell() {
   };
   const openAccount = () => push("account");
   const openPatches = () => push("patches");
+  const openYearInReview = () => push("yearInReview");
   const openSecretPatchQR = () => push("secretPatchQR");
   const openScanRedeem = () => push("scanRedeem");
   const openTeam = (teamId) => {
@@ -5546,6 +5724,7 @@ function AppShell() {
         onOpenEvent={openEvent}
         onOpenField={openField}
         onNavigate={goTab}
+        onOpenYearInReview={openYearInReview}
         search={homeSearch} setSearch={setHomeSearch}
         activeCat={homeActiveCat} setActiveCat={setHomeActiveCat}
         viewMode={homeViewMode} setViewMode={setHomeViewMode}
@@ -5698,6 +5877,7 @@ function AppShell() {
         onNavigate={goTab}
         onOpenAccount={openAccount}
         onOpenPatches={openPatches}
+        onOpenYearInReview={openYearInReview}
         onOpenSecretPatchQR={openSecretPatchQR}
         onOpenScanRedeem={openScanRedeem}
         onLogout={handleLogout}
@@ -5730,6 +5910,14 @@ function AppShell() {
         patches={patches}
         patchesLoading={patchesLoading}
         setFeaturedPatch={setFeaturedPatch}
+      />
+    );
+  } else if (screen === "yearInReview") {
+    content = (
+      <YearInReviewScreen
+        onBack={pop}
+        year={reviewYear()}
+        stats={computePlayerYearStats(myBookings, patches, reviewYear())}
       />
     );
   } else if (screen === "secretPatchQR") {
