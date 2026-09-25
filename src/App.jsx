@@ -1192,11 +1192,7 @@ function HomeScreen({
         </button>
       </div>
 
-      {/* TEMPORARY, for Michael to test the banner before the real Dec 26
-          window — bypasses the date gate for this one account only.
-          Remove this uid check once testing is done; isReviewWindow()
-          itself is untouched. */}
-      {(isReviewWindow() || user?.uid === "lg4HMLTJvsPfSEN1pvNhMV4fbct1") && (
+      {isReviewWindow() && (
         <button
           onClick={onOpenYearInReview}
           className="mx-6 mb-4 p-4 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
