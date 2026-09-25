@@ -1200,7 +1200,7 @@ function HomeScreen({
         <button
           onClick={onOpenYearInReview}
           className="mx-6 mb-4 p-4 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
-          style={{ background: "linear-gradient(135deg, #1554B8, #0B2E5C)", borderRadius: T.rCard, boxShadow: T.shadowMd }}
+          style={{ width: "calc(100% - 48px)", background: "linear-gradient(135deg, #1554B8, #0B2E5C)", borderRadius: T.rCard, boxShadow: T.shadowMd }}
         >
           <div className="flex-1">
             <div className="text-[13px] font-semibold" style={{ ...display, color: "#FFFFFF" }}>Your {reviewYear()} Year in Review is ready</div>
