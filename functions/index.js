@@ -517,6 +517,16 @@ export const bookFreeEvent = onCall(
       throw new HttpsError("failed-precondition", "This event requires payment — use checkout instead.");
     }
 
+    // Same gate createBookingCheckout already has for the paid path: an
+    // unclaimed field has no owner on Atlas to see or honor this booking,
+    // so it doesn't matter that this particular event happens to be free —
+    // block it here too rather than only when money's involved.
+    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
+    const fieldData = fieldSnap.data();
+    if (!fieldData?.ownerId) {
+      throw new HttpsError("failed-precondition", "This field hasn't been claimed by an owner yet, so bookings aren't available.");
+    }
+
     const profileSnap = await db.collection("users").doc(uid).get();
     const profileData = profileSnap.data() || {};
     const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {};
@@ -532,8 +542,7 @@ export const bookFreeEvent = onCall(
     let walkOnEligible = false;
     const loc = request.data?.location;
     if (loc) {
-      const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
-      walkOnEligible = isNearField(loc, fieldSnap.data());
+      walkOnEligible = isNearField(loc, fieldData);
     }
 
     // A real transaction, not just a plain write — the same oversell

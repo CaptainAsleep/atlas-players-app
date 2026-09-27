@@ -1600,7 +1600,7 @@ function HomeScreen({
   );
 }
 
-function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
+function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
   myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout,
   fieldVouchers, redeemVoucher }) {
   const { T, display, body, mono, theme } = useTheme();
@@ -1690,6 +1690,12 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
   const isFull = ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking;
   const waiverBlocking = ev.waiver && !signature;
+  // An unclaimed field has no owner on Atlas to see or honor a booking —
+  // block new ones here regardless of price, the same way the backend
+  // now does (bookFreeEvent/createBookingCheckout). Gated on fieldsLoading
+  // so this never flashes true during the brief window before useFields()
+  // resolves.
+  const fieldUnclaimed = !fieldsLoading && !!field && !field.ownerId;
 
   // Extracted so both a normal "Reserve This Event" tap AND a just-completed
   // waiver signature can trigger the same real booking action — signing is
@@ -2153,12 +2159,21 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
 
       <div className="absolute bottom-4 left-4 right-4 px-5 py-3 flex items-center justify-between" style={{ background: T.glassFill, backdropFilter: T.glassBlur, WebkitBackdropFilter: T.glassBlur, border: T.glassBorder, borderRadius: T.rFloat, boxShadow: T.shadowFloat, zIndex: 1000 }}>
         <div>
-          <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
-          <div className="text-[18px] font-semibold" style={{ ...mono, color: usingVoucher ? T.good : T.ash }}>
-            {usingVoucher ? "$0 (voucher)" : priceDisplayText}
-          </div>
-          {typeof ev.maxCapacity === "number" && (
-            <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
+          {fieldUnclaimed ? (
+            <>
+              <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Booking Unavailable</div>
+              <div className="text-[12px] max-w-[180px]" style={{ ...body, color: T.ashDim }}>This field hasn't been claimed by an owner yet.</div>
+            </>
+          ) : (
+            <>
+              <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
+              <div className="text-[18px] font-semibold" style={{ ...mono, color: usingVoucher ? T.good : T.ash }}>
+                {usingVoucher ? "$0 (voucher)" : priceDisplayText}
+              </div>
+              {typeof ev.maxCapacity === "number" && (
+                <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
+              )}
+            </>
           )}
         </div>
         {ev.canceled ? (
@@ -2219,6 +2234,10 @@ function EventDetailScreen({ ev, field, onBack, onOpenField, favorited, onToggle
           // hatch for someone who genuinely canceled on Stripe's page.
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
             Confirming Payment…
+          </span>
+        ) : fieldUnclaimed ? (
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
+            Not Available
           </span>
         ) : (
           <button
@@ -5904,6 +5923,7 @@ function AppShell() {
       <EventDetailScreen
         ev={activeEvent}
         field={activeField}
+        fieldsLoading={fieldsLoading}
         onBack={pop}
         onOpenField={() => openField(activeField)}
         favorited={isFavorited("event", activeEvent.id)}
