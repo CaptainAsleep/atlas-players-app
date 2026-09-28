@@ -5753,6 +5753,70 @@ const fields = [
       "own website exists but looks stale (copyright footer stuck at 2022, no clear current-year event dates on the homepage) -- however I independently confirmed genuine, recent, dated activity elsewhere: a real Sept 2025 \"Red Creek Royale\" ticketed event, an Oct 2025 \"Operation High Desert 2.0\" event listed on the third-party utahairsoftevents.com hub, and TikTok posts referencing repeat events (\"Operation Clocktower,\" described as their biggest event yet) -- genuinely active despite the stale-looking own site",
     lastScraped: "2026-09-22",
   },
+
+  // ---- New York (added 2026-09-28) -----------------------------------------
+  // Michael flagged this one directly. Its own domain/branding say "Albany"
+  // and it reads as a Massachusetts border-area result in casual searches, but
+  // the business itself, its Facebook page, and every directory checked place
+  // it in Nassau, NY (Rensselaer County) -- confirmed this before adding.
+  {
+    id: "albany-paintball-experience-nassau",
+    name: "Albany Paintball Experience",
+    city: "Nassau, NY",
+    address: "3167 US-20, Nassau, NY 12123",
+    phone: "(518) 227-0515",
+    email: "albanypaintballexperience@gmail.com",
+    website: "https://albanypaintballexperienceny.com/",
+    facebook: "https://www.facebook.com/AlbanyPaintballExperience/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Large, long-running paintball-primary venue (multiple field types: woodsball, speedball, hyperball, plus dedicated urban/wooded airsoft terrain) less than 20 minutes from downtown Albany, NY, with a genuine standing airsoft program -- airsoft runs Saturdays, paintball Sundays. History of large-scale scenario events (own marketing cites past games up to 4,000 players).",
+    status: "active",
+    dataSource:
+      "own website (albanypaintballexperienceny.com, dedicated /airsoft/ and /fields/ pages) + Facebook + multiple independent directories (Chamber of Commerce, businessyab.com) corroborating phone/address + AllEvents.in showing a dated 2026 event (\"Blowback Throwback 2026,\" Jun 27 2026), confirming current activity. Publishes only a Gmail contact address, so the domain-match owner-claim trick won't apply.",
+    lastScraped: "2026-09-28",
+  },
+
+  // ---- Massachusetts (new state, added 2026-09-28) --------------------------
+  {
+    id: "advanced-action-sports-webster",
+    name: "Advanced Action Sports",
+    city: "Webster, MA",
+    address: "109 Worcester Rd, Webster, MA 01570",
+    phone: "(508) 731-6300",
+    email: "contact@advancedactionsports.com",
+    website: "https://www.advancedactionsports.com/",
+    ownerEmailDomain: "advancedactionsports.com", // for owner-app claim verification -- must match the claiming email's domain
+    facebook: "https://www.facebook.com/advancedactionsports",
+    instagram: "https://www.instagram.com/advancedactionsports/",
+    indoorOutdoor: "outdoor",
+    about:
+      "Seasonal walk-in airsoft, paintball, Nerf, and gel-blaster park (April 1 through the Wednesday before Thanksgiving), including team-game airsoft, LARP-style scenarios, and milsim/historical-reenactment formats. A second, newer Advanced Action Sports location operates by appointment only in Granville, MA. Michael flagged this field directly.",
+    status: "active",
+    dataSource:
+      "own website (advancedactionsports.com, dedicated /airsoft/ page) + Facebook + Instagram + Yelp (updated September 2026, the current month at research time). Resolves a previously-unresolved question from the Rhode Island seeding pass: this business's own homepage lists Webster and Granville, MA as its two current locations, while a separate West Warwick, RI location some directories still list could not be confirmed active and remains excluded pending a direct call.",
+    lastScraped: "2026-09-28",
+  },
+
+  // ---- New Hampshire, additional field (added 2026-09-28) -------------------
+  {
+    id: "green-ops-milsim-orford",
+    name: "Green Ops Milsim",
+    city: "Orford, NH",
+    address: "159 Dame Hill Rd, Orford, NH",
+    phone: "(802) 324-3370",
+    email: "derek@greenopsmilsim.com",
+    website: "https://greenopsmilsim.com/",
+    ownerEmailDomain: "greenopsmilsim.com", // for owner-app claim verification -- must match the claiming email's domain
+    facebook: "https://www.facebook.com/profile.php?id=61578811841227",
+    indoorOutdoor: "outdoor",
+    about:
+      "Strictly milsim-focused outdoor airsoft field, running structured scenario games with a formal TACSOP ruleset and IFF procedures. Michael flagged this field directly.",
+    status: "active",
+    dataSource:
+      "own website (greenopsmilsim.com, last modified July 2026, with a formal TACSOP ruleset and waiver system) + dated 2026 events (\"Battlesim Walk-On,\" Aug 23 2026; \"Red Storm Rising -- Part 2,\" Sep 12 2026) + Instagram + Facebook + YouTube.",
+    lastScraped: "2026-09-28",
+  },
 ];
 
 // ---- EVENTS ---------------------------------------------------------------

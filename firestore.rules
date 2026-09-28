@@ -248,7 +248,13 @@ service cloud.firestore {
     // publicProfiles collection below is the deliberately narrow, public-
     // facing mirror used for viewing other players.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Split from a single read+write line (2026-09-28) so the admin
+      // read grant below can't accidentally also grant admin write —
+      // the admin portal's new Players section needs to show a player's
+      // email, but should never be able to edit their account. Write
+      // stays self-only, unchanged.
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && request.auth.uid == userId;
 
       // A player's own mirror of their bookings — self-access covers
       // create/delete (booking/canceling) via the parent rule above. This
@@ -329,7 +335,12 @@ service cloud.firestore {
       // not private. Write stays owner-only.
       match /patches/{patchId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        // isAdmin() added 2026-09-28 so a catalog patch (achievementPatches
+        // entries with trigger: null — Bug Hunter, Ambassador, Secret
+        // Agent, etc. — need a human, not a rule, to grant them) can be
+        // granted from the admin portal's Players section instead of by
+        // hand through the Firebase console.
+        allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
       }
 
       // Digital vouchers issued when an owner cancels an event a player
