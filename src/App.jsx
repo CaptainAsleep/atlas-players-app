@@ -1653,6 +1653,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const [selectedRentalIds, setSelectedRentalIds] = useState([]);
   const toggleRental = (id) => setSelectedRentalIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   const rentalsCents = rentalOptions.filter((r) => selectedRentalIds.includes(r.id)).reduce((sum, r) => sum + r.priceCents, 0);
+  // Lifted up from inside proceedToBook so the click handlers below can
+  // read it synchronously, before any awaits — needed to decide whether
+  // to pre-open a blank tab for Stripe Checkout at click time (see
+  // handlePrimaryAction/handleSign).
+  const isPaidEvent = entryPriceCents + rentalsCents > 0;
   const [showPatchViewer, setShowPatchViewer] = useState(false);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -1684,6 +1689,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const voucherCoversCost = !!bestFieldVoucher && entryPriceCents > 0 && bestFieldVoucher.amountCents >= entryPriceCents;
   const usingVoucher = applyVoucher && voucherCoversCost;
   const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
+  // Set only if even the synchronously-pre-opened tab gets blocked (rare —
+  // an aggressive popup blocker that blocks everything, not just
+  // post-await opens) — gives the player a real, tappable link instead of
+  // a silent dead end.
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
   const [shareState, setShareState] = useState(null); // "copied" briefly, to confirm the clipboard fallback
@@ -1700,18 +1710,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // Extracted so both a normal "Reserve This Event" tap AND a just-completed
   // waiver signature can trigger the same real booking action — signing is
   // now step one of booking, not a separate standalone thing on this page.
-  const proceedToBook = async () => {
+  const proceedToBook = async (preOpenedWindow = null) => {
     setBookingBusy(true);
     setBookingError("");
-    // A real, priced event goes through actual Stripe Checkout — the
-    // booking itself only gets created server-side once payment succeeds,
-    // not here. A free event (no real price set) keeps the original,
-    // instant flow, since there's no payment to wait on at all.
-    // Combined, not entry-only — a free event with a rental selected still
-    // needs real payment, so it routes to Stripe checkout too, exactly
-    // like a normally-priced event. See createBookingCheckout's own
-    // combined chargeableCents guard on the Cloud Function side.
-    const isPaidEvent = entryPriceCents + rentalsCents > 0;
+    setPendingCheckoutUrl(null);
     // Grabbed once, up front, for either path — best-effort only (resolves
     // to null rather than blocking or failing booking if location isn't
     // available or granted). The server decides whether it's actually
@@ -1722,22 +1724,33 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     try {
       if (isPaidEvent) {
         const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds);
-        // Opens in a genuinely separate tab rather than navigating this
-        // app's own window away — a real, confirmed WebKit bug can
-        // corrupt this PWA's own rendering after returning from an
-        // external site through the same tab (found and fixed on the
-        // owner app's Payouts flow first). Opening separately also means
-        // this tab's own live listener on the booking never drops — the
-        // "Reserved" state below will pick it up automatically the moment
-        // the webhook confirms payment, whichever tab that happens in.
-        window.open(url, "_blank");
+        // Redirect the tab that was already opened synchronously at click
+        // time (see handlePrimaryAction/handleSign) rather than calling
+        // window.open here. By this point we're past getQuickLocation's
+        // await and the createBookingCheckout round trip — a fresh
+        // window.open this late is no longer within the trusted
+        // user-gesture window on Safari (and unreliably on Chrome) and
+        // gets silently blocked, which is exactly the bug this replaces:
+        // no tab ever appeared, with the button stuck on "Confirming
+        // Payment…" and no error surfaced anywhere.
+        if (preOpenedWindow && !preOpenedWindow.closed) {
+          preOpenedWindow.location.href = url;
+        } else {
+          // No usable pre-opened tab — best-effort fresh open, and if
+          // that's blocked too, fall back to a visible manual link
+          // (pendingCheckoutUrl below) instead of a silent dead end.
+          const fresh = window.open(url, "_blank");
+          if (!fresh) setPendingCheckoutUrl(url);
+        }
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
+        preOpenedWindow?.close(); // shouldn't exist on the free path, but don't leave a stray blank tab if it does
         await bookEvent(user.uid, profile, ev, selectedChoice, location);
         setBookingBusy(false);
       }
     } catch (err) {
+      preOpenedWindow?.close(); // don't leave a stray blank tab behind on a failed attempt
       // Every HttpsError createBookingCheckout/bookFreeEvent actually
       // throw (failed-precondition, already-exists, not-found,
       // invalid-argument, unauthenticated) is already a complete,
@@ -1811,7 +1824,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
       setShowWaiver(true);
       return;
     }
-    proceedToBook();
+    // Pre-open a blank tab synchronously, in direct response to this
+    // click, before proceedToBook's awaits — see proceedToBook for why.
+    // Only for a paid event; a free booking never opens a tab at all.
+    const preOpenedWindow = isPaidEvent ? window.open("", "_blank") : null;
+    proceedToBook(preOpenedWindow);
   };
 
   const handleCancel = async () => {
@@ -1850,6 +1867,15 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
 
   const handleSign = async () => {
     if (!legalName.trim() || !agreed || !user) return;
+    // This tap is the real trusted gesture when a waiver was required —
+    // the original "Reserve This Event" tap only opened the waiver sheet,
+    // it never reached proceedToBook. So the blank tab has to be grabbed
+    // right here, synchronously, before signWaiver/proceedToBook's awaits
+    // — otherwise the eventual window.open lands well outside the
+    // trusted-gesture window on Safari and gets silently blocked. Never
+    // opened for a voucher redemption (no Stripe involved) or a free
+    // event.
+    const preOpenedWindow = (!pendingVoucherRedeem && isPaidEvent) ? window.open("", "_blank") : null;
     setSigning(true);
     setSignError("");
     try {
@@ -1867,11 +1893,13 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
       // signature saves, rather than making the player tap a second time.
       if (pendingVoucherRedeem) {
         setPendingVoucherRedeem(false);
+        preOpenedWindow?.close(); // guard's already false above, but never leave a stray blank tab
         await proceedToRedeemVoucher();
       } else {
-        await proceedToBook();
+        await proceedToBook(preOpenedWindow);
       }
     } catch (err) {
+      preOpenedWindow?.close(); // signWaiver itself failed — don't leave a stray blank tab behind
       setSignError("Couldn't save your signature — try again.");
     } finally {
       setSigning(false);
@@ -2260,8 +2288,19 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
           <p className="text-[12px] text-center py-2" style={{ ...body, color: T.ash, background: T.panel, borderRadius: 4, border: `1px solid ${T.line}` }}>
             Complete your payment in the new tab — this page will update on its own once it's confirmed.
           </p>
+          {pendingCheckoutUrl && (
+            <a
+              href={pendingCheckoutUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center text-[12px] font-semibold mt-1.5 py-2"
+              style={{ ...body, color: T.inverse, background: T.cta, borderRadius: T.rPill }}
+            >
+              Open Payment Page
+            </a>
+          )}
           <button
-            onClick={() => setCheckoutOpenedInfo(false)}
+            onClick={() => { setCheckoutOpenedInfo(false); setPendingCheckoutUrl(null); }}
             className="w-full text-center text-[11px] font-medium mt-1.5"
             style={{ ...body, color: T.accent }}
           >
