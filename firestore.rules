@@ -220,27 +220,38 @@ service cloud.firestore {
       // actually verifying something with Stripe. Without this, the
       // existing self-write rule would let anyone set their own account to
       // "active" directly from browser devtools, no payment required.
-      allow update: if request.auth != null && request.auth.uid == ownerId
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
-          "connectOnboardingComplete"
-        ])
-        // claimedFieldCount is a denormalized counter (no cap enforced on
-        // it anymore, but still kept honest for admin-portal visibility)
-        // — the client increments its own copy in the same batch as a
-        // field claim (there's no Cloud Function on that path), so this
-        // can't just be added to the fully-blocked list above. It can
-        // only ever go up, by exactly 1, one claim at a time.
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["claimedFieldCount"])
-          || request.resource.data.claimedFieldCount == resource.data.get('claimedFieldCount', 0) + 1)
-        // feeModel ("pass_to_player" or "absorb") is chosen once, right
-        // after an owner's first field claim, and locked in for good —
-        // matches Atlas Standard's "selected at sign-up" design. Once set,
-        // no further client write may touch it at all; a real fee-model
-        // change is a rare, manually-handled (admin/Discord) case, not a
-        // self-serve one.
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["feeModel"])
-          || !("feeModel" in resource.data));
+      allow update: if request.auth != null && (
+        (request.auth.uid == ownerId
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
+            "connectOnboardingComplete"
+          ])
+          // claimedFieldCount is a denormalized counter (no cap enforced on
+          // it anymore, but still kept honest for admin-portal visibility)
+          // — the client increments its own copy in the same batch as a
+          // field claim (there's no Cloud Function on that path), so this
+          // can't just be added to the fully-blocked list above. It can
+          // only ever go up, by exactly 1, one claim at a time.
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["claimedFieldCount"])
+            || request.resource.data.claimedFieldCount == resource.data.get('claimedFieldCount', 0) + 1)
+          // feeModel ("pass_to_player" or "absorb") is chosen once, right
+          // after an owner's first field claim, and locked in for good —
+          // matches Atlas Standard's "selected at sign-up" design. Once
+          // set, no further OWNER client write may touch it at all; a
+          // real fee-model change goes through the isAdmin() branch below
+          // instead.
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["feeModel"])
+            || !("feeModel" in resource.data)))
+        ||
+        // Admin can change a field's fee model directly from the admin
+        // portal (2026-09-30) — the one thing deliberately locked out of
+        // owner self-service above. A real fee-model change was already a
+        // rare, manually-handled case (previously Firebase console/
+        // Discord); this just gives it a real UI instead of hand-editing
+        // Firestore. Scoped to ONLY this key so the grant can never be
+        // used to touch payouts/Stripe fields or anything else here.
+        (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["feeModel"]))
+      );
     }
     // A signed-in user can read and write ONLY their own profile document —
     // never anyone else's, and never before they're authenticated. This is
