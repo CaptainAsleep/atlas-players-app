@@ -198,6 +198,10 @@ const achievementPatches = [
 
   { id: "whitehorse-milsim", name: "WhiteHorse Milsim", imageFile: "whitehorsemilsim.png",
     details: "Be a member of WhiteHorse Milsim", trigger: null },
+
+  { id: "first-booking", name: "First Booking", imageFile: "firstbooking.png",
+    details: "A 1-of-1 patch, awarded to the very first person to ever book an event on Atlas",
+    trigger: null },
 ];
 
 async function uploadAndSeed() {
