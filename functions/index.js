@@ -1,6 +1,7 @@
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
@@ -32,6 +33,7 @@ const BOOKING_EMAIL_FROM = "Michael @ Atlas <bookingconfirmation@airsoftatlas.ap
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatesDir = path.join(__dirname, "templates");
 const signupWelcomeTemplate = readFileSync(path.join(templatesDir, "signup-welcome.html"), "utf-8");
+const verifyEmailSectionTemplate = readFileSync(path.join(templatesDir, "verify-email-section.html"), "utf-8");
 const bookingConfirmationFirstTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-first.html"), "utf-8");
 const bookingConfirmationRepeatTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-repeat.html"), "utf-8");
 
@@ -433,7 +435,7 @@ export const createBookingCheckout = onCall(
     // is what actually closes the "paid twice because the booking hadn't
     // shown up yet" risk, not just the UI-side button-disabling, which a
     // force-quit/relaunch would bypass entirely on its own.
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams = {
       mode: "payment",
       customer_email: request.auth.token?.email,
       line_items: [
@@ -490,9 +492,29 @@ export const createBookingCheckout = onCall(
       },
       success_url: "https://playerapp.airsoftatlas.app/?booking=success",
       cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
-    }, {
-      idempotencyKey: `booking-checkout:${eventId}:${uid}`,
-    });
+    };
+
+    // The deterministic key above means Stripe honors a byte-identical
+    // repeat request (impatient re-tap, relaunch, network blip) by handing
+    // back the original session instead of creating a second one. But if a
+    // later request under this same key has DIFFERENT parameters — almost
+    // always because Atlas shipped a change to this function between a
+    // player's abandoned first attempt and their next retry — Stripe
+    // throws a StripeIdempotencyError rather than silently reusing or
+    // recreating anything. That's recoverable, and safe to recover from
+    // (it can only ever create one new session, never a duplicate charge),
+    // by retrying exactly once under a fresh key. A genuinely simultaneous
+    // identical retry never reaches this catch at all, so the original
+    // double-charge protection is untouched.
+    const idempotencyKey = `booking-checkout:${eventId}:${uid}`;
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+    } catch (err) {
+      if (err.type !== "StripeIdempotencyError") throw err;
+      console.warn(`createBookingCheckout: idempotency key mismatch for ${uid}/${eventId}, retrying with a fresh key`);
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: `${idempotencyKey}:retry:${Date.now()}` });
+    }
 
     return { url: session.url };
   }
@@ -1415,7 +1437,29 @@ export const sendPlayerWelcomeEmail = onDocumentUpdated(
     await event.data.after.ref.update({ welcomeEmailSentAt: FieldValue.serverTimestamp() });
 
     const callsign = after.callsign || "Player";
-    const html = fillTemplate(signupWelcomeTemplate, { "[PLAYER CALLSIGN]": callsign });
+
+    // Google sign-ins already have emailVerified: true at account creation
+    // (Google already vouches for that address) — nothing to ask them to
+    // click, so this section is left empty for them. A Resend/Auth hiccup
+    // building the link should never block the welcome email itself from
+    // going out, hence the broad try/catch rather than letting it throw.
+    let verifySectionHtml = "";
+    try {
+      const authUser = await getAuth().getUser(event.params.userId);
+      if (!authUser.emailVerified) {
+        const verifyLink = await getAuth().generateEmailVerificationLink(after.email, {
+          url: "https://airsoftatlas.app/verify-email.html",
+        });
+        verifySectionHtml = fillTemplate(verifyEmailSectionTemplate, { "[VERIFY_LINK]": verifyLink });
+      }
+    } catch (err) {
+      console.error(`sendPlayerWelcomeEmail: couldn't build verify-email section for ${event.params.userId}:`, err);
+    }
+
+    const html = fillTemplate(signupWelcomeTemplate, {
+      "[PLAYER CALLSIGN]": callsign,
+      "[VERIFY_EMAIL_SECTION]": verifySectionHtml,
+    });
 
     try {
       const resend = new Resend(resendApiKey.value());

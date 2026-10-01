@@ -12,7 +12,7 @@ import {
   updatePassword,
   updateProfile,
 } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "../lib/firebase";
 
@@ -89,6 +89,31 @@ export function useAuth() {
       }
     });
   }, [user, profile?.callsign]);
+
+  // Picks up email verification completed outside the app (the player
+  // clicked the link from the welcome email, possibly on a different
+  // device/browser than where they use Atlas) — emailVerified doesn't push
+  // to an already-open client, so this re-checks it once per account load
+  // and catches Firestore up the first time it's true. Skipped entirely
+  // once Firestore already says verified, so an already-verified account
+  // never costs an extra Auth call on load. Also fixes a related gap: the
+  // publicProfiles backfill above only ever sets verified when the public
+  // profile doc doesn't exist yet, so without this, a player's own profile
+  // could say verified while their public one (what teammates see) stayed
+  // stuck on the stale signup-time value.
+  useEffect(() => {
+    if (!user || !profile || profile.verified === true) return;
+    user.reload()
+      .then(() => auth.currentUser?.getIdToken(true)) // force a fresh ID token so its
+      .then(() => {                                    // email_verified claim matches
+        if (!auth.currentUser?.emailVerified) return;   // reality for the rules check
+        const batch = writeBatch(db);
+        batch.set(doc(db, "users", user.uid), { verified: true }, { merge: true });
+        batch.set(doc(db, "publicProfiles", user.uid), { verified: true }, { merge: true });
+        return batch.commit();
+      })
+      .catch((err) => console.error("email-verification sync failed:", err));
+  }, [user, profile?.verified]);
 
   // Shared by email/password signUp and any social sign-in provider: creates
   // the Firestore users/{uid} doc plus its publicProfiles/{uid} mirror for a

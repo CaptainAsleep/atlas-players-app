@@ -265,7 +265,15 @@ service cloud.firestore {
       // email, but should never be able to edit their account. Write
       // stays self-only, unchanged.
       allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow write: if request.auth != null && request.auth.uid == userId;
+      // A player can write their own doc freely, with one narrow carve-out:
+      // "verified" can only ever be set to true when the Auth ID token's own
+      // email_verified claim says so — otherwise a player could just set
+      // the trust badge on themselves from devtools with no real
+      // verification at all. Doesn't block unsetting it (not a real case
+      // here); request.resource.data reflects the full resulting document
+      // regardless of merge vs. full-set, so this holds either way.
+      allow write: if request.auth != null && request.auth.uid == userId
+        && (request.resource.data.verified != true || request.auth.token.email_verified == true);
 
       // A player's own mirror of their bookings — self-access covers
       // create/delete (booking/canceling) via the parent rule above. This
@@ -407,7 +415,11 @@ service cloud.firestore {
       allow read: if true;
       allow create, delete: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && (
-        request.auth.uid == uid
+        // Same verified-forgery carve-out as users/{userId} above — the
+        // public mirror is just as self-writable, so it needs the same
+        // guard, not just the source doc.
+        (request.auth.uid == uid
+          && (request.resource.data.verified != true || request.auth.token.email_verified == true))
         ||
         // Anyone signing up with this player's referral link can bump
         // their referral count by exactly 1 — narrow, single-field,
