@@ -1612,6 +1612,17 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const basePriceCents = Math.round(parseFloat(String(ev.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
 
   const [showWaiver, setShowWaiver] = useState(false);
+  // Best-effort location, used only for the Walk-On Survivor check
+  // server-side — kicked off the moment this screen mounts rather than
+  // when the player actually taps Book/Sign, so the up-to-4s GPS wait
+  // (see getQuickLocation) overlaps with the player reading the page /
+  // signing a waiver instead of sitting in front of the Stripe checkout
+  // call. proceedToBook/proceedToRedeemVoucher await this same promise
+  // instead of starting a fresh fetch.
+  const locationPromiseRef = useRef(null);
+  useEffect(() => {
+    locationPromiseRef.current = getQuickLocation();
+  }, []);
   // Price Options — a group of player-picked, differently-priced choices
   // (weapon class, BB weight, etc.), set by the field owner on the event.
   // Absent for a normal flat-price or free event.
@@ -1720,7 +1731,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     // close enough and whether this is even a first-ever booking; this is
     // just the one thing only the client can supply, and it applies to a
     // walk-on paying at the gate in cash just as much as one booking free.
-    const location = await getQuickLocation();
+    const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
         const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds);
@@ -1790,7 +1801,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     if (!bestFieldVoucher) return;
     setBookingBusy(true);
     setBookingError("");
-    const location = await getQuickLocation();
+    const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location);
       setBookingBusy(false);

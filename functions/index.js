@@ -308,7 +308,15 @@ export const createBookingCheckout = onCall(
     const db = getFirestore();
     const stripe = new Stripe(stripeSecretKey.value());
 
-    const eventSnap = await db.collection("events").doc(eventId).get();
+    const eventRef = db.collection("events").doc(eventId);
+    // Depends on nothing but eventId/uid, both already known at this
+    // point — kicked off now, in parallel with eventSnap itself, instead
+    // of after it. Checked in the exact same place/order as before
+    // (below, after the waiver and capacity checks) — only when this
+    // read *starts* moved, not when its result is acted on.
+    const existingBookingPromise = eventRef.collection("bookings").doc(uid).get();
+
+    const eventSnap = await eventRef.get();
     if (!eventSnap.exists) {
       throw new HttpsError("not-found", "Event not found.");
     }
@@ -317,6 +325,11 @@ export const createBookingCheckout = onCall(
     if (eventData.canceled) {
       throw new HttpsError("failed-precondition", "This event has been canceled.");
     }
+
+    // Depends only on eventData.fieldId, now known — kicked off here so
+    // it runs in parallel with the waiver-signature read (and the sync
+    // capacity check) below, instead of waiting for both to finish first.
+    const fieldPromise = db.collection("fields").doc(eventData.fieldId).get();
 
     // Waiver requirement, re-checked server-side — the client already
     // gates this in the UI, but a real payment endpoint can't trust the
@@ -337,12 +350,12 @@ export const createBookingCheckout = onCall(
       throw new HttpsError("failed-precondition", "This event is full.");
     }
 
-    const existingBooking = await db.collection("events").doc(eventId).collection("bookings").doc(uid).get();
+    const existingBooking = await existingBookingPromise; // usually already resolved by now
     if (existingBooking.exists) {
       throw new HttpsError("already-exists", "Already booked for this event.");
     }
 
-    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
+    const fieldSnap = await fieldPromise; // had a head start since eventData.fieldId became known
     const fieldData = fieldSnap.data();
     if (!fieldData?.ownerId) {
       throw new HttpsError("failed-precondition", "This field isn't set up to accept payments yet.");
