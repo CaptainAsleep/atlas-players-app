@@ -260,6 +260,25 @@ function computeStandardFee(entryPriceCents) {
   return Math.min(Math.round(entryPriceCents * 0.035) + 130, 500);
 }
 
+// The posted ticket price a cancellation voucher should be worth — never
+// the platform fee, never a rental's cost, never dependent on which fee
+// model the field happened to be on. A booking made after this shipped
+// has the real value stored directly (entryPriceCents, captured once at
+// checkout-creation time via resolveEntryPrice — see createBookingCheckout).
+// An older booking from before this field existed falls back to the best
+// reconstruction available: back the fee out only when the player paid
+// it, and always back out any rentals too, since amountPaidCents has
+// always included those regardless of fee model.
+function resolveVoucherAmountCents(booking, passFeeToPlayer) {
+  if (typeof booking.entryPriceCents === "number") return booking.entryPriceCents;
+  const feeCents = typeof booking.bookingFeeCents === "number" ? booking.bookingFeeCents : 0;
+  const rentalsCents = (booking.selectedRentals || []).reduce(
+    (sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents : 0), 0
+  );
+  const deduction = rentalsCents + (passFeeToPlayer ? feeCents : 0);
+  return Math.max(0, (booking.amountPaidCents || 0) - deduction);
+}
+
 // Mirrors distanceMiles() in the player app's src/App.jsx exactly — kept
 // in sync manually since functions/ and src/ don't share a module here.
 function distanceMilesServer(lat1, lng1, lat2, lng2) {
@@ -452,6 +471,13 @@ export const createBookingCheckout = onCall(
         eventId,
         fieldId: eventData.fieldId,
         bookingFeeCents: String(bookingFeeCents),
+        // The real, resolved ticket price (base + whichever Price Option
+        // was picked) — deliberately excludes rentals and the platform
+        // fee, same as resolveEntryPrice returns it. Read back by the
+        // webhook below and stored on the booking doc so a future
+        // cancellation voucher (resolveVoucherAmountCents) never has to
+        // reverse-engineer this out of amountPaidCents.
+        entryPriceCents: String(entryPriceCents),
         ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: String(selectedChoice.priceCents) } : {}),
         // Stripe metadata values are strings only — "true"/absent, not a
         // real boolean.
@@ -706,16 +732,14 @@ export const cancelEventWithVouchers = onCall(
         if (b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0) {
           const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
           voucherId = voucherRef.id;
-          // Ticket price only — when the player paid the platform fee on
-          // top (pass_to_player), that fee is backed out of the voucher's
-          // value; when the owner absorbed it, amountPaidCents was
-          // already just the ticket price and nothing needs subtracting.
-          // Atlas doesn't refund its own booking fee just because the
-          // owner canceled.
-          const feeCentsOnThisBooking = typeof b.bookingFeeCents === "number" ? b.bookingFeeCents : 0;
-          voucherAmountCents = passFeeToPlayer
-            ? Math.max(0, b.amountPaidCents - feeCentsOnThisBooking)
-            : b.amountPaidCents;
+          // Ticket price only, via the shared helper — the real,
+          // resolved price this booking's checkout captured
+          // (entryPriceCents) when available, or a best-effort
+          // reconstruction for an older booking made before that field
+          // existed. Atlas doesn't refund its own booking fee just
+          // because the owner canceled, and a voucher never covers a
+          // rental either.
+          voucherAmountCents = resolveVoucherAmountCents(b, passFeeToPlayer);
           batch.set(voucherRef, {
             fieldId: eventData.fieldId,
             fieldName: eventData.fieldName || fieldData.name || null,
@@ -830,12 +854,9 @@ export const grantVoucherToPlayer = onCall(
         throw new HttpsError("failed-precondition", "This event is already canceled.");
       }
 
-      // Same ticket-price-only math cancelEventWithVouchers uses — the
-      // Atlas platform fee is never refunded or put on a voucher.
-      const feeCentsOnThisBooking = typeof b.bookingFeeCents === "number" ? b.bookingFeeCents : 0;
-      voucherAmountCents = passFeeToPlayer
-        ? Math.max(0, b.amountPaidCents - feeCentsOnThisBooking)
-        : b.amountPaidCents;
+      // Same shared helper cancelEventWithVouchers uses — ticket price
+      // only, never the platform fee or a rental's cost.
+      voucherAmountCents = resolveVoucherAmountCents(b, passFeeToPlayer);
 
       const now = new Date();
       const expiresAt = new Date(now.getTime() + expirationDays * 86400000);
@@ -1083,7 +1104,7 @@ export const stripeWebhook = onRequest(
           const session = event.data.object;
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals } = session.metadata;
             // Written by createBookingCheckout as a JSON string (Stripe
             // metadata values are strings only) — parsed back out here the
             // same defensive way selectedChoiceLabel/Cents are trusted:
@@ -1146,6 +1167,13 @@ export const stripeWebhook = onRequest(
                 // metadata since it was already computed once, at checkout
                 // creation.
                 bookingFeeCents: bookingFeeCents != null ? Number(bookingFeeCents) : null,
+                // The real ticket price this booking paid — base price +
+                // whichever Price Option was picked, excluding rentals
+                // and the platform fee. Read straight off checkout
+                // metadata (resolveEntryPrice, computed once at checkout
+                // creation) so cancellation vouchers never have to
+                // reconstruct it later from amountPaidCents.
+                entryPriceCents: entryPriceCents != null ? Number(entryPriceCents) : null,
                 // Which Price Options choice this player picked, if the
                 // event has that group — read straight off checkout
                 // metadata since it was already validated once, server-
