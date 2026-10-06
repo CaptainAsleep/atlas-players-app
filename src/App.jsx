@@ -820,7 +820,7 @@ function FieldFacts({ field, rentalPick }) {
                     key={r.id}
                     onClick={() => rentalPick.onToggle(r.id)}
                     className="flex items-start gap-3 p-3 text-left w-full"
-                    style={{ background: picked ? T.tintGood : T.panelAlt, borderRadius: T.rCard, outline: picked ? `1.5px solid ${T.good}` : "none", outlineOffset: -1 }}
+                    style={{ background: picked ? T.tintGood : "transparent", borderRadius: T.rCard, border: `1.5px ${picked ? "solid" : "dashed"} ${picked ? T.good : T.line}` }}
                   >
                     <div className="w-5 h-5 mt-0.5 flex-shrink-0 flex items-center justify-center" style={{ borderRadius: 5, border: `1.5px solid ${picked ? T.good : T.line}`, background: picked ? T.good : "transparent" }}>
                       {picked && <Check size={13} color={T.inverse} strokeWidth={3} />}
