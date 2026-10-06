@@ -41,6 +41,17 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // Team calendar event banners — same officer-only model as teamPatches.
+    match /teamEventBanners/{teamId}/{eventId}/{fileName} {
+      allow read: if true;
+      allow delete: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+      allow create, update: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer"
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
     match /fieldGallery/{fieldId}/{fileName} {
       // Same ownership-via-Firestore-lookup pattern as team patches — only
       // this field's actual owner can add/remove gallery photos.

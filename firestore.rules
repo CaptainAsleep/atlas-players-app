@@ -520,6 +520,52 @@ service cloud.firestore {
               && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer") // an officer removing someone
         );
       }
+
+      // Team event calendar (WhiteHorse Milsim request, 2026-10-06). Events
+      // here are the team's own "we're attending this" posts — external
+      // ticket link, no Atlas booking — so they deliberately live apart from
+      // the bookable top-level events collection. Public read (the public
+      // calendar), officer-only write, same officer check as the team doc.
+      match /events/{eventId} {
+        allow read: if true;
+        allow create: if request.auth != null
+          && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer"
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update, delete: if request.auth != null
+          && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+
+        // Per-event attendance. Team members can mark going / interested /
+        // notGoing and can read the whole list; a non-member can only mark
+        // themselves "interested" and can only read their own doc.
+        match /rsvps/{uid} {
+          allow read: if request.auth != null && (
+            request.auth.uid == uid
+            || exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+          );
+          allow create, update: if request.auth != null
+            && request.auth.uid == uid
+            && request.resource.data.uid == uid
+            && (
+              (exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+                && request.resource.data.status in ["going", "interested", "notGoing"])
+              || request.resource.data.status == "interested"
+            );
+          allow delete: if request.auth != null && request.auth.uid == uid;
+        }
+      }
+
+      // Custom team roles — labels only (title + description), no
+      // permissions. Public read; officer-only create/edit/delete. Which
+      // members hold which roles lives on the member doc (roleIds), which is
+      // already officer-only to update.
+      match /roles/{roleId} {
+        allow read: if true;
+        allow create, update, delete: if request.auth != null
+          && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+      }
     }
 
     // Officer role requests — a member asking their team's officers to
@@ -533,10 +579,19 @@ service cloud.firestore {
     // which Firestore rules evaluate as an update (not a create) — and
     // update is hard-denied below.
     match /officerRequests/{requestId} {
+      // Bug fixed 2026-10-04: a read of a doc that doesn't exist yet has
+      // resource == null, so resource.data.uid errored and the rule denied
+      // it. useMyOfficerRequest's onSnapshot on {teamId}_{uid} hits exactly
+      // that case before any request exists, so the listener died with
+      // permission-denied, the button never flipped to "Pending", and a
+      // second tap became a denied update ("try again"). A missing doc is
+      // now readable only at the caller's own {teamId}_{uid} id.
       allow read: if request.auth != null && (
-        request.auth.uid == resource.data.uid
-        || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
-            && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer")
+        resource == null
+          ? requestId.matches('.*_' + request.auth.uid)
+          : (request.auth.uid == resource.data.uid
+             || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+                 && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer"))
       );
       // Only a genuine current member (not already an officer) can
       // request for themselves, and only under the doc id this team/uid

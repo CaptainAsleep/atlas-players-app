@@ -14,7 +14,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useSWUpdate } from "./hooks/useSWUpdate";
-import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests } from "./hooks/useTeams";
+import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
@@ -3419,6 +3419,508 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
   );
 }
 
+// ── Team event calendar & custom roles (2026-10-06, WhiteHorse Milsim) ──
+// Calendar events live under teams/{teamId}/events — the team's own "we're
+// attending this" posts (external ticket link, no Atlas booking). Public
+// read, officer-only write. Roles are labels only; no permissions.
+
+// Local-date "YYYY-MM-DD" (NOT toISOString, which is UTC and can be a day off).
+function todayLocalStr() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+// Accepts "example.com/x" or "https://…"; returns a clean http(s) URL, ""
+// for empty input, or null when it isn't a usable web link (blocks things
+// like javascript: that would be dangerous in an href on a public page).
+function normalizeWebUrl(raw) {
+  const v = (raw || "").trim();
+  if (!v) return "";
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withScheme);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+const RSVP_OPTIONS = [
+  { status: "going", label: "Going" },
+  { status: "interested", label: "Interested" },
+  { status: "notGoing", label: "Not going" },
+];
+
+function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error }) {
+  const { T, display, body } = useTheme();
+  const bannerInputRef = useRef(null);
+  const [title, setTitle] = useState(initial?.title || "");
+  const [date, setDate] = useState(initial?.date || "");
+  const [endDate, setEndDate] = useState(initial?.endDate || "");
+  const [startTime, setStartTime] = useState(initial?.startTime || "");
+  const [endTime, setEndTime] = useState(initial?.endTime || "");
+  const [fieldId, setFieldId] = useState(initial?.fieldId || null);
+  const [fieldName, setFieldName] = useState(initial?.fieldName || "");
+  const [locationName, setLocationName] = useState(initial?.locationName || "");
+  const [pickingField, setPickingField] = useState(false);
+  const [fieldSearch, setFieldSearch] = useState("");
+  const [regionalArea, setRegionalArea] = useState(initial?.regionalArea || "");
+  const [ticketUrl, setTicketUrl] = useState(initial?.ticketUrl || "");
+  const [opordUrl, setOpordUrl] = useState(initial?.opordUrl || "");
+  const [bannerBlob, setBannerBlob] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState(initial?.bannerUrl || null);
+  const [removeBanner, setRemoveBanner] = useState(false);
+  const [localError, setLocalError] = useState("");
+
+  const inputStyle = { ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+
+  const handleBannerSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const resized = await resizeImageFile(file, 1200, 0.85);
+      setBannerBlob(resized);
+      setBannerPreview(URL.createObjectURL(resized));
+      setRemoveBanner(false);
+    } catch (err) {
+      setLocalError("Couldn't use that image — try another.");
+    }
+  };
+
+  const handleSave = () => {
+    setLocalError("");
+    if (!title.trim()) return setLocalError("Give the event a name.");
+    if (!date) return setLocalError("Pick a start date.");
+    if (endDate && endDate < date) return setLocalError("End date can't be before the start date.");
+    const ticket = normalizeWebUrl(ticketUrl);
+    if (ticket === null) return setLocalError("Ticket link doesn't look like a valid web address.");
+    const opord = normalizeWebUrl(opordUrl);
+    if (opord === null) return setLocalError("OPORD link doesn't look like a valid web address.");
+    onSave(
+      {
+        title: title.trim(),
+        date,
+        endDate: endDate || null,
+        startTime: startTime || null,
+        endTime: endTime || null,
+        fieldId: fieldId || null,
+        fieldName: fieldId ? fieldName : null,
+        locationName: fieldId ? null : locationName.trim() || null,
+        regionalArea: regionalArea.trim() || null,
+        ticketUrl: ticket || null,
+        opordUrl: opord || null,
+      },
+      bannerBlob,
+      removeBanner && !bannerBlob
+    );
+  };
+
+  return (
+    <div className="mb-4 p-3 flex flex-col gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+      <input ref={bannerInputRef} type="file" accept="image/*" onChange={handleBannerSelected} className="hidden" />
+      {bannerPreview && !removeBanner ? (
+        <div className="relative w-full" style={{ height: 120, borderRadius: 6, overflow: "hidden", background: T.panelAlt }}>
+          <img src={bannerPreview} alt="" className="w-full h-full" style={{ objectFit: "cover" }} />
+          <button
+            onClick={() => { setRemoveBanner(true); setBannerBlob(null); }}
+            className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.6)", borderRadius: 12 }}
+            aria-label="Remove banner"
+          >
+            <X size={13} color="#fff" />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => bannerInputRef.current?.click()}
+          className="w-full py-6 text-[12px] font-medium flex items-center justify-center gap-2"
+          style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: 6 }}
+        >
+          <Camera size={14} /> Add banner image
+        </button>
+      )}
+      {bannerPreview && !removeBanner && (
+        <button onClick={() => bannerInputRef.current?.click()} className="text-[11px] font-semibold text-left" style={{ ...body, color: T.accent }}>
+          Change banner
+        </button>
+      )}
+
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event name" maxLength={100}
+        className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+
+      <div className="flex gap-2">
+        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+          Start date
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+        </label>
+        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+          End date (optional)
+          <input type="date" value={endDate} min={date || undefined} onChange={(e) => setEndDate(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+          Start time
+          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+        </label>
+        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+          End time
+          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+        </label>
+      </div>
+
+      <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Location</div>
+      {fieldId && !pickingField ? (
+        <div className="flex items-center justify-between px-3 py-2" style={{ background: T.panelAlt, borderRadius: 4, border: `1px solid ${T.line}` }}>
+          <span className="text-[13px]" style={{ ...body, color: T.ash }}>{fieldName}</span>
+          <button onClick={() => { setFieldId(null); setFieldName(""); setPickingField(true); }} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>
+            Change
+          </button>
+        </div>
+      ) : pickingField ? (
+        <div className="p-2" style={{ background: T.panelAlt, borderRadius: 4, border: `1px solid ${T.line}` }}>
+          <input value={fieldSearch} onChange={(e) => setFieldSearch(e.target.value)} placeholder="Search fields…"
+            className="w-full mb-2 px-3 py-2 text-[13px] outline-none" style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }} />
+          <div style={{ maxHeight: 180, overflowY: "auto" }}>
+            {(fields || [])
+              .filter((f) => !["relocated", "closed", "no-airsoft"].includes(f.status))
+              .filter((f) => f.name.toLowerCase().includes(fieldSearch.toLowerCase()))
+              .map((f) => (
+                <button key={f.id}
+                  onClick={() => { setFieldId(f.id); setFieldName(f.name); setPickingField(false); setFieldSearch(""); }}
+                  className="w-full py-2 text-left text-[13px]" style={{ ...body, color: T.ash }}>
+                  {f.name} <span style={{ color: T.ashFaint }}>· {f.city}</span>
+                </button>
+              ))}
+          </div>
+          <button onClick={() => { setPickingField(false); setFieldSearch(""); }} className="text-[11px] font-medium mt-1" style={{ ...body, color: T.ashFaint }}>Cancel</button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <button onClick={() => setPickingField(true)} className="w-full py-2 text-[12px] font-medium"
+            style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: T.rPill }}>
+            Choose a field in Atlas
+          </button>
+          <input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="…or type a location (not on Atlas)" maxLength={120}
+            className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+        </div>
+      )}
+
+      <input value={regionalArea} onChange={(e) => setRegionalArea(e.target.value)} placeholder="Regional area (e.g. Upper Peninsula, MI)" maxLength={100}
+        className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+      <input value={ticketUrl} onChange={(e) => setTicketUrl(e.target.value)} placeholder="Ticket link" inputMode="url" autoCapitalize="none"
+        className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+      <input value={opordUrl} onChange={(e) => setOpordUrl(e.target.value)} placeholder="OPORD link (Google Docs, etc.)" inputMode="url" autoCapitalize="none"
+        className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+      <p className="text-[10px]" style={{ ...body, color: T.ashFaint }}>The OPORD link is visible to anyone who opens this team page.</p>
+
+      {(localError || error) && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{localError || error}</p>}
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
+          Cancel
+        </button>
+        <button onClick={handleSave} disabled={saving}
+          className="flex-1 py-2 text-[12px] font-semibold"
+          style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Saving…" : initial ? "Save changes" : "Add event"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit, onDelete, past }) {
+  const { T, display, body } = useTheme();
+  const { setTeamEventRsvp, clearTeamEventRsvp } = useTeamActions();
+  const myStatus = useMyTeamEventRsvp(team.id, event.id, user?.uid);
+  const rsvps = useTeamEventRsvps(team.id, event.id, isMember);
+  const [showWho, setShowWho] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const options = isMember ? RSVP_OPTIONS : RSVP_OPTIONS.filter((o) => o.status === "interested");
+  const location = event.fieldName || event.locationName;
+  const timeLine = [event.startTime && formatTimeStr(event.startTime), event.endTime && formatTimeStr(event.endTime)].filter(Boolean).join(" – ");
+
+  const choose = async (status) => {
+    if (!user) return;
+    setBusy(true);
+    setErr("");
+    try {
+      if (myStatus === status) await clearTeamEventRsvp(team.id, event.id, user.uid);
+      else await setTeamEventRsvp(team.id, event.id, user.uid, profile, status);
+    } catch (e) {
+      setErr("Couldn't update your response — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const linkStyle = { ...body, border: `1px solid ${T.line}`, color: T.accent, borderRadius: T.rPill };
+  const groups = RSVP_OPTIONS.map((o) => ({ ...o, people: rsvps.filter((r) => r.status === o.status) }));
+
+  return (
+    <div className="mb-3 overflow-hidden" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, opacity: past ? 0.8 : 1 }}>
+      {event.bannerUrl && <img src={event.bannerUrl} alt="" className="w-full" style={{ height: 120, objectFit: "cover" }} />}
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{event.title}</div>
+          {isOfficer && (
+            <div className="flex gap-2 flex-shrink-0">
+              <button onClick={() => onEdit(event)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Edit</button>
+              <button onClick={() => onDelete(event)} className="text-[11px] font-semibold" style={{ ...body, color: T.alert }}>Delete</button>
+            </div>
+          )}
+        </div>
+        <div className="text-[12px] mt-1" style={{ ...body, color: T.ashDim }}>
+          {formatDate(event.date, event.endDate)}{timeLine ? ` · ${timeLine}` : ""}
+        </div>
+        {(location || event.regionalArea) && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <MapPin size={12} color={T.ashFaint} />
+            <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+              {[location, event.regionalArea].filter(Boolean).join(" · ")}
+            </span>
+          </div>
+        )}
+
+        {(event.ticketUrl || event.opordUrl) && (
+          <div className="flex gap-2 mt-2">
+            {event.ticketUrl && (
+              <a href={event.ticketUrl} target="_blank" rel="noreferrer noopener" className="px-3 py-1.5 text-[11px] font-semibold" style={linkStyle}>Tickets</a>
+            )}
+            {event.opordUrl && (
+              <a href={event.opordUrl} target="_blank" rel="noreferrer noopener" className="px-3 py-1.5 text-[11px] font-semibold" style={linkStyle}>OPORD</a>
+            )}
+          </div>
+        )}
+
+        {!past && user && (
+          <div className="flex gap-1.5 mt-3">
+            {options.map((o) => {
+              const active = myStatus === o.status;
+              return (
+                <button key={o.status} onClick={() => choose(o.status)} disabled={busy}
+                  className="flex-1 py-1.5 text-[11px] font-semibold"
+                  style={{
+                    ...body,
+                    borderRadius: T.rPill,
+                    background: active ? T.cta : "transparent",
+                    color: active ? T.inverse : T.ashDim,
+                    border: `1px solid ${active ? T.cta : T.line}`,
+                    opacity: busy ? 0.6 : 1,
+                  }}>
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {err && <p className="text-[11px] mt-1" style={{ ...body, color: T.alert }}>{err}</p>}
+        {!isMember && !past && user && myStatus === "interested" && (
+          <p className="text-[10px] mt-1" style={{ ...body, color: T.ashFaint }}>Only team members see who's attending.</p>
+        )}
+
+        {isMember && (
+          <>
+            <button onClick={() => setShowWho((v) => !v)} className="text-[11px] font-medium mt-2" style={{ ...body, color: T.ashFaint }}>
+              {groups.map((g) => `${g.people.length} ${g.label.toLowerCase()}`).join(" · ")} {showWho ? "▴" : "▾"}
+            </button>
+            {showWho && (
+              <div className="mt-1 flex flex-col gap-1">
+                {groups.map((g) => (
+                  <div key={g.status} className="text-[11px]" style={{ ...body, color: T.ashDim }}>
+                    <span style={{ color: T.ashFaint }}>{g.label}: </span>
+                    {g.people.length ? g.people.map((p) => p.callsign).join(", ") : "—"}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields }) {
+  const { T, body } = useTheme();
+  const { events } = useTeamEvents(team.id);
+  const { createTeamEvent, updateTeamEvent, deleteTeamEvent } = useTeamActions();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [showPast, setShowPast] = useState(false);
+
+  const today = todayLocalStr();
+  const isPast = (e) => (e.endDate || e.date) < today;
+  const upcoming = events.filter((e) => !isPast(e)).sort((a, b) => a.date.localeCompare(b.date));
+  const past = events.filter(isPast).sort((a, b) => b.date.localeCompare(a.date));
+
+  const closeForm = () => { setFormOpen(false); setEditingEvent(null); setFormError(""); };
+
+  const handleSave = async (fieldsData, bannerBlob, removeBanner) => {
+    setSaving(true);
+    setFormError("");
+    try {
+      if (editingEvent) await updateTeamEvent(team.id, editingEvent.id, fieldsData, bannerBlob, removeBanner);
+      else await createTeamEvent(team.id, user.uid, fieldsData, bannerBlob);
+      closeForm();
+    } catch (err) {
+      console.error("save team event:", err);
+      setFormError("Couldn't save the event — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (event) => {
+    if (!window.confirm(`Delete "${event.title}"? This can't be undone.`)) return;
+    try {
+      await deleteTeamEvent(team.id, event.id);
+    } catch (err) {
+      console.error("delete team event:", err);
+      setFormError("Couldn't delete the event — try again.");
+    }
+  };
+
+  const card = (e, isPastCard) => (
+    <TeamEventCard key={e.id} team={team} event={e} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer}
+      past={isPastCard} onEdit={(ev) => { setEditingEvent(ev); setFormOpen(true); }} onDelete={handleDelete} />
+  );
+
+  return (
+    <>
+      <Eyebrow>Events</Eyebrow>
+      {isOfficer && !formOpen && (
+        <button onClick={() => setFormOpen(true)} className="w-full mb-3 p-3 text-left text-[13px] font-medium"
+          style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: T.rPill }}>
+          + Add an event
+        </button>
+      )}
+      {formOpen && (
+        <TeamEventForm key={editingEvent?.id || "new"} team={team} fields={fields} initial={editingEvent}
+          onCancel={closeForm} onSave={handleSave} saving={saving} error={formError} />
+      )}
+      {!formOpen && formError && <p className="text-[12px] mb-2" style={{ ...body, color: T.alert }}>{formError}</p>}
+
+      {upcoming.length === 0 && !formOpen && (
+        <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>No upcoming events posted.</p>
+      )}
+      {upcoming.map((e) => card(e, false))}
+
+      {past.length > 0 && (
+        <>
+          <button onClick={() => setShowPast((v) => !v)} className="text-[12px] font-semibold mb-2 mt-1" style={{ ...body, color: T.ashDim }}>
+            Past events ({past.length}) {showPast ? "▴" : "▾"}
+          </button>
+          {showPast && past.map((e) => card(e, true))}
+        </>
+      )}
+      <div className="mb-3" />
+    </>
+  );
+}
+
+// Officer-only role manager (create / edit / delete). Everyone can see the
+// role list; assignment to members happens in the roster.
+function TeamRolesSection({ team, user, members, roles, isOfficer }) {
+  const { T, display, body } = useTheme();
+  const { createTeamRole, updateTeamRole, deleteTeamRole } = useTeamActions();
+  const [editingId, setEditingId] = useState(null); // role id, or "new"
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const startNew = () => { setEditingId("new"); setTitle(""); setDescription(""); setError(""); };
+  const startEdit = (r) => { setEditingId(r.id); setTitle(r.title || ""); setDescription(r.description || ""); setError(""); };
+  const cancel = () => { setEditingId(null); setError(""); };
+
+  const save = async () => {
+    if (!title.trim()) return setError("A role needs a title.");
+    setSaving(true);
+    setError("");
+    try {
+      const data = { title: title.trim(), description: description.trim() };
+      if (editingId === "new") await createTeamRole(team.id, user.uid, data);
+      else await updateTeamRole(team.id, editingId, data);
+      setEditingId(null);
+    } catch (err) {
+      console.error("save role:", err);
+      setError("Couldn't save the role — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (r) => {
+    if (!window.confirm(`Delete the "${r.title}" role? It will be removed from anyone who holds it.`)) return;
+    try {
+      await deleteTeamRole(team.id, r.id, members);
+    } catch (err) {
+      console.error("delete role:", err);
+      setError("Couldn't delete the role — try again.");
+    }
+  };
+
+  if (!isOfficer && roles.length === 0) return null;
+
+  const inputStyle = { ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+
+  return (
+    <>
+      <Eyebrow>Team Roles</Eyebrow>
+      <div className="flex flex-col gap-2 mb-3">
+        {roles.map((r) => (
+          <div key={r.id} className="p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.title}</div>
+              {isOfficer && (
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => startEdit(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Edit</button>
+                  <button onClick={() => remove(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.alert }}>Delete</button>
+                </div>
+              )}
+            </div>
+            {r.description && <p className="text-[12px] mt-1" style={{ ...body, color: T.ashDim }}>{r.description}</p>}
+          </div>
+        ))}
+      </div>
+
+      {isOfficer && editingId && (
+        <div className="mb-3 p-3 flex flex-col gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Role title (e.g. Medic)" maxLength={50}
+            className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this role do?" rows={2} maxLength={300}
+            className="w-full px-3 py-2 text-[13px] outline-none" style={{ ...inputStyle, resize: "none" }} />
+          {error && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={cancel} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Cancel</button>
+            <button onClick={save} disabled={saving} className="flex-1 py-2 text-[12px] font-semibold"
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Saving…" : "Save role"}
+            </button>
+          </div>
+        </div>
+      )}
+      {isOfficer && !editingId && (
+        <>
+          {error && <p className="text-[12px] mb-2" style={{ ...body, color: T.alert }}>{error}</p>}
+          <button onClick={startNew} className="w-full mb-5 p-3 text-left text-[13px] font-medium"
+            style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: T.rPill }}>
+            + Add a role
+          </button>
+        </>
+      )}
+    </>
+  );
+}
+
 function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
   requestOfficer, deleteOfficerRequest, approveOfficerRequest }) {
@@ -3433,6 +3935,9 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const [showFieldPicker, setShowFieldPicker] = useState(false);
   const [fieldSearch, setFieldSearch] = useState("");
   const [officerRequestBusy, setOfficerRequestBusy] = useState(false);
+  const roles = useTeamRoles(team?.id);
+  const { setMemberRoleIds } = useTeamActions();
+  const [assigningUid, setAssigningUid] = useState(null);
 
   const myMembership = members.find((m) => m.uid === user?.uid);
   const isOfficer = myMembership?.role === "officer";
@@ -3694,6 +4199,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           </div>
         )}
 
+        <TeamCalendarSection team={team} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer} fields={fields} />
+
         {isOfficer && officerRequests.length > 0 && (
           <>
             <Eyebrow>Pending Officer Requests ({officerRequests.length})</Eyebrow>
@@ -3733,10 +4240,13 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           </>
         )}
 
+        <TeamRolesSection team={team} user={user} members={members} roles={roles} isOfficer={isOfficer} />
+
         <Eyebrow>Roster ({members.length})</Eyebrow>
         <div className="flex flex-col gap-2 mb-5">
           {members.map((m) => (
-            <div key={m.uid} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            <div key={m.uid} className="p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            <div className="flex items-center gap-3">
               <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 flex items-center gap-3 text-left">
                 {m.avatarUrl ? (
                   <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
@@ -3747,9 +4257,23 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                 )}
                 <div className="flex-1">
                   <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{m.callsign}</div>
+                  {roles.filter((r) => (m.roleIds || []).includes(r.id)).length > 0 && (
+                    <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>
+                      {roles.filter((r) => (m.roleIds || []).includes(r.id)).map((r) => r.title).join(" · ")}
+                    </div>
+                  )}
                 </div>
               </button>
               {m.role === "officer" && <Tag tone="accent">OFFICER</Tag>}
+              {isOfficer && roles.length > 0 && (
+                <button
+                  onClick={() => setAssigningUid(assigningUid === m.uid ? null : m.uid)}
+                  className="px-2 py-1 text-[10px] font-semibold"
+                  style={{ ...body, border: `1px solid ${T.line}`, color: T.accent, borderRadius: T.rPill }}
+                >
+                  Roles
+                </button>
+              )}
               {isOfficer && m.uid !== user?.uid && (
                 <div className="flex gap-1.5">
                   <button
@@ -3768,6 +4292,32 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                   </button>
                 </div>
               )}
+            </div>
+            {isOfficer && assigningUid === m.uid && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {roles.map((r) => {
+                  const has = (m.roleIds || []).includes(r.id);
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={async () => {
+                        setActionError("");
+                        try {
+                          const current = m.roleIds || [];
+                          await setMemberRoleIds(team.id, m.uid, has ? current.filter((id) => id !== r.id) : [...current, r.id]);
+                        } catch (err) {
+                          setActionError("Couldn't update roles — try again.");
+                        }
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold"
+                      style={{ ...body, borderRadius: T.rPill, background: has ? T.cta : "transparent", color: has ? T.inverse : T.ashDim, border: `1px solid ${has ? T.cta : T.line}` }}
+                    >
+                      {r.title}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             </div>
           ))}
         </div>

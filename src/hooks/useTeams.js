@@ -127,6 +127,103 @@ export function useOfficerRequests(teamId) {
   return { officerRequests: requests, officerRequestsLoading: loading };
 }
 
+// ── Team event calendar (2026-10-06) ───────────────────────────────────
+// Public read, officer-only write. Events are the team's own "we're
+// attending this" posts, stored under the team rather than in the bookable
+// top-level events collection (see atlas-status.md scope).
+export function useTeamEvents(teamId) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!teamId) {
+      setEvents([]);
+      setLoading(false);
+      return undefined;
+    }
+    setLoading(true);
+    const unsub = onSnapshot(
+      collection(db, "teams", teamId, "events"),
+      (snap) => {
+        setEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      },
+      (err) => {
+        console.error("useTeamEvents:", err);
+        setLoading(false);
+      }
+    );
+    return unsub;
+  }, [teamId]);
+
+  return { events, loading };
+}
+
+// Everyone's RSVP for one event. Rules only let team members read the whole
+// list, so pass enabled=false for non-members (they use useMyTeamEventRsvp).
+export function useTeamEventRsvps(teamId, eventId, enabled) {
+  const [rsvps, setRsvps] = useState([]);
+
+  useEffect(() => {
+    if (!teamId || !eventId || !enabled) {
+      setRsvps([]);
+      return undefined;
+    }
+    const unsub = onSnapshot(
+      collection(db, "teams", teamId, "events", eventId, "rsvps"),
+      (snap) => setRsvps(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("useTeamEventRsvps:", err)
+    );
+    return unsub;
+  }, [teamId, eventId, enabled]);
+
+  return rsvps;
+}
+
+// The signed-in player's own RSVP on one event (null = none yet).
+export function useMyTeamEventRsvp(teamId, eventId, uid) {
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => {
+    if (!teamId || !eventId || !uid) {
+      setStatus(null);
+      return undefined;
+    }
+    const unsub = onSnapshot(
+      doc(db, "teams", teamId, "events", eventId, "rsvps", uid),
+      (snap) => setStatus(snap.exists() ? snap.data().status : null),
+      (err) => console.error("useMyTeamEventRsvp:", err)
+    );
+    return unsub;
+  }, [teamId, eventId, uid]);
+
+  return status;
+}
+
+// Custom team roles — labels only (title + description), officer-managed.
+export function useTeamRoles(teamId) {
+  const [roles, setRoles] = useState([]);
+
+  useEffect(() => {
+    if (!teamId) {
+      setRoles([]);
+      return undefined;
+    }
+    const unsub = onSnapshot(
+      collection(db, "teams", teamId, "roles"),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+        setRoles(list);
+      },
+      (err) => console.error("useTeamRoles:", err)
+    );
+    return unsub;
+  }, [teamId]);
+
+  return roles;
+}
+
 export function useTeamActions() {
   // Creates the team and its founding-officer member record in one atomic
   // batch — the security rules specifically allow this combination (self-add
@@ -274,6 +371,96 @@ export function useTeamActions() {
     }
   }
 
+  // ── Team event calendar ──────────────────────────────────────────────
+  // fields: { title, date, endDate, startTime, endTime, fieldId, fieldName,
+  // locationName, regionalArea, ticketUrl, opordUrl }. bannerBlob optional.
+  // The doc id is generated first so the banner can be uploaded to its own
+  // path before the event doc is written.
+  async function createTeamEvent(teamId, uid, fields, bannerBlob) {
+    const eventRef = doc(collection(db, "teams", teamId, "events"));
+    let bannerUrl = null;
+    if (bannerBlob) {
+      const storageRef = ref(storage, `teamEventBanners/${teamId}/${eventRef.id}/banner.jpg`);
+      await uploadBytes(storageRef, bannerBlob, { contentType: "image/jpeg" });
+      bannerUrl = await getDownloadURL(storageRef);
+    }
+    await setDoc(eventRef, {
+      ...fields,
+      bannerUrl,
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return eventRef.id;
+  }
+
+  // bannerBlob: a new image to upload; removeBanner: true to clear it.
+  async function updateTeamEvent(teamId, eventId, fields, bannerBlob, removeBanner) {
+    const update = { ...fields, updatedAt: serverTimestamp() };
+    const storageRef = ref(storage, `teamEventBanners/${teamId}/${eventId}/banner.jpg`);
+    if (bannerBlob) {
+      await uploadBytes(storageRef, bannerBlob, { contentType: "image/jpeg" });
+      update.bannerUrl = await getDownloadURL(storageRef);
+    } else if (removeBanner) {
+      await deleteObject(storageRef).catch(() => {});
+      update.bannerUrl = null;
+    }
+    await updateDoc(doc(db, "teams", teamId, "events", eventId), update);
+  }
+
+  async function deleteTeamEvent(teamId, eventId) {
+    await deleteObject(ref(storage, `teamEventBanners/${teamId}/${eventId}/banner.jpg`)).catch(() => {});
+    await deleteDoc(doc(db, "teams", teamId, "events", eventId));
+  }
+
+  // status: "going" | "interested" | "notGoing". Non-members can only
+  // ever write "interested" (enforced in the rules).
+  async function setTeamEventRsvp(teamId, eventId, uid, profile, status) {
+    await setDoc(doc(db, "teams", teamId, "events", eventId, "rsvps", uid), {
+      uid,
+      status,
+      callsign: profile?.callsign || "Player",
+      avatarUrl: profile?.avatarUrl || null,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async function clearTeamEventRsvp(teamId, eventId, uid) {
+    await deleteDoc(doc(db, "teams", teamId, "events", eventId, "rsvps", uid));
+  }
+
+  // ── Custom roles (labels only — no permissions) ──────────────────────
+  async function createTeamRole(teamId, uid, { title, description }) {
+    const roleRef = doc(collection(db, "teams", teamId, "roles"));
+    await setDoc(roleRef, { title, description, createdBy: uid, createdAt: serverTimestamp() });
+    return roleRef.id;
+  }
+
+  async function updateTeamRole(teamId, roleId, { title, description }) {
+    await updateDoc(doc(db, "teams", teamId, "roles", roleId), { title, description });
+  }
+
+  // Deleting a role also strips it from every member holding it, in one
+  // batch, so no member doc is left pointing at a role that's gone.
+  async function deleteTeamRole(teamId, roleId, members) {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "teams", teamId, "roles", roleId));
+    (members || [])
+      .filter((m) => (m.roleIds || []).includes(roleId))
+      .forEach((m) => {
+        batch.update(doc(db, "teams", teamId, "members", m.uid), {
+          roleIds: m.roleIds.filter((id) => id !== roleId),
+        });
+      });
+    await batch.commit();
+  }
+
+  // Cosmetic assignment only — deliberately NOT the permission-bearing
+  // `role: "officer" | "member"` field.
+  async function setMemberRoleIds(teamId, memberUid, roleIds) {
+    await updateDoc(doc(db, "teams", teamId, "members", memberUid), { roleIds });
+  }
+
   return {
     createTeam,
     joinTeam,
@@ -287,5 +474,14 @@ export function useTeamActions() {
     requestOfficer,
     deleteOfficerRequest,
     approveOfficerRequest,
+    createTeamEvent,
+    updateTeamEvent,
+    deleteTeamEvent,
+    setTeamEventRsvp,
+    clearTeamEventRsvp,
+    createTeamRole,
+    updateTeamRole,
+    deleteTeamRole,
+    setMemberRoleIds,
   };
 }
