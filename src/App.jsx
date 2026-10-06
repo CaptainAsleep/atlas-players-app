@@ -4301,21 +4301,30 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
               className="w-full px-3 py-2.5 text-[13px] bg-transparent outline-none mb-2"
               style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, resize: "none" }}
             />
-            <div className="flex gap-2 mb-2">
-              {[
-                { key: "open", label: "Open to join" },
-                { key: "approval", label: "Approval required" },
-              ].map((o) => (
-                <button
-                  key={o.key}
-                  onClick={() => setEditPolicy(o.key)}
-                  className="flex-1 py-2 text-[12px] font-medium"
-                  style={{ ...body, border: `1px solid ${editPolicy === o.key ? T.cta : T.line}`, background: editPolicy === o.key ? T.cta : "transparent", color: editPolicy === o.key ? T.inverse : T.ashDim, borderRadius: T.rPill }}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={editPolicy === "approval"}
+              onClick={() => setEditPolicy(editPolicy === "approval" ? "open" : "approval")}
+              className="w-full flex items-center gap-3 px-3 py-2.5 mb-2 text-left"
+              style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}
+            >
+              <div className="flex-1">
+                <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>Require approval to join</div>
+                <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
+                  {editPolicy === "approval" ? "Officers approve each request" : "Anyone can join"}
+                </div>
+              </div>
+              <div
+                className="relative flex-shrink-0"
+                style={{ width: 40, height: 22, borderRadius: 11, background: editPolicy === "approval" ? T.cta : T.line, transition: "background 0.15s" }}
+              >
+                <div
+                  className="absolute"
+                  style={{ top: 2, left: editPolicy === "approval" ? 20 : 2, width: 18, height: 18, borderRadius: 9, background: T.inverse, transition: "left 0.15s" }}
+                />
+              </div>
+            </button>
             <div className="flex gap-2">
               <button onClick={() => setEditing(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                 Cancel
