@@ -272,8 +272,12 @@ service cloud.firestore {
       // verification at all. Doesn't block unsetting it (not a real case
       // here); request.resource.data reflects the full resulting document
       // regardless of merge vs. full-set, so this holds either way.
+      // 2026-10-06: .get('verified', false) below, not .verified. A new users doc has no
+      // verified field, and reading a missing field errors (= deny) instead of
+      // returning null, so every unverified-email player's writes, including the
+      // first create and the terms acceptance, were being rejected.
       allow write: if request.auth != null && request.auth.uid == userId
-        && (request.resource.data.verified != true || request.auth.token.email_verified == true);
+        && (request.resource.data.get('verified', false) != true || request.auth.token.email_verified == true);
 
       // A player's own mirror of their bookings — self-access covers
       // create/delete (booking/canceling) via the parent rule above. This
@@ -419,7 +423,7 @@ service cloud.firestore {
         // public mirror is just as self-writable, so it needs the same
         // guard, not just the source doc.
         (request.auth.uid == uid
-          && (request.resource.data.verified != true || request.auth.token.email_verified == true))
+          && (request.resource.data.get('verified', false) != true || request.auth.token.email_verified == true))
         ||
         // Anyone signing up with this player's referral link can bump
         // their referral count by exactly 1 — narrow, single-field,
