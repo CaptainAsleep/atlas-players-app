@@ -5965,6 +5965,7 @@ function LegalAgreementScreen({ onAccept }) {
   const [tab, setTab] = useState("terms");
   const [checked, setChecked] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const TABS = [
     { key: "terms", label: "Terms of Use", text: TERMS_OF_USE },
@@ -5973,10 +5974,22 @@ function LegalAgreementScreen({ onAccept }) {
   ];
   const activeText = TABS.find((t) => t.key === tab).text;
 
+  // Real report, 2026-10-05: a player checked the box and got bounced
+  // straight back here. Firestore applies the terms write locally first, so
+  // the app advanced, then the server rejected it and the local change rolled
+  // back. With no try/catch the rejection was swallowed and the player (and
+  // we) never saw why. Now a failure resets the button and says so.
   const handleAccept = async () => {
     setSaving(true);
-    await onAccept();
-    setSaving(false);
+    setError("");
+    try {
+      await onAccept();
+    } catch (err) {
+      console.error("accept terms failed:", err);
+      setError("We couldn't save your agreement. Check your connection and try again. If it keeps happening, contact support.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -6008,6 +6021,7 @@ function LegalAgreementScreen({ onAccept }) {
           </div>
           <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>I've read and agree to the Terms of Use, Privacy Policy, and EULA.</span>
         </button>
+        {error && <p className="text-[12px] mb-2 text-center" style={{ ...body, color: T.alert }}>{error}</p>}
         <button
           onClick={handleAccept}
           disabled={!checked || saving}

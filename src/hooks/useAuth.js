@@ -230,10 +230,13 @@ export function useAuth() {
   // forcing re-acceptance the same way a first-time signup does.
   async function acceptTerms(version) {
     if (!auth.currentUser) return;
-    await updateDoc(doc(db, "users", auth.currentUser.uid), {
-      acceptedTermsVersion: version,
-      acceptedTermsAt: serverTimestamp(),
-    });
+    // setDoc+merge, not updateDoc: updateDoc fails outright if the profile
+    // doc is missing, which is exactly the state a stranded account is in.
+    await setDoc(
+      doc(db, "users", auth.currentUser.uid),
+      { acceptedTermsVersion: version, acceptedTermsAt: serverTimestamp() },
+      { merge: true }
+    );
   }
 
   async function completeOnboarding(data) {
