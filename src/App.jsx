@@ -6351,11 +6351,30 @@ function AppShell() {
   // redirect could corrupt anything — since the bug only ever shrinks the
   // reported value, never grows it.
   useEffect(() => {
+    // Real report, 2026-10-06: on desktop (Opera GX) the bottom nav vanished.
+    // The never-shrink cache below is only right for the phone WebKit bug it
+    // was built for. On a desktop browser the viewport legitimately gets
+    // smaller (window resize, zoom, fullscreen/F11 off, devtools or a browser
+    // sidebar opening), and html/body/#root are position:fixed with
+    // overflow:hidden at this height, so a stale larger value pushes the
+    // bottom of the app, nav included, below the visible window with no way
+    // to scroll to it. sessionStorage survives a reload, so even refreshing
+    // didn't clear it. Desktop now always uses the live height.
+    const isPhone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const setRealHeight = () => {
       const current = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-      const cached = parseInt(sessionStorage.getItem("atlas-known-good-height") || "0", 10);
-      const real = Math.max(current, cached);
-      sessionStorage.setItem("atlas-known-good-height", String(real));
+      let real = current;
+      try {
+        if (isPhone) {
+          const cached = parseInt(sessionStorage.getItem("atlas-known-good-height") || "0", 10);
+          real = Math.max(current, cached);
+          sessionStorage.setItem("atlas-known-good-height", String(real));
+        } else {
+          sessionStorage.removeItem("atlas-known-good-height");
+        }
+      } catch {
+        // Storage blocked — fall back to the live height.
+      }
       document.documentElement.style.setProperty("--real-screen-height", `${real}px`);
     };
     setRealHeight();
