@@ -4076,10 +4076,10 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const [fieldSearch, setFieldSearch] = useState("");
   const [officerRequestBusy, setOfficerRequestBusy] = useState(false);
   const [joinBusy, setJoinBusy] = useState(false);
-  const [editPolicy, setEditPolicy] = useState("open");
   const roles = useTeamRoles(team?.id);
-  const { setMemberRoleIds } = useTeamActions();
+  const { setMemberRoleIds, setJoinPolicy } = useTeamActions();
   const [assigningUid, setAssigningUid] = useState(null);
+  const [policyBusy, setPolicyBusy] = useState(false);
 
   const myMembership = members.find((m) => m.uid === user?.uid);
   const isOfficer = myMembership?.role === "officer";
@@ -4089,7 +4089,6 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const startEdit = () => {
     setEditName(team?.name || "");
     setEditDesc(team?.description || "");
-    setEditPolicy(team?.joinPolicy === "approval" ? "approval" : "open"); // no field = open
     setEditing(true);
   };
 
@@ -4098,7 +4097,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
     setSaving(true);
     setActionError("");
     try {
-      await updateTeamInfo(team.id, { name: editName.trim(), description: editDesc.trim(), joinPolicy: editPolicy });
+      await updateTeamInfo(team.id, { name: editName.trim(), description: editDesc.trim() });
       setEditing(false);
     } catch (err) {
       setActionError("Couldn't save changes — try again.");
@@ -4130,6 +4129,20 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
       await joinTeam(user.uid, profile, team.id, team.name);
     } catch (err) {
       setActionError("Couldn't join — try again.");
+    }
+  };
+
+  // Saves immediately, no Save button: it's a setting, not a draft. The live
+  // team snapshot reflects the write at once and rolls back if it's rejected.
+  const handleTogglePolicy = async () => {
+    setActionError("");
+    setPolicyBusy(true);
+    try {
+      await setJoinPolicy(team.id, team.joinPolicy === "approval" ? "open" : "approval");
+    } catch (err) {
+      setActionError("Couldn't change the join setting — try again.");
+    } finally {
+      setPolicyBusy(false);
     }
   };
 
@@ -4277,8 +4290,36 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
         {!editing ? (
           <>
             {team.description && <p className="text-[13px] max-w-xs mb-3" style={{ ...body, color: T.ashDim }}>{team.description}</p>}
-            {team.joinPolicy === "approval" && (
-              <p className="text-[11px] mb-3" style={{ ...body, color: T.ashFaint }}>Officer approval required to join</p>
+            {isOfficer ? (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={team.joinPolicy === "approval"}
+                onClick={handleTogglePolicy}
+                disabled={policyBusy}
+                className="w-full flex items-center gap-3 px-3 py-2.5 mb-3 text-left"
+                style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, opacity: policyBusy ? 0.6 : 1 }}
+              >
+                <div className="flex-1">
+                  <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>Require approval to join</div>
+                  <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
+                    {team.joinPolicy === "approval" ? "Officers approve each request" : "Anyone can join"}
+                  </div>
+                </div>
+                <div
+                  className="relative flex-shrink-0"
+                  style={{ width: 40, height: 22, borderRadius: 11, background: team.joinPolicy === "approval" ? T.cta : T.line, transition: "background 0.15s" }}
+                >
+                  <div
+                    className="absolute"
+                    style={{ top: 2, left: team.joinPolicy === "approval" ? 20 : 2, width: 18, height: 18, borderRadius: 9, background: T.inverse, transition: "left 0.15s" }}
+                  />
+                </div>
+              </button>
+            ) : (
+              team.joinPolicy === "approval" && (
+                <p className="text-[11px] mb-3" style={{ ...body, color: T.ashFaint }}>Officer approval required to join</p>
+              )
             )}
             {isOfficer && (
               <button onClick={startEdit} className="text-[12px] font-medium mb-2" style={{ ...body, color: T.accent }}>
@@ -4301,30 +4342,6 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
               className="w-full px-3 py-2.5 text-[13px] bg-transparent outline-none mb-2"
               style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, resize: "none" }}
             />
-            <button
-              type="button"
-              role="switch"
-              aria-checked={editPolicy === "approval"}
-              onClick={() => setEditPolicy(editPolicy === "approval" ? "open" : "approval")}
-              className="w-full flex items-center gap-3 px-3 py-2.5 mb-2 text-left"
-              style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4 }}
-            >
-              <div className="flex-1">
-                <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>Require approval to join</div>
-                <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
-                  {editPolicy === "approval" ? "Officers approve each request" : "Anyone can join"}
-                </div>
-              </div>
-              <div
-                className="relative flex-shrink-0"
-                style={{ width: 40, height: 22, borderRadius: 11, background: editPolicy === "approval" ? T.cta : T.line, transition: "background 0.15s" }}
-              >
-                <div
-                  className="absolute"
-                  style={{ top: 2, left: editPolicy === "approval" ? 20 : 2, width: 18, height: 18, borderRadius: 9, background: T.inverse, transition: "left 0.15s" }}
-                />
-              </div>
-            </button>
             <div className="flex gap-2">
               <button onClick={() => setEditing(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                 Cancel

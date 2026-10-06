@@ -351,8 +351,8 @@ export function useTeamActions() {
     await batch.commit();
   }
 
-  async function updateTeamInfo(teamId, { name, description, joinPolicy }) {
-    await updateDoc(doc(db, "teams", teamId), { name, description, ...(joinPolicy ? { joinPolicy } : {}) });
+  async function updateTeamInfo(teamId, { name, description }) {
+    await updateDoc(doc(db, "teams", teamId), { name, description });
     // Keep every current member's denormalized teamName in sync — a rename
     // shouldn't leave the roster or player profiles showing the old name.
     const membersSnap = await getDocs(collection(db, "teams", teamId, "members"));
@@ -432,6 +432,13 @@ export function useTeamActions() {
   }
 
   // ── Team join approval (2026-10-06) ──────────────────────────────────
+  // Officer flipping a team between "open" and "approval". Just a field on
+  // the team doc, so the existing officer-only team update rule covers it.
+  async function setJoinPolicy(teamId, joinPolicy) {
+    if (joinPolicy !== "open" && joinPolicy !== "approval") return;
+    await updateDoc(doc(db, "teams", teamId), { joinPolicy });
+  }
+
   // Player asking to join an approval-required team. Same {teamId}_{uid}
   // idiom as requestOfficer, so a second ask while one is pending can't
   // stack up (it would hit an existing doc, which is an update, and the
@@ -618,6 +625,7 @@ export function useTeamActions() {
     requestOfficer,
     deleteOfficerRequest,
     approveOfficerRequest,
+    setJoinPolicy,
     requestToJoin,
     deleteJoinRequest,
     approveJoinRequest,
