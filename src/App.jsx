@@ -3973,7 +3973,7 @@ function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields,
 // role list; assignment to members happens in the roster.
 function TeamRolesSection({ team, user, members, roles, isOfficer }) {
   const { T, display, body } = useTheme();
-  const { createTeamRole, updateTeamRole, deleteTeamRole } = useTeamActions();
+  const { createTeamRole, reorderTeamRoles, updateTeamRole, deleteTeamRole } = useTeamActions();
   const [editingId, setEditingId] = useState(null); // role id, or "new"
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -3990,7 +3990,7 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
     setError("");
     try {
       const data = { title: title.trim(), description: description.trim() };
-      if (editingId === "new") await createTeamRole(team.id, user.uid, data);
+      if (editingId === "new") await createTeamRole(team.id, user.uid, data, roles);
       else await updateTeamRole(team.id, editingId, data);
       setEditingId(null);
     } catch (err) {
@@ -3998,6 +3998,20 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
       setError("Couldn't save the role — try again.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const move = async (index, delta) => {
+    const target = index + delta;
+    if (target < 0 || target >= roles.length) return;
+    const next = [...roles];
+    [next[index], next[target]] = [next[target], next[index]];
+    setError("");
+    try {
+      await reorderTeamRoles(team.id, next);
+    } catch (err) {
+      console.error("move role:", err);
+      setError("Couldn't reorder — try again.");
     }
   };
 
@@ -4019,14 +4033,20 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
     <>
       <Eyebrow>Team Roles</Eyebrow>
       <div className="flex flex-col gap-2 mb-3">
-        {roles.map((r) => (
+        {roles.map((r, i) => (
           <div key={r.id} className="p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="flex items-start justify-between gap-2">
               <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.title}</div>
               {isOfficer && (
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => startEdit(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Edit</button>
-                  <button onClick={() => remove(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.alert }}>Delete</button>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <button onClick={() => startEdit(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Edit</button>
+                    <button onClick={() => remove(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.alert }}>Delete</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up" className="text-[13px]" style={{ ...body, color: T.ashDim, opacity: i === 0 ? 0.3 : 1 }}>↑</button>
+                    <button onClick={() => move(i, 1)} disabled={i === roles.length - 1} aria-label="Move down" className="text-[13px]" style={{ ...body, color: T.ashDim, opacity: i === roles.length - 1 ? 0.3 : 1 }}>↓</button>
+                  </div>
                 </div>
               )}
             </div>

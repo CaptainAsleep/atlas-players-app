@@ -301,7 +301,15 @@ export function useTeamRoles(teamId) {
       collection(db, "teams", teamId, "roles"),
       (snap) => {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+        // Officer-set order first. Roles made before ordering existed have
+        // no `order`; they sort after ordered ones, alphabetically, until an
+        // officer's first move/add writes a position to every role.
+        list.sort((a, b) => {
+          const ao = a.order ?? Infinity;
+          const bo = b.order ?? Infinity;
+          if (ao !== bo) return ao < bo ? -1 : 1;
+          return (a.title || "").localeCompare(b.title || "");
+        });
         setRoles(list);
       },
       (err) => console.error("useTeamRoles:", err)
@@ -604,10 +612,23 @@ export function useTeamActions() {
   }
 
   // ── Custom roles (labels only — no permissions) ──────────────────────
-  async function createTeamRole(teamId, uid, { title, description }) {
+  // existingRoles = the roles as currently displayed. Their positions are
+  // written in the same batch (so older roles with no `order` get one and
+  // the new role can't sort ahead of them); the new role goes last.
+  async function createTeamRole(teamId, uid, { title, description }, existingRoles = []) {
     const roleRef = doc(collection(db, "teams", teamId, "roles"));
-    await setDoc(roleRef, { title, description, createdBy: uid, createdAt: serverTimestamp() });
+    const batch = writeBatch(db);
+    existingRoles.forEach((r, i) => batch.update(doc(db, "teams", teamId, "roles", r.id), { order: i }));
+    batch.set(roleRef, { title, description, order: existingRoles.length, createdBy: uid, createdAt: serverTimestamp() });
+    await batch.commit();
     return roleRef.id;
+  }
+
+  // Writes a position to every role in the given display order, in one batch.
+  async function reorderTeamRoles(teamId, orderedRoles) {
+    const batch = writeBatch(db);
+    orderedRoles.forEach((r, i) => batch.update(doc(db, "teams", teamId, "roles", r.id), { order: i }));
+    await batch.commit();
   }
 
   async function updateTeamRole(teamId, roleId, { title, description }) {
@@ -729,6 +750,7 @@ export function useTeamActions() {
     swapTeamRankOrder,
     setMemberRank,
     createTeamRole,
+    reorderTeamRoles,
     updateTeamRole,
     deleteTeamRole,
     setMemberRoleIds,
