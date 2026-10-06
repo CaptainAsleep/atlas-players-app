@@ -14,7 +14,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useSWUpdate } from "./hooks/useSWUpdate";
-import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles } from "./hooks/useTeams";
+import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
@@ -4061,9 +4061,9 @@ function TeamLinksSection({ team, isOfficer }) {
   );
 }
 
-function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
+function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, myJoinRequest, joinRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
-  requestOfficer, deleteOfficerRequest, approveOfficerRequest, highlightEventId }) {
+  requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, highlightEventId }) {
   const { T, display, body, mono } = useTheme();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -4075,6 +4075,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const [showFieldPicker, setShowFieldPicker] = useState(false);
   const [fieldSearch, setFieldSearch] = useState("");
   const [officerRequestBusy, setOfficerRequestBusy] = useState(false);
+  const [joinBusy, setJoinBusy] = useState(false);
+  const [editPolicy, setEditPolicy] = useState("open");
   const roles = useTeamRoles(team?.id);
   const { setMemberRoleIds } = useTeamActions();
   const [assigningUid, setAssigningUid] = useState(null);
@@ -4087,6 +4089,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const startEdit = () => {
     setEditName(team?.name || "");
     setEditDesc(team?.description || "");
+    setEditPolicy(team?.joinPolicy === "approval" ? "approval" : "open"); // no field = open
     setEditing(true);
   };
 
@@ -4095,7 +4098,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
     setSaving(true);
     setActionError("");
     try {
-      await updateTeamInfo(team.id, { name: editName.trim(), description: editDesc.trim() });
+      await updateTeamInfo(team.id, { name: editName.trim(), description: editDesc.trim(), joinPolicy: editPolicy });
       setEditing(false);
     } catch (err) {
       setActionError("Couldn't save changes — try again.");
@@ -4127,6 +4130,48 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
       await joinTeam(user.uid, profile, team.id, team.name);
     } catch (err) {
       setActionError("Couldn't join — try again.");
+    }
+  };
+
+  const handleRequestToJoin = async () => {
+    setActionError("");
+    setJoinBusy(true);
+    try {
+      await requestToJoin(team.id, user.uid, profile);
+    } catch (err) {
+      setActionError("Couldn't send your request — try again.");
+    } finally {
+      setJoinBusy(false);
+    }
+  };
+
+  const handleCancelJoinRequest = async () => {
+    setActionError("");
+    setJoinBusy(true);
+    try {
+      await deleteJoinRequest(team.id, user.uid);
+    } catch (err) {
+      setActionError("Couldn't cancel your request — try again.");
+    } finally {
+      setJoinBusy(false);
+    }
+  };
+
+  const handleApproveJoinRequest = async (r) => {
+    setActionError("");
+    try {
+      await approveJoinRequest(team.id, r);
+    } catch (err) {
+      setActionError("Couldn't approve — try again.");
+    }
+  };
+
+  const handleDenyJoinRequest = async (uid) => {
+    setActionError("");
+    try {
+      await deleteJoinRequest(team.id, uid);
+    } catch (err) {
+      setActionError("Couldn't deny — try again.");
     }
   };
 
@@ -4232,6 +4277,9 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
         {!editing ? (
           <>
             {team.description && <p className="text-[13px] max-w-xs mb-3" style={{ ...body, color: T.ashDim }}>{team.description}</p>}
+            {team.joinPolicy === "approval" && (
+              <p className="text-[11px] mb-3" style={{ ...body, color: T.ashFaint }}>Officer approval required to join</p>
+            )}
             {isOfficer && (
               <button onClick={startEdit} className="text-[12px] font-medium mb-2" style={{ ...body, color: T.accent }}>
                 Edit team info
@@ -4253,6 +4301,21 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
               className="w-full px-3 py-2.5 text-[13px] bg-transparent outline-none mb-2"
               style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, resize: "none" }}
             />
+            <div className="flex gap-2 mb-2">
+              {[
+                { key: "open", label: "Open to join" },
+                { key: "approval", label: "Approval required" },
+              ].map((o) => (
+                <button
+                  key={o.key}
+                  onClick={() => setEditPolicy(o.key)}
+                  className="flex-1 py-2 text-[12px] font-medium"
+                  style={{ ...body, border: `1px solid ${editPolicy === o.key ? T.cta : T.line}`, background: editPolicy === o.key ? T.cta : "transparent", color: editPolicy === o.key ? T.inverse : T.ashDim, borderRadius: T.rPill }}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2">
               <button onClick={() => setEditing(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
                 Cancel
@@ -4273,7 +4336,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
       <div className="px-6 pt-2">
         {actionError && <p className="text-[12px] mb-3 text-center" style={{ ...body, color: T.alert }}>{actionError}</p>}
 
-        {!isMember && !alreadyOnAnotherTeam && (
+        {!isMember && !alreadyOnAnotherTeam && team.joinPolicy !== "approval" && (
           <button
             onClick={handleJoin}
             className="w-full py-3 font-semibold text-[14px] mb-5"
@@ -4281,6 +4344,31 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           >
             Join Team
           </button>
+        )}
+        {!isMember && !alreadyOnAnotherTeam && team.joinPolicy === "approval" && !myJoinRequest && (
+          <button
+            onClick={handleRequestToJoin}
+            disabled={joinBusy}
+            className="w-full py-3 font-semibold text-[14px] mb-5"
+            style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: joinBusy ? 0.6 : 1 }}
+          >
+            {joinBusy ? "…" : "Request to Join"}
+          </button>
+        )}
+        {!isMember && !alreadyOnAnotherTeam && team.joinPolicy === "approval" && myJoinRequest && (
+          <div className="mb-5 text-center">
+            <div
+              className="w-full py-3 font-semibold text-[14px]"
+              style={{ ...display, background: T.panelAlt, color: T.ashDim, borderRadius: T.rPill }}
+            >
+              {myJoinRequest.approved ? "Approved — joining…" : "Approval pending"}
+            </div>
+            {!myJoinRequest.approved && (
+              <button onClick={handleCancelJoinRequest} disabled={joinBusy} className="text-[12px] font-medium mt-2" style={{ ...body, color: T.ashFaint }}>
+                {joinBusy ? "…" : "Cancel request"}
+              </button>
+            )}
+          </div>
         )}
         {alreadyOnAnotherTeam && (
           <p className="text-[12px] text-center mb-5" style={{ ...body, color: T.ashFaint }}>
@@ -4370,6 +4458,45 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                     </button>
                     <button
                       onClick={() => handleDenyOfficerRequest(r.uid)}
+                      className="px-2 py-1 text-[10px] font-semibold"
+                      style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: T.rPill }}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {isOfficer && joinRequests.length > 0 && (
+          <>
+            <Eyebrow>Pending Join Requests ({joinRequests.length})</Eyebrow>
+            <div className="flex flex-col gap-2 mb-5">
+              {joinRequests.map((r) => (
+                <div key={r.uid} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                  {r.avatarUrl ? (
+                    <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${r.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+                  ) : (
+                    <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                      {r.callsign.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.callsign}</div>
+                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Requesting to join</div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => handleApproveJoinRequest(r)}
+                      className="px-2 py-1 text-[10px] font-semibold"
+                      style={{ ...body, background: T.cta, color: T.inverse, borderRadius: T.rPill }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleDenyJoinRequest(r.uid)}
                       className="px-2 py-1 text-[10px] font-semibold"
                       style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: T.rPill }}
                     >
@@ -6434,6 +6561,10 @@ function AppShell() {
     requestOfficer,
     deleteOfficerRequest,
     approveOfficerRequest,
+    requestToJoin,
+    deleteJoinRequest,
+    approveJoinRequest,
+    finishApprovedJoin,
   } = useTeamActions();
   const { profiles: allPublicProfiles } = useAllPublicProfiles();
   const { friends, friendsLoading } = useFriends(user?.uid);
@@ -6625,6 +6756,29 @@ function AppShell() {
   const { team: activeTeam, members: activeTeamMembers, teamLoading: activeTeamLoading } = useTeam(activeTeamId);
   const { myOfficerRequest: activeTeamMyOfficerRequest } = useMyOfficerRequest(activeTeamId, user?.uid);
   const { officerRequests: activeTeamOfficerRequests } = useOfficerRequests(activeTeamId);
+  const { myJoinRequest: activeTeamMyJoinRequest } = useMyJoinRequest(activeTeamId, user?.uid);
+  const { joinRequests: activeTeamJoinRequests } = useJoinRequests(activeTeamId);
+  const { myJoinRequests } = useMyJoinRequests(user?.uid);
+
+  // Team join approval: an officer's approval creates the member doc and
+  // flags the request approved, but can't touch this player's own profile
+  // docs. Whenever this player's app sees an approved request, it finishes
+  // the join itself (teamId/teamName on their profile, then clears the
+  // request). The ref stops a snapshot re-fire from starting it twice.
+  const finishingJoinRef = useRef(new Set());
+  useEffect(() => {
+    if (!user || !profile) return;
+    myJoinRequests
+      .filter((r) => r.approved === true)
+      .forEach((r) => {
+        const key = `${r.teamId}_${r.uid}`;
+        if (finishingJoinRef.current.has(key)) return;
+        finishingJoinRef.current.add(key);
+        finishApprovedJoin(user.uid, profile, r.teamId)
+          .catch((err) => console.error("finish approved join failed:", err))
+          .finally(() => finishingJoinRef.current.delete(key));
+      });
+  }, [myJoinRequests, user?.uid, profile?.teamId]);
 
   // If an officer removed this player since their last visit, their own
   // profile still points at that team — correct it once, quietly, whenever
@@ -6811,6 +6965,8 @@ function AppShell() {
         teamLoading={activeTeamLoading}
         myOfficerRequest={activeTeamMyOfficerRequest}
         officerRequests={activeTeamOfficerRequests}
+        myJoinRequest={activeTeamMyJoinRequest}
+        joinRequests={activeTeamJoinRequests}
         profile={profile}
         user={user}
         onBack={pop}
@@ -6827,6 +6983,9 @@ function AppShell() {
         requestOfficer={requestOfficer}
         deleteOfficerRequest={deleteOfficerRequest}
         approveOfficerRequest={approveOfficerRequest}
+        requestToJoin={requestToJoin}
+        deleteJoinRequest={deleteJoinRequest}
+        approveJoinRequest={approveJoinRequest}
         highlightEventId={eventDeepLinkId}
       />
     );

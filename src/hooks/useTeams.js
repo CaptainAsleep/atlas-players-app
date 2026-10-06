@@ -127,6 +127,70 @@ export function useOfficerRequests(teamId) {
   return { officerRequests: requests, officerRequestsLoading: loading };
 }
 
+// ── Team join approval (2026-10-06) ────────────────────────────────────
+// A player's own pending request for one team, if any — gates the Join
+// button between "Request to Join" and "Approval pending". Single doc read
+// at the {teamId}_{uid} id, same as useMyOfficerRequest.
+export function useMyJoinRequest(teamId, uid) {
+  const [request, setRequest] = useState(null);
+
+  useEffect(() => {
+    if (!teamId || !uid) {
+      setRequest(null);
+      return;
+    }
+    const unsub = onSnapshot(
+      doc(db, "joinRequests", `${teamId}_${uid}`),
+      (snap) => setRequest(snap.exists() ? snap.data() : null),
+      (err) => console.error("useMyJoinRequest error:", err)
+    );
+    return unsub;
+  }, [teamId, uid]);
+
+  return { myJoinRequest: request };
+}
+
+// Every join request this player has made, across teams. App-level, so an
+// approval is noticed (and the join finished) wherever they are in the app.
+export function useMyJoinRequests(uid) {
+  const [requests, setRequests] = useState([]);
+
+  useEffect(() => {
+    if (!uid) {
+      setRequests([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      query(collection(db, "joinRequests"), where("uid", "==", uid)),
+      (snap) => setRequests(snap.docs.map((d) => d.data())),
+      (err) => console.error("useMyJoinRequests error:", err)
+    );
+    return unsub;
+  }, [uid]);
+
+  return { myJoinRequests: requests };
+}
+
+// Every pending join request for a team — the officer-side queue.
+export function useJoinRequests(teamId) {
+  const [requests, setRequests] = useState([]);
+
+  useEffect(() => {
+    if (!teamId) {
+      setRequests([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      query(collection(db, "joinRequests"), where("teamId", "==", teamId)),
+      (snap) => setRequests(snap.docs.map((d) => d.data()).filter((r) => r.approved !== true)),
+      (err) => console.error("useJoinRequests error:", err)
+    );
+    return unsub;
+  }, [teamId]);
+
+  return { joinRequests: requests };
+}
+
 // ── Team event calendar (2026-10-06) ───────────────────────────────────
 // Public read, officer-only write. Events are the team's own "we're
 // attending this" posts, stored under the team rather than in the bookable
@@ -236,6 +300,10 @@ export function useTeamActions() {
       name,
       description: description || "",
       patchUrl: null,
+      // New teams default to officer approval (2026-10-06); officers can
+      // switch to "open" in team settings. Teams that predate this have no
+      // joinPolicy field at all, which the rules read as "open".
+      joinPolicy: "approval",
       createdBy: uid,
       createdAt: serverTimestamp(),
     });
@@ -283,8 +351,8 @@ export function useTeamActions() {
     await batch.commit();
   }
 
-  async function updateTeamInfo(teamId, { name, description }) {
-    await updateDoc(doc(db, "teams", teamId), { name, description });
+  async function updateTeamInfo(teamId, { name, description, joinPolicy }) {
+    await updateDoc(doc(db, "teams", teamId), { name, description, ...(joinPolicy ? { joinPolicy } : {}) });
     // Keep every current member's denormalized teamName in sync — a rename
     // shouldn't leave the roster or player profiles showing the old name.
     const membersSnap = await getDocs(collection(db, "teams", teamId, "members"));
@@ -361,6 +429,74 @@ export function useTeamActions() {
     batch.update(doc(db, "teams", teamId, "members", uid), { role: "officer" });
     batch.delete(doc(db, "officerRequests", `${teamId}_${uid}`));
     await batch.commit();
+  }
+
+  // ── Team join approval (2026-10-06) ──────────────────────────────────
+  // Player asking to join an approval-required team. Same {teamId}_{uid}
+  // idiom as requestOfficer, so a second ask while one is pending can't
+  // stack up (it would hit an existing doc, which is an update, and the
+  // rules only let an officer do that).
+  async function requestToJoin(teamId, uid, profile) {
+    await setDoc(doc(db, "joinRequests", `${teamId}_${uid}`), {
+      teamId,
+      uid,
+      callsign: profile?.callsign || "Player",
+      avatarUrl: profile?.avatarUrl || null,
+      requestedAt: serverTimestamp(),
+      approved: false,
+    });
+  }
+
+  // Requester cancelling, or an officer denying. Same write either way
+  // (the rules gate who may); denial leaves no record, per Michael.
+  async function deleteJoinRequest(teamId, uid) {
+    await deleteDoc(doc(db, "joinRequests", `${teamId}_${uid}`));
+  }
+
+  // Officer approving: creates the member doc and flags the request
+  // approved in one atomic batch. It deliberately can't touch the player's
+  // own users/publicProfiles docs (rules are self-only), so those are
+  // finished by the player's own app, see finishApprovedJoin.
+  async function approveJoinRequest(teamId, request) {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "teams", teamId, "members", request.uid), {
+      uid: request.uid,
+      callsign: request.callsign || "Player",
+      avatarUrl: request.avatarUrl || null,
+      role: "member",
+      joinedAt: serverTimestamp(),
+    });
+    batch.update(doc(db, "joinRequests", `${teamId}_${request.uid}`), { approved: true });
+    await batch.commit();
+  }
+
+  // Runs on the player's own client once their request shows approved:
+  // sets their teamId/teamName and clears the request. Handles the two
+  // ways an approval can be stale by the time the player's app sees it:
+  // an officer already removed them again, or they joined a different
+  // team in the meantime (then the stray member doc is removed instead).
+  async function finishApprovedJoin(uid, profile, teamId) {
+    const memberRef = doc(db, "teams", teamId, "members", uid);
+    const requestRef = doc(db, "joinRequests", `${teamId}_${uid}`);
+    const memberSnap = await getDoc(memberRef);
+    if (!memberSnap.exists()) {
+      await deleteDoc(requestRef);
+      return;
+    }
+    if (profile?.teamId && profile.teamId !== teamId) {
+      const b = writeBatch(db);
+      b.delete(memberRef);
+      b.delete(requestRef);
+      await b.commit();
+      return;
+    }
+    const teamSnap = await getDoc(doc(db, "teams", teamId));
+    const teamName = teamSnap.exists() ? teamSnap.data().name : "";
+    const b = writeBatch(db);
+    b.update(doc(db, "users", uid), { teamId, teamName });
+    b.update(doc(db, "publicProfiles", uid), { teamId, teamName });
+    b.delete(requestRef);
+    await b.commit();
   }
 
   // Run once, cheaply, whenever a player with a teamId opens the Social tab.
@@ -482,6 +618,10 @@ export function useTeamActions() {
     requestOfficer,
     deleteOfficerRequest,
     approveOfficerRequest,
+    requestToJoin,
+    deleteJoinRequest,
+    approveJoinRequest,
+    finishApprovedJoin,
     createTeamEvent,
     updateTeamEvent,
     deleteTeamEvent,

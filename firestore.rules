@@ -493,7 +493,15 @@ service cloud.firestore {
         allow create: if request.auth != null && (
           // Open joining — anyone signed in can join as a regular member,
           // matching how real airsoft clans actually work (no gatekeeping).
-          (memberUid == request.auth.uid && request.resource.data.role == "member")
+          (memberUid == request.auth.uid && request.resource.data.role == "member"
+            // Team Join Approval (2026-10-06): self-join only on OPEN teams.
+            // Without this, anyone could write their own member doc directly
+            // and bypass approval. .get() with a default, not .joinPolicy:
+            // existing teams have no such field and a bare read of a missing
+            // field errors (= deny). Absent = open, so existing teams are
+            // unchanged. Approval teams are joined via an officer creating
+            // the member doc (the officer clause below).
+            && get(/databases/$(database)/documents/teams/$(teamId)).data.get('joinPolicy', 'open') == 'open')
           ||
           // Founding officer — only the team's own creator, only for their
           // own uid, only at the moment the team itself is created (checked
@@ -612,6 +620,48 @@ service cloud.firestore {
         request.auth.uid == resource.data.uid // the requester cancelling their own ask
         || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
             && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer") // an officer denying, or approving (paired with the role-change write)
+      );
+    }
+
+    // Team join requests (2026-10-06) — a player asking to join a team whose
+    // joinPolicy is "approval", and any officer approving or denying. Same
+    // shape as officerRequests above: one doc per (team, player) at
+    // {teamId}_{uid}, existence = pending, deny = delete. One difference:
+    // approving does NOT delete the doc. An officer can't write the player's
+    // own users/publicProfiles docs, so approval creates the member doc and
+    // marks this request approved:true; the player's own app sees that,
+    // finishes their profile (teamId/teamName) and deletes the request.
+    match /joinRequests/{requestId} {
+      // Same missing-doc handling as officerRequests (resource == null on a
+      // doc that doesn't exist yet), plus the player's own-uid query.
+      allow read: if request.auth != null && (
+        resource == null
+          ? requestId.matches('.*_' + request.auth.uid)
+          : (request.auth.uid == resource.data.uid
+             || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+                 && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer"))
+      );
+      // Only for yourself, under your own {teamId}_{uid} id, only on a team
+      // that actually requires approval, and only if you're not already in
+      // it. A second request while one is pending hits an existing doc,
+      // which is an update, and the only update allowed is an officer's.
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid
+        && requestId == request.resource.data.teamId + '_' + request.resource.data.uid
+        && get(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.get('joinPolicy', 'open') == 'approval'
+        && !exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/members/$(request.auth.uid))
+        && request.resource.data.get('approved', false) == false;
+      // Officer approving: the one allowed edit, flipping approved to true.
+      allow update: if request.auth != null
+        && exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["approved"])
+        && request.resource.data.approved == true;
+      // The player cancelling or finishing, or an officer denying.
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.uid
+        || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer")
       );
     }
   }
