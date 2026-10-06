@@ -3614,7 +3614,7 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
         </div>
       )}
 
-      <input value={regionalArea} onChange={(e) => setRegionalArea(e.target.value)} placeholder="Regional area (e.g. Upper Peninsula, MI)" maxLength={100}
+      <input value={regionalArea} onChange={(e) => setRegionalArea(e.target.value)} placeholder="Regional area (e.g. Region 1)" maxLength={100}
         className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
       <input value={ticketUrl} onChange={(e) => setTicketUrl(e.target.value)} placeholder="Ticket link" inputMode="url" autoCapitalize="none"
         className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
