@@ -14,7 +14,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useSWUpdate } from "./hooks/useSWUpdate";
-import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles } from "./hooks/useTeams";
+import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
@@ -278,7 +278,7 @@ function formatDate(dateStr, endDateStr) {
 // Downscales/compresses a picked photo client-side before it ever leaves the
 // device — phone camera photos can be 10MB+, and an avatar only ever needs
 // to be a few hundred pixels. Keeps uploads fast and Storage costs near zero.
-function resizeImageFile(file, maxSize = 400, quality = 0.85) {
+function resizeImageFile(file, maxSize = 400, quality = 0.85, mimeType = "image/jpeg") {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Couldn't read that file."));
@@ -298,7 +298,7 @@ function resizeImageFile(file, maxSize = 400, quality = 0.85) {
         canvas.width = width;
         canvas.height = height;
         canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Couldn't process that image."))), "image/jpeg", quality);
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Couldn't process that image."))), mimeType, quality);
       };
       img.src = e.target.result;
     };
@@ -3954,6 +3954,165 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
   );
 }
 
+// Team ranks: an officer-defined, military-style ladder. Everyone sees the
+// list (insignia, name, what it takes to earn it) so they know what's
+// achievable; officers get add/edit/delete/reorder. Shown highest first.
+function TeamRanksSection({ team, user, members, ranks, isOfficer }) {
+  const { T, display, body } = useTheme();
+  const { createTeamRank, updateTeamRank, deleteTeamRank, swapTeamRankOrder } = useTeamActions();
+  const [editingId, setEditingId] = useState(null); // rank id, or "new"
+  const [title, setTitle] = useState("");
+  const [requirements, setRequirements] = useState("");
+  const [imageBlob, setImageBlob] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [removeImage, setRemoveImage] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef(null);
+
+  const reset = () => { setImageBlob(null); setPreviewUrl(null); setRemoveImage(false); setError(""); };
+  const startNew = () => { reset(); setEditingId("new"); setTitle(""); setRequirements(""); };
+  const startEdit = (r) => { reset(); setEditingId(r.id); setTitle(r.title || ""); setRequirements(r.requirements || ""); setPreviewUrl(r.imageUrl || null); };
+  const cancel = () => { setEditingId(null); reset(); };
+
+  const pickImage = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    try {
+      // PNG so a transparent insignia stays transparent.
+      const blob = await resizeImageFile(file, 256, 1, "image/png");
+      setImageBlob(blob);
+      setRemoveImage(false);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setError("Couldn't use that image — try a different one.");
+    }
+  };
+
+  const clearImage = () => { setImageBlob(null); setPreviewUrl(null); setRemoveImage(true); };
+
+  const save = async () => {
+    if (!title.trim()) return setError("A rank needs a name.");
+    setSaving(true);
+    setError("");
+    try {
+      const data = { title: title.trim(), requirements: requirements.trim(), imageBlob };
+      if (editingId === "new") {
+        const nextOrder = ranks.length ? Math.max(...ranks.map((r) => r.order ?? 0)) + 1 : 0;
+        await createTeamRank(team.id, user.uid, { ...data, order: nextOrder });
+      } else {
+        await updateTeamRank(team.id, editingId, { ...data, removeImage });
+      }
+      setEditingId(null);
+      reset();
+    } catch (err) {
+      console.error("save rank:", err);
+      setError("Couldn't save the rank — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (r) => {
+    if (!window.confirm(`Delete the "${r.title}" rank? It will be removed from anyone who holds it.`)) return;
+    try {
+      await deleteTeamRank(team.id, r.id, members);
+    } catch (err) {
+      console.error("delete rank:", err);
+      setError("Couldn't delete the rank — try again.");
+    }
+  };
+
+  const move = async (index, delta) => {
+    const other = ranks[index + delta];
+    if (!other) return;
+    setError("");
+    try {
+      await swapTeamRankOrder(team.id, ranks[index], other);
+    } catch (err) {
+      console.error("move rank:", err);
+      setError("Couldn't reorder — try again.");
+    }
+  };
+
+  if (!isOfficer && ranks.length === 0) return null;
+
+  const inputStyle = { ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+
+  return (
+    <>
+      <Eyebrow>Team Ranks</Eyebrow>
+      <div className="flex flex-col gap-2 mb-3">
+        {ranks.map((r, i) => (
+          <div key={r.id} className="p-3 flex items-start gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            {r.imageUrl && (
+              <img src={r.imageUrl} alt={r.title} className="w-12 h-12 flex-shrink-0" style={{ objectFit: "contain" }} />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.title}</div>
+              {r.requirements && <p className="text-[12px] mt-1 whitespace-pre-wrap" style={{ ...body, color: T.ashDim }}>{r.requirements}</p>}
+            </div>
+            {isOfficer && (
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <div className="flex gap-2">
+                  <button onClick={() => startEdit(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Edit</button>
+                  <button onClick={() => remove(r)} className="text-[11px] font-semibold" style={{ ...body, color: T.alert }}>Delete</button>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up" className="text-[13px]" style={{ ...body, color: T.ashDim, opacity: i === 0 ? 0.3 : 1 }}>↑</button>
+                  <button onClick={() => move(i, 1)} disabled={i === ranks.length - 1} aria-label="Move down" className="text-[13px]" style={{ ...body, color: T.ashDim, opacity: i === ranks.length - 1 ? 0.3 : 1 }}>↓</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {isOfficer && editingId && (
+        <div className="mb-3 p-3 flex flex-col gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Rank name (e.g. Sergeant)" maxLength={50}
+            className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+          <textarea value={requirements} onChange={(e) => setRequirements(e.target.value)} placeholder="Requirements for this rank (optional)" rows={3} maxLength={500}
+            className="w-full px-3 py-2 text-[13px] outline-none" style={{ ...inputStyle, resize: "none" }} />
+          <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} className="hidden" />
+          <div className="flex items-center gap-3">
+            {previewUrl ? (
+              <img src={previewUrl} alt="Insignia preview" className="w-12 h-12 flex-shrink-0" style={{ objectFit: "contain" }} />
+            ) : (
+              <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center text-[10px]" style={{ ...body, background: T.panelAlt, borderRadius: 6, color: T.ashFaint }}>No image</div>
+            )}
+            <button onClick={() => fileRef.current?.click()} className="text-[12px] font-semibold" style={{ ...body, color: T.accent }}>
+              {previewUrl ? "Change image" : "Add image (optional)"}
+            </button>
+            {previewUrl && (
+              <button onClick={clearImage} className="text-[12px] font-semibold" style={{ ...body, color: T.alert }}>Remove</button>
+            )}
+          </div>
+          {error && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={cancel} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Cancel</button>
+            <button onClick={save} disabled={saving} className="flex-1 py-2 text-[12px] font-semibold"
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Saving…" : "Save rank"}
+            </button>
+          </div>
+        </div>
+      )}
+      {isOfficer && !editingId && (
+        <>
+          {error && <p className="text-[12px] mb-2" style={{ ...body, color: T.alert }}>{error}</p>}
+          <button onClick={startNew} className="w-full mb-5 p-3 text-left text-[13px] font-medium"
+            style={{ ...body, color: T.accent, border: `1px dashed ${T.line}`, borderRadius: T.rPill }}>
+            + Add a rank
+          </button>
+        </>
+      )}
+    </>
+  );
+}
+
 const TEAM_LINK_FIELDS = [
   { key: "discord", label: "Discord", placeholder: "Discord invite link" },
   { key: "website", label: "Website", placeholder: "Website" },
@@ -4077,7 +4236,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const [officerRequestBusy, setOfficerRequestBusy] = useState(false);
   const [joinBusy, setJoinBusy] = useState(false);
   const roles = useTeamRoles(team?.id);
-  const { setMemberRoleIds, setJoinPolicy } = useTeamActions();
+  const ranks = useTeamRanks(team?.id);
+  const { setMemberRoleIds, setJoinPolicy, setMemberRank } = useTeamActions();
   const [assigningUid, setAssigningUid] = useState(null);
   const [policyBusy, setPolicyBusy] = useState(false);
 
@@ -4535,6 +4695,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           </>
         )}
 
+        <TeamRanksSection team={team} user={user} members={members} ranks={ranks} isOfficer={isOfficer} />
+
         <TeamRolesSection team={team} user={user} members={members} roles={roles} isOfficer={isOfficer} />
 
         <Eyebrow>Roster ({members.length})</Eyebrow>
@@ -4552,6 +4714,14 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                 )}
                 <div className="flex-1">
                   <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{m.callsign}</div>
+                  {ranks.find((r) => r.id === m.rankId) && (
+                    <div className="flex items-center gap-1.5 text-[11px]" style={{ ...body, color: T.ashDim }}>
+                      {ranks.find((r) => r.id === m.rankId).imageUrl && (
+                        <img src={ranks.find((r) => r.id === m.rankId).imageUrl} alt="" className="w-4 h-4 flex-shrink-0" style={{ objectFit: "contain" }} />
+                      )}
+                      <span>{ranks.find((r) => r.id === m.rankId).title}</span>
+                    </div>
+                  )}
                   {roles.filter((r) => (m.roleIds || []).includes(r.id)).length > 0 && (
                     <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>
                       {roles.filter((r) => (m.roleIds || []).includes(r.id)).map((r) => r.title).join(" · ")}
@@ -4560,13 +4730,13 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                 </div>
               </button>
               {m.role === "officer" && <Tag tone="accent">OFFICER</Tag>}
-              {isOfficer && roles.length > 0 && (
+              {isOfficer && (roles.length > 0 || ranks.length > 0) && (
                 <button
                   onClick={() => setAssigningUid(assigningUid === m.uid ? null : m.uid)}
                   className="px-2 py-1 text-[10px] font-semibold"
                   style={{ ...body, border: `1px solid ${T.line}`, color: T.accent, borderRadius: T.rPill }}
                 >
-                  Roles
+                  Assign
                 </button>
               )}
               {isOfficer && m.uid !== user?.uid && (
@@ -4588,8 +4758,37 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                 </div>
               )}
             </div>
-            {isOfficer && assigningUid === m.uid && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
+            {isOfficer && assigningUid === m.uid && ranks.length > 0 && (
+              <div className="mt-2">
+                <div className="text-[10px] font-semibold mb-1" style={{ ...body, color: T.ashFaint }}>RANK</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {ranks.map((r) => {
+                    const has = m.rankId === r.id;
+                    return (
+                      <button
+                        key={r.id}
+                        onClick={async () => {
+                          setActionError("");
+                          try {
+                            await setMemberRank(team.id, m.uid, has ? null : r.id);
+                          } catch (err) {
+                            setActionError("Couldn't update rank — try again.");
+                          }
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-semibold"
+                        style={{ ...body, borderRadius: T.rPill, background: has ? T.cta : "transparent", color: has ? T.inverse : T.ashDim, border: `1px solid ${has ? T.cta : T.line}` }}
+                      >
+                        {r.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {isOfficer && assigningUid === m.uid && roles.length > 0 && (
+              <div className="mt-2">
+                {ranks.length > 0 && <div className="text-[10px] font-semibold mb-1" style={{ ...body, color: T.ashFaint }}>ROLES</div>}
+              <div className="flex flex-wrap gap-1.5">
                 {roles.map((r) => {
                   const has = (m.roleIds || []).includes(r.id);
                   return (
@@ -4611,6 +4810,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                     </button>
                   );
                 })}
+              </div>
               </div>
             )}
             </div>

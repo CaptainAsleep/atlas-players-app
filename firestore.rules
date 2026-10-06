@@ -578,6 +578,18 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
           && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
       }
+
+      // Team ranks (2026-10-06) — officer-defined, military-style ladder: a
+      // title, optional insignia image, and the requirements to earn it.
+      // Public read so anyone can see which ranks exist. Labels only, no
+      // permissions. Which member holds which rank lives on the member doc
+      // (rankId), already officer-only to update.
+      match /ranks/{rankId} {
+        allow read: if true;
+        allow create, update, delete: if request.auth != null
+          && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+      }
     }
 
     // Officer role requests — a member asking their team's officers to

@@ -265,6 +265,30 @@ export function useMyTeamEventRsvp(teamId, eventId, uid) {
 }
 
 // Custom team roles — labels only (title + description), officer-managed.
+// Team ranks (2026-10-06): the officer-defined ladder, highest first.
+export function useTeamRanks(teamId) {
+  const [ranks, setRanks] = useState([]);
+
+  useEffect(() => {
+    if (!teamId) {
+      setRanks([]);
+      return undefined;
+    }
+    const unsub = onSnapshot(
+      collection(db, "teams", teamId, "ranks"),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        setRanks(list);
+      },
+      (err) => console.error("useTeamRanks:", err)
+    );
+    return unsub;
+  }, [teamId]);
+
+  return ranks;
+}
+
 export function useTeamRoles(teamId) {
   const [roles, setRoles] = useState([]);
 
@@ -590,6 +614,70 @@ export function useTeamActions() {
     await updateDoc(doc(db, "teams", teamId, "roles", roleId), { title, description });
   }
 
+  // ── Team ranks (2026-10-06) ───────────────────────────────────────────
+  // Image is optional. The rank doc id is generated first so the insignia
+  // can be uploaded to its own path before the doc is written. PNG, not
+  // JPEG, so a transparent insignia keeps its transparency. `order` 0 =
+  // highest; new ranks go to the bottom (callers pass the next position).
+  async function createTeamRank(teamId, uid, { title, requirements, imageBlob, order }) {
+    const rankRef = doc(collection(db, "teams", teamId, "ranks"));
+    let imageUrl = null;
+    if (imageBlob) {
+      const storageRef = ref(storage, `teamRanks/${teamId}/${rankRef.id}/rank.png`);
+      await uploadBytes(storageRef, imageBlob, { contentType: "image/png" });
+      imageUrl = await getDownloadURL(storageRef);
+    }
+    await setDoc(rankRef, { title, requirements, imageUrl, order, createdBy: uid, createdAt: serverTimestamp() });
+    return rankRef.id;
+  }
+
+  // imageBlob = new image; removeImage = true clears the existing one;
+  // neither = leave the image as is.
+  async function updateTeamRank(teamId, rankId, { title, requirements, imageBlob, removeImage }) {
+    const update = { title, requirements };
+    const storageRef = ref(storage, `teamRanks/${teamId}/${rankId}/rank.png`);
+    if (imageBlob) {
+      await uploadBytes(storageRef, imageBlob, { contentType: "image/png" });
+      const url = await getDownloadURL(storageRef);
+      // Same path every time, so bust the browser cache or an old insignia
+      // can keep showing after a replace.
+      update.imageUrl = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+    } else if (removeImage) {
+      update.imageUrl = null;
+      await deleteObject(storageRef).catch(() => {});
+    }
+    await updateDoc(doc(db, "teams", teamId, "ranks", rankId), update);
+  }
+
+  // Deleting a rank clears it from every member holding it, in one batch,
+  // so no member doc is left pointing at a rank that's gone; the image is
+  // removed best-effort afterward.
+  async function deleteTeamRank(teamId, rankId, members) {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "teams", teamId, "ranks", rankId));
+    (members || [])
+      .filter((m) => m.rankId === rankId)
+      .forEach((m) => {
+        batch.update(doc(db, "teams", teamId, "members", m.uid), { rankId: null });
+      });
+    await batch.commit();
+    await deleteObject(ref(storage, `teamRanks/${teamId}/${rankId}/rank.png`)).catch(() => {});
+  }
+
+  // Swaps two neighboring ranks' positions in one batch.
+  async function swapTeamRankOrder(teamId, a, b) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "teams", teamId, "ranks", a.id), { order: b.order });
+    batch.update(doc(db, "teams", teamId, "ranks", b.id), { order: a.order });
+    await batch.commit();
+  }
+
+  // One rank per member; null clears it. Cosmetic, like roleIds: deliberately
+  // NOT the permission-bearing `role` field.
+  async function setMemberRank(teamId, memberUid, rankId) {
+    await updateDoc(doc(db, "teams", teamId, "members", memberUid), { rankId: rankId || null });
+  }
+
   // Deleting a role also strips it from every member holding it, in one
   // batch, so no member doc is left pointing at a role that's gone.
   async function deleteTeamRole(teamId, roleId, members) {
@@ -635,6 +723,11 @@ export function useTeamActions() {
     deleteTeamEvent,
     setTeamEventRsvp,
     clearTeamEventRsvp,
+    createTeamRank,
+    updateTeamRank,
+    deleteTeamRank,
+    swapTeamRankOrder,
+    setMemberRank,
     createTeamRole,
     updateTeamRole,
     deleteTeamRole,
