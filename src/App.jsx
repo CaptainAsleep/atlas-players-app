@@ -3632,7 +3632,7 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
   );
 }
 
-function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit, onDelete, past }) {
+function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit, onDelete, past, highlighted }) {
   const { T, display, body } = useTheme();
   const { setTeamEventRsvp, clearTeamEventRsvp } = useTeamActions();
   const myStatus = useMyTeamEventRsvp(team.id, event.id, user?.uid);
@@ -3640,6 +3640,22 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
   const [showWho, setShowWho] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [shareState, setShareState] = useState(null);
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (highlighted) cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlighted]);
+
+  const handleShare = async () => {
+    const url = `https://playerapp.airsoftatlas.app/?team=${team.id}&event=${event.id}`;
+    const text = `${team.name}: ${event.title} — ${formatDate(event.date, event.endDate)}`;
+    const result = await shareContent(event.title, text, url);
+    if (result === "copied") {
+      setShareState("copied");
+      setTimeout(() => setShareState(null), 2000);
+    }
+  };
 
   const options = isMember ? RSVP_OPTIONS : RSVP_OPTIONS.filter((o) => o.status === "interested");
   const location = event.fieldName || event.locationName;
@@ -3663,17 +3679,22 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
   const groups = RSVP_OPTIONS.map((o) => ({ ...o, people: rsvps.filter((r) => r.status === o.status) }));
 
   return (
-    <div className="mb-3 overflow-hidden" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, opacity: past ? 0.8 : 1 }}>
+    <div ref={cardRef} className="mb-3 overflow-hidden" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, opacity: past ? 0.8 : 1, outline: highlighted ? `2px solid ${T.accent}` : "none" }}>
       {event.bannerUrl && <img src={event.bannerUrl} alt="" className="w-full" style={{ height: 120, objectFit: "cover" }} />}
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{event.title}</div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={handleShare} className="w-6 h-6 flex items-center justify-center" aria-label="Share event invite">
+              {shareState === "copied" ? <Check size={15} color={T.good} /> : <Share2 size={14} color={T.ashDim} />}
+            </button>
           {isOfficer && (
             <div className="flex gap-2 flex-shrink-0">
               <button onClick={() => onEdit(event)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Edit</button>
               <button onClick={() => onDelete(event)} className="text-[11px] font-semibold" style={{ ...body, color: T.alert }}>Delete</button>
             </div>
           )}
+          </div>
         </div>
         <div className="text-[12px] mt-1" style={{ ...body, color: T.ashDim }}>
           {formatDate(event.date, event.endDate)}{timeLine ? ` · ${timeLine}` : ""}
@@ -3746,7 +3767,7 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
   );
 }
 
-function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields }) {
+function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields, highlightEventId }) {
   const { T, body } = useTheme();
   const { events } = useTeamEvents(team.id);
   const { createTeamEvent, updateTeamEvent, deleteTeamEvent } = useTeamActions();
@@ -3760,6 +3781,13 @@ function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields 
   const isPast = (e) => (e.endDate || e.date) < today;
   const upcoming = events.filter((e) => !isPast(e)).sort((a, b) => a.date.localeCompare(b.date));
   const past = events.filter(isPast).sort((a, b) => b.date.localeCompare(a.date));
+
+  // A shared link to an event that's already past lives in the collapsed
+  // "Past events" list — open it so the link doesn't land on nothing.
+  useEffect(() => {
+    if (highlightEventId && past.some((e) => e.id === highlightEventId)) setShowPast(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightEventId, events.length]);
 
   const closeForm = () => { setFormOpen(false); setEditingEvent(null); setFormError(""); };
 
@@ -3790,7 +3818,7 @@ function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields 
 
   const card = (e, isPastCard) => (
     <TeamEventCard key={e.id} team={team} event={e} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer}
-      past={isPastCard} onEdit={(ev) => { setEditingEvent(ev); setFormOpen(true); }} onDelete={handleDelete} />
+      highlighted={e.id === highlightEventId} past={isPastCard} onEdit={(ev) => { setEditingEvent(ev); setFormOpen(true); }} onDelete={handleDelete} />
   );
 
   return (
@@ -3921,9 +3949,116 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
   );
 }
 
+const TEAM_LINK_FIELDS = [
+  { key: "discord", label: "Discord", placeholder: "Discord invite link" },
+  { key: "website", label: "Website", placeholder: "Website" },
+  { key: "facebook", label: "Facebook", placeholder: "Facebook page or group" },
+  { key: "instagram", label: "Instagram", placeholder: "Instagram profile" },
+  { key: "youtube", label: "YouTube", placeholder: "YouTube channel" },
+];
+
+// Team links: a `links` map on the team doc. Everyone sees the pills (opens
+// in a new tab); officers get an Edit form. Fixed set + one custom link.
+function TeamLinksSection({ team, isOfficer }) {
+  const { T, display, body } = useTheme();
+  const { updateTeamLinks } = useTeamActions();
+  const links = team.links || {};
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState({});
+  const [otherLabel, setOtherLabel] = useState("");
+  const [otherUrl, setOtherUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const pills = [
+    ...TEAM_LINK_FIELDS.filter((f) => links[f.key]).map((f) => ({ label: f.label, url: links[f.key] })),
+    ...(links.other?.url ? [{ label: links.other.label || "Link", url: links.other.url }] : []),
+  ];
+
+  const startEdit = () => {
+    const v = {};
+    TEAM_LINK_FIELDS.forEach((f) => { v[f.key] = links[f.key] || ""; });
+    setValues(v);
+    setOtherLabel(links.other?.label || "");
+    setOtherUrl(links.other?.url || "");
+    setError("");
+    setEditing(true);
+  };
+
+  const save = async () => {
+    setError("");
+    const next = {};
+    for (const f of TEAM_LINK_FIELDS) {
+      const url = normalizeWebUrl(values[f.key]);
+      if (url === null) return setError(`${f.label} link doesn't look like a valid web address.`);
+      if (url) next[f.key] = url;
+    }
+    const otherNorm = normalizeWebUrl(otherUrl);
+    if (otherNorm === null) return setError("The custom link doesn't look like a valid web address.");
+    if (otherNorm) next.other = { label: otherLabel.trim().slice(0, 30) || "Link", url: otherNorm };
+    setSaving(true);
+    try {
+      await updateTeamLinks(team.id, next);
+      setEditing(false);
+    } catch (err) {
+      console.error("save team links:", err);
+      setError("Couldn't save links — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOfficer && pills.length === 0) return null;
+  const inputStyle = { ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+
+  return (
+    <>
+      <Eyebrow>Links</Eyebrow>
+      {!editing ? (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          {pills.map((l) => (
+            <a key={l.label + l.url} href={l.url} target="_blank" rel="noreferrer noopener"
+              className="px-3 py-1.5 text-[12px] font-semibold"
+              style={{ ...body, border: `1px solid ${T.line}`, color: T.accent, borderRadius: T.rPill }}>
+              {l.label}
+            </a>
+          ))}
+          {isOfficer && (
+            <button onClick={startEdit} className="text-[12px] font-medium" style={{ ...body, color: T.accent }}>
+              {pills.length ? "Edit links" : "+ Add links"}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="mb-4 p-3 flex flex-col gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+          {TEAM_LINK_FIELDS.map((f) => (
+            <input key={f.key} value={values[f.key] || ""} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+              placeholder={f.placeholder} inputMode="url" autoCapitalize="none"
+              className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+          ))}
+          <div className="flex gap-2">
+            <input value={otherLabel} onChange={(e) => setOtherLabel(e.target.value)} placeholder="Other (label)" maxLength={30}
+              className="w-1/3 px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+            <input value={otherUrl} onChange={(e) => setOtherUrl(e.target.value)} placeholder="Other link" inputMode="url" autoCapitalize="none"
+              className="flex-1 px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+          </div>
+          {error && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => setEditing(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Cancel</button>
+            <button onClick={save} disabled={saving} className="flex-1 py-2 text-[12px] font-semibold"
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Saving…" : "Save links"}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
-  requestOfficer, deleteOfficerRequest, approveOfficerRequest }) {
+  requestOfficer, deleteOfficerRequest, approveOfficerRequest, highlightEventId }) {
   const { T, display, body, mono } = useTheme();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -4148,6 +4283,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           </p>
         )}
 
+        <TeamLinksSection team={team} isOfficer={isOfficer} />
+
         <Eyebrow>Home Field</Eyebrow>
         {team.homeFieldName ? (
           <div className="mb-4 p-3 flex items-center justify-between" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -4199,7 +4336,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           </div>
         )}
 
-        <TeamCalendarSection team={team} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer} fields={fields} />
+        <TeamCalendarSection team={team} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer} fields={fields} highlightEventId={highlightEventId} />
 
         {isOfficer && officerRequests.length > 0 && (
           <>
@@ -6287,10 +6424,17 @@ function AppShell() {
   // quietly behind them rather than needing a separate redirect effect).
   const [fieldDeepLinkId] = useState(() => new URLSearchParams(window.location.search).get("field"));
 
-  const [stack, setStack] = useState(() => (fieldDeepLinkId ? ["home", "field"] : ["home"]));
+  // Team event invite link (?team=<teamId>&event=<eventId>) — opens that
+  // team's page on the shared event. Same wait-behind-the-gates behavior as
+  // the field link, so a signed-out visitor signs in first and then lands
+  // on the team.
+  const [teamDeepLinkId] = useState(() => new URLSearchParams(window.location.search).get("team"));
+  const [eventDeepLinkId] = useState(() => new URLSearchParams(window.location.search).get("event"));
+
+  const [stack, setStack] = useState(() => (fieldDeepLinkId ? ["home", "field"] : teamDeepLinkId ? ["home", "team"] : ["home"]));
   const [activeEventId, setActiveEventId] = useState(null);
   const [activeFieldId, setActiveFieldId] = useState(() => fieldDeepLinkId || null);
-  const [activeTeamId, setActiveTeamId] = useState(null);
+  const [activeTeamId, setActiveTeamId] = useState(() => (!fieldDeepLinkId && teamDeepLinkId) || null);
   const [activePlayerId, setActivePlayerId] = useState(null);
   const screen = stack[stack.length - 1];
 
@@ -6645,6 +6789,7 @@ function AppShell() {
         requestOfficer={requestOfficer}
         deleteOfficerRequest={deleteOfficerRequest}
         approveOfficerRequest={approveOfficerRequest}
+        highlightEventId={eventDeepLinkId}
       />
     );
   } else if (screen === "profile") {

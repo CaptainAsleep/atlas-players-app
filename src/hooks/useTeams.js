@@ -307,6 +307,13 @@ export function useTeamActions() {
     await updateDoc(doc(db, "teams", teamId), { patchUrl: url });
   }
 
+  // Team social/Discord/website links — a plain map on the team doc
+  // (public read, officer-only update, both already enforced by the teams
+  // rules). Replaces the whole map; callers pass only the non-empty keys.
+  async function updateTeamLinks(teamId, links) {
+    await updateDoc(doc(db, "teams", teamId), { links });
+  }
+
   async function setMemberRole(teamId, memberUid, role) {
     await updateDoc(doc(db, "teams", teamId, "members", memberUid), { role });
   }
@@ -468,6 +475,7 @@ export function useTeamActions() {
     updateTeamInfo,
     setHomeField,
     updateTeamPatch,
+    updateTeamLinks,
     setMemberRole,
     removeMember,
     reconcileMembership,
