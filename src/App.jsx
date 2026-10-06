@@ -3453,7 +3453,7 @@ const RSVP_OPTIONS = [
   { status: "notGoing", label: "Not going" },
 ];
 
-function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error }) {
+function TeamEventForm({ team, fields, atlasEvents, initial, onCancel, onSave, saving, error }) {
   const { T, display, body } = useTheme();
   const bannerInputRef = useRef(null);
   const [title, setTitle] = useState(initial?.title || "");
@@ -3473,6 +3473,11 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
   const [bannerPreview, setBannerPreview] = useState(initial?.bannerUrl || null);
   const [removeBanner, setRemoveBanner] = useState(false);
   const [localError, setLocalError] = useState("");
+  // "atlas" = link a live Atlas event (details are pulled from it);
+  // "manual" = a milsim event that isn't an Atlas event (typed in by hand).
+  const [mode, setMode] = useState(initial?.atlasEventId ? "atlas" : "manual");
+  const [atlasEventId, setAtlasEventId] = useState(initial?.atlasEventId || null);
+  const [eventSearch, setEventSearch] = useState("");
 
   const inputStyle = { ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
   // iOS Safari gives native date/time inputs an intrinsic width wider than a
@@ -3495,8 +3500,41 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
     }
   };
 
+  const pickedAtlasEvent = (atlasEvents || []).find((e) => e.id === atlasEventId) || null;
+  const linkableEvents = (atlasEvents || [])
+    .filter((e) => !e.canceled && (e.endDate || e.date) >= todayLocalStr())
+    .filter((e) => `${e.title} ${e.fieldName}`.toLowerCase().includes(eventSearch.toLowerCase()))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   const handleSave = () => {
     setLocalError("");
+    if (mode === "atlas") {
+      if (!pickedAtlasEvent) return setLocalError("Pick the Atlas event to link.");
+      const opordLinked = normalizeWebUrl(opordUrl);
+      if (opordLinked === null) return setLocalError("OPORD link doesn't look like a valid web address.");
+      // Snapshot of the Atlas event's basics, kept only as a fallback for
+      // if it's later canceled or removed; the card always shows the live
+      // event while it exists. Manual-only fields are cleared.
+      onSave(
+        {
+          atlasEventId: pickedAtlasEvent.id,
+          title: pickedAtlasEvent.title,
+          date: pickedAtlasEvent.date,
+          endDate: pickedAtlasEvent.endDate || null,
+          startTime: pickedAtlasEvent.startTime || null,
+          endTime: pickedAtlasEvent.endTime || null,
+          fieldId: pickedAtlasEvent.fieldId || null,
+          fieldName: pickedAtlasEvent.fieldName || null,
+          locationName: null,
+          regionalArea: null,
+          ticketUrl: null,
+          opordUrl: opordLinked || null,
+        },
+        null,
+        !!initial?.bannerUrl // drop a manual banner left over from before linking
+      );
+      return;
+    }
     if (!title.trim()) return setLocalError("Give the event a name.");
     if (!date) return setLocalError("Pick a start date.");
     if (endDate && endDate < date) return setLocalError("End date can't be before the start date.");
@@ -3506,6 +3544,7 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
     if (opord === null) return setLocalError("OPORD link doesn't look like a valid web address.");
     onSave(
       {
+        atlasEventId: null,
         title: title.trim(),
         date,
         endDate: endDate || null,
@@ -3525,6 +3564,44 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
 
   return (
     <div className="mb-4 p-3 flex flex-col gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+      <button
+        onClick={() => { setMode(mode === "atlas" ? "manual" : "atlas"); setLocalError(""); }}
+        className="text-[12px] font-semibold text-left"
+        style={{ ...body, color: T.accent }}
+      >
+        {mode === "atlas" ? "Enter event details manually instead" : "Link an event that's on Atlas instead"}
+      </button>
+      {mode === "atlas" ? (
+        pickedAtlasEvent ? (
+          <div className="flex items-center justify-between gap-3 px-3 py-2" style={{ background: T.panelAlt, borderRadius: 4, border: `1px solid ${T.line}` }}>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{pickedAtlasEvent.title}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>
+                {[pickedAtlasEvent.fieldName, formatDate(pickedAtlasEvent.date, pickedAtlasEvent.endDate)].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <button onClick={() => setAtlasEventId(null)} className="text-[11px] font-semibold flex-shrink-0" style={{ ...body, color: T.accent }}>Change</button>
+          </div>
+        ) : (
+          <div className="p-2" style={{ background: T.panelAlt, borderRadius: 4, border: `1px solid ${T.line}` }}>
+            <input value={eventSearch} onChange={(e) => setEventSearch(e.target.value)} placeholder="Search Atlas events…"
+              className="w-full mb-2 px-3 py-2 text-[13px] outline-none" style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }} />
+            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+              {linkableEvents.length === 0 && (
+                <p className="text-[12px] py-2" style={{ ...body, color: T.ashFaint }}>No matching upcoming Atlas events.</p>
+              )}
+              {linkableEvents.map((e) => (
+                <button key={e.id} onClick={() => { setAtlasEventId(e.id); setEventSearch(""); }}
+                  className="w-full py-2 text-left" style={{ ...body, color: T.ash }}>
+                  <div className="text-[13px]">{e.title}</div>
+                  <div className="text-[11px]" style={{ color: T.ashFaint }}>{[e.fieldName, formatDate(e.date, e.endDate)].filter(Boolean).join(" · ")}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      ) : (
+      <>
       <input ref={bannerInputRef} type="file" accept="image/*" onChange={handleBannerSelected} className="hidden" />
       {bannerPreview && !removeBanner ? (
         <div className="relative w-full" style={{ height: 120, borderRadius: 6, overflow: "hidden", background: T.panelAlt }}>
@@ -3618,6 +3695,8 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
         className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
       <input value={ticketUrl} onChange={(e) => setTicketUrl(e.target.value)} placeholder="Ticket link" inputMode="url" autoCapitalize="none"
         className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+      </>
+      )}
       <input value={opordUrl} onChange={(e) => setOpordUrl(e.target.value)} placeholder="OPORD link (Google Docs, etc.)" inputMode="url" autoCapitalize="none"
         className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
       <p className="text-[10px]" style={{ ...body, color: T.ashFaint }}>The OPORD link is visible to anyone who opens this team page.</p>
@@ -3637,7 +3716,7 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
   );
 }
 
-function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit, onDelete, past, highlighted }) {
+function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit, onDelete, onOpenEvent, past, highlighted }) {
   const { T, display, body } = useTheme();
   const { setTeamEventRsvp, clearTeamEventRsvp } = useTeamActions();
   const myStatus = useMyTeamEventRsvp(team.id, event.id, user?.uid);
@@ -3701,8 +3780,9 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
           )}
           </div>
         </div>
+        {event._atlas && <div className="mt-1"><Tag tone="accent">ON ATLAS</Tag></div>}
         <div className="text-[12px] mt-1" style={{ ...body, color: T.ashDim }}>
-          {formatDate(event.date, event.endDate)}{timeLine ? ` · ${timeLine}` : ""}
+          {formatDate(event.date, event.endDate)}{timeLine ? ` · ${timeLine}` : ""}{event._atlas ? ` · ${displayPrice(event._atlas.price)}` : ""}
         </div>
         {(location || event.regionalArea) && (
           <div className="flex items-center gap-1.5 mt-1">
@@ -3713,9 +3793,18 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
           </div>
         )}
 
-        {(event.ticketUrl || event.opordUrl) && (
+        {event._atlasMissing && (
+          <p className="text-[11px] mt-1" style={{ ...body, color: T.ashFaint }}>This event is no longer listed on Atlas.</p>
+        )}
+
+        {(event._atlas || event.ticketUrl || event.opordUrl) && (
           <div className="flex gap-2 mt-2">
-            {event.ticketUrl && (
+            {event._atlas && (
+              <button onClick={() => onOpenEvent(event._atlas)} className="px-3 py-1.5 text-[11px] font-semibold" style={{ ...body, background: T.cta, color: T.inverse, borderRadius: T.rPill }}>
+                View in Atlas
+              </button>
+            )}
+            {!event._atlas && event.ticketUrl && (
               <a href={event.ticketUrl} target="_blank" rel="noreferrer noopener" className="px-3 py-1.5 text-[11px] font-semibold" style={linkStyle}>Tickets</a>
             )}
             {event.opordUrl && (
@@ -3772,10 +3861,31 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
   );
 }
 
-function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields, highlightEventId }) {
+function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields, atlasEvents, onOpenEvent, highlightEventId }) {
   const { T, body } = useTheme();
-  const { events } = useTeamEvents(team.id);
+  const { events: rawEvents } = useTeamEvents(team.id);
   const { createTeamEvent, updateTeamEvent, deleteTeamEvent } = useTeamActions();
+  // A team event linked to a live Atlas event shows that event's current
+  // details (so a reschedule or price change follows automatically); the
+  // stored copy is only the fallback if it's canceled or removed. Resolved
+  // here, before sorting and the past/upcoming split, so the live date wins.
+  const events = rawEvents.map((e) => {
+    if (!e.atlasEventId) return e;
+    const live = (atlasEvents || []).find((a) => a.id === e.atlasEventId);
+    if (!live || live.canceled) return { ...e, _atlasMissing: true };
+    return {
+      ...e,
+      _atlas: live,
+      title: live.title,
+      date: live.date,
+      endDate: live.endDate || null,
+      startTime: live.startTime || null,
+      endTime: live.endTime || null,
+      fieldId: live.fieldId || null,
+      fieldName: live.fieldName || null,
+      bannerUrl: live.imageUrl || null,
+    };
+  });
   const [formOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -3822,7 +3932,7 @@ function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields,
   };
 
   const card = (e, isPastCard) => (
-    <TeamEventCard key={e.id} team={team} event={e} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer}
+    <TeamEventCard key={e.id} team={team} event={e} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer} onOpenEvent={onOpenEvent}
       highlighted={e.id === highlightEventId} past={isPastCard} onEdit={(ev) => { setEditingEvent(ev); setFormOpen(true); }} onDelete={handleDelete} />
   );
 
@@ -3836,7 +3946,7 @@ function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields,
         </button>
       )}
       {formOpen && (
-        <TeamEventForm key={editingEvent?.id || "new"} team={team} fields={fields} initial={editingEvent}
+        <TeamEventForm key={editingEvent?.id || "new"} team={team} fields={fields} atlasEvents={atlasEvents} initial={editingEvent}
           onCancel={closeForm} onSave={handleSave} saving={saving} error={formError} />
       )}
       {!formOpen && formError && <p className="text-[12px] mb-2" style={{ ...body, color: T.alert }}>{formError}</p>}
@@ -4222,7 +4332,7 @@ function TeamLinksSection({ team, isOfficer }) {
 
 function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, myJoinRequest, joinRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
-  requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, highlightEventId }) {
+  requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, atlasEvents, onOpenEvent, highlightEventId }) {
   const { T, display, body, mono } = useTheme();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -4615,7 +4725,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           </div>
         )}
 
-        <TeamCalendarSection team={team} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer} fields={fields} highlightEventId={highlightEventId} />
+        <TeamCalendarSection team={team} user={user} profile={profile} isMember={isMember} isOfficer={isOfficer} fields={fields} atlasEvents={atlasEvents} onOpenEvent={onOpenEvent} highlightEventId={highlightEventId} />
 
         {isOfficer && officerRequests.length > 0 && (
           <>
@@ -7212,6 +7322,8 @@ function AppShell() {
         requestToJoin={requestToJoin}
         deleteJoinRequest={deleteJoinRequest}
         approveJoinRequest={approveJoinRequest}
+        atlasEvents={events}
+        onOpenEvent={openEvent}
         highlightEventId={eventDeepLinkId}
       />
     );
