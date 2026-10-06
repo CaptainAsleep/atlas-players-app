@@ -4,7 +4,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -30,16 +30,27 @@ const ATLAS_EMAIL_FROM = "Michael @ Atlas <welcome@airsoftatlas.app>";
 // the welcome emails in a player's inbox.
 const BOOKING_EMAIL_FROM = "Michael @ Atlas <bookingconfirmation@airsoftatlas.app>";
 
+// Team-officer emails send from their own address (teams@, already covered
+// by the verified airsoftatlas.app domain — no new Resend/DNS setup).
+const TEAM_EMAIL_FROM = "Atlas Teams <teams@airsoftatlas.app>";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatesDir = path.join(__dirname, "templates");
 const signupWelcomeTemplate = readFileSync(path.join(templatesDir, "signup-welcome.html"), "utf-8");
 const verifyEmailSectionTemplate = readFileSync(path.join(templatesDir, "verify-email-section.html"), "utf-8");
 const bookingConfirmationFirstTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-first.html"), "utf-8");
 const bookingConfirmationRepeatTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-repeat.html"), "utf-8");
+const teamOfficerWelcomeTemplate = readFileSync(path.join(templatesDir, "team-officer-welcome.html"), "utf-8");
 
 // Plain [token] -> value substitution, same style already proven in
 // atlas-email-sender/send.mjs (html.split(token).join(value)) — no
 // templating library needed for this.
+// Team names and callsigns are user-typed, so anything that lands in an
+// HTML email gets escaped first.
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
 function fillTemplate(html, replacements) {
   let out = html;
   for (const [token, value] of Object.entries(replacements)) {
@@ -1649,6 +1660,90 @@ export const sendFieldOwnerWelcomeEmail = onDocumentUpdated(
       }
     } catch (err) {
       console.error(`sendFieldOwnerWelcomeEmail: failed for field ${fieldId}:`, err);
+    }
+  }
+);
+
+// ── Team officer welcome email ──────────────────────────────────────────
+// Fires when a member doc under a team becomes role "officer" — one trigger
+// covers both paths that do that: the founder (createTeam writes the
+// creator's member doc as officer) and a promotion (an officer approving a
+// request, or setMemberRole). Nothing in the team write paths is touched.
+// Sent once per person per team: a server-only emailSends doc is created
+// atomically (create() fails if it already exists), so a redelivered
+// trigger or a demote-then-repromote can never send a second copy. Players
+// can't read or write emailSends (no rule matches, so it's default-deny).
+// Kill switch: set config/emailAutomation.teamOfficerWelcome = false.
+export const sendTeamOfficerWelcomeEmail = onDocumentWritten(
+  { document: "teams/{teamId}/members/{uid}", secrets: [resendApiKey] },
+  async (event) => {
+    const { teamId, uid } = event.params;
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    if (!after || after.role !== "officer" || before?.role === "officer") return;
+
+    const db = getFirestore();
+
+    const cfg = await db.collection("config").doc("emailAutomation").get();
+    if (cfg.exists && cfg.data()?.teamOfficerWelcome === false) {
+      console.log(`sendTeamOfficerWelcomeEmail: disabled by config, skipping ${teamId}/${uid}.`);
+      return;
+    }
+
+    // Mark as sent before attempting the send — a failure costs one missed
+    // email, never a repeat one (same reasoning as the other welcome emails).
+    try {
+      await db.collection("emailSends").doc(`teamOfficerWelcome_${teamId}_${uid}`).create({
+        type: "teamOfficerWelcome",
+        teamId,
+        uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      if (err?.code === 6) return; // ALREADY_EXISTS — this officer was already emailed
+      console.error(`sendTeamOfficerWelcomeEmail: couldn't record send for ${teamId}/${uid}:`, err);
+      return;
+    }
+
+    const [userSnap, teamSnap] = await Promise.all([
+      db.collection("users").doc(uid).get(),
+      db.collection("teams").doc(teamId).get(),
+    ]);
+    const toEmail = userSnap.data()?.email;
+    if (!toEmail) {
+      console.warn(`sendTeamOfficerWelcomeEmail: skipping ${teamId}/${uid} — no email on file.`);
+      return;
+    }
+
+    const team = teamSnap.data() || {};
+    const teamName = team.name || "your team";
+    const callsign = after.callsign || userSnap.data()?.callsign || "Operator";
+    const isFounder = team.createdBy === uid;
+    const safeTeam = escapeHtml(teamName);
+
+    const html = fillTemplate(teamOfficerWelcomeTemplate, {
+      "[CALLSIGN]": escapeHtml(callsign),
+      "[HEADLINE]": isFounder ? `${safeTeam} is yours to run.` : `You&rsquo;re an officer of ${safeTeam}.`,
+      "[INTRO LINE]": isFounder
+        ? `You just set up <b>${safeTeam}</b> on Atlas. As an officer, you run it &mdash; here&rsquo;s everything you can set up on your team page, so you can get it working the way your team actually operates.`
+        : `You&rsquo;ve been made an officer of <b>${safeTeam}</b> on Atlas, which means you can help run it. Here&rsquo;s everything officers can set up on the team page.`,
+    });
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: TEAM_EMAIL_FROM,
+        to: toEmail,
+        subject: isFounder
+          ? `${teamName} is yours to run — here's what you can set up`
+          : `You're an officer of ${teamName} — here's what you can set up`,
+        html,
+      });
+      if (error) {
+        console.error(`sendTeamOfficerWelcomeEmail: Resend error for ${teamId}/${uid}:`, error);
+      }
+    } catch (err) {
+      console.error(`sendTeamOfficerWelcomeEmail: failed for ${teamId}/${uid}:`, err);
     }
   }
 );

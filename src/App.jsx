@@ -688,7 +688,7 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
 // section independently uses real field-owner data when present (field.amenities/
 // rules/chrono) and only falls back to demo placeholder content — with an
 // explicit "DEMO DATA" tag — where a field hasn't provided that section yet.
-function FieldFacts({ field }) {
+function FieldFacts({ field, rentalPick }) {
   const { T, display, body, mono } = useTheme();
   const hasRealAmenities = Array.isArray(field?.amenities) && field.amenities.length > 0;
   const hasRealRules = Array.isArray(field?.rules) && field.rules.length > 0;
@@ -780,28 +780,69 @@ function FieldFacts({ field }) {
         </div>
       </div>
 
-      {Array.isArray(field?.rentals) && field.rentals.length > 0 && (
-        <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-          <Eyebrow>Rental Gear</Eyebrow>
-          <div className="flex flex-col gap-3 mt-2">
-            {field.rentals.map((r) => (
-              <div key={r.name} className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.name}</div>
-                  <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{r.includes}</div>
-                  {r.availability && (
-                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{r.availability}</div>
-                  )}
-                </div>
-                <div className="text-[13px] font-semibold flex-shrink-0" style={{ ...mono, color: T.accent }}>{r.price}</div>
-              </div>
-            ))}
+      {Array.isArray(field?.rentals) && field.rentals.length > 0 && (() => {
+        const pickable = new Set((rentalPick?.options || []).map((o) => o.id));
+        const canPick = pickable.size > 0;
+        return (
+          <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            <Eyebrow>{canPick ? "Rental Gear (optional)" : "Rental Gear"}</Eyebrow>
+            {canPick && (
+              <p className="text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
+                Tap any item to add it to your reservation.
+              </p>
+            )}
+            <div className="flex flex-col gap-3 mt-2">
+              {field.rentals.map((r) => {
+                const selectable = !!r.id && pickable.has(r.id);
+                const picked = selectable && rentalPick.selectedIds.includes(r.id);
+                const info = (
+                  <>
+                    <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.name}</div>
+                    <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{r.includes}</div>
+                    {r.availability && (
+                      <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{r.availability}</div>
+                    )}
+                  </>
+                );
+                const price = (
+                  <div className="text-[13px] font-semibold flex-shrink-0" style={{ ...mono, color: T.accent }}>{r.price}</div>
+                );
+                if (!selectable) {
+                  return (
+                    <div key={r.id || r.name} className="flex items-start justify-between gap-3">
+                      <div>{info}</div>
+                      {price}
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => rentalPick.onToggle(r.id)}
+                    className="flex items-start gap-3 p-3 text-left w-full"
+                    style={{ background: picked ? T.tintGood : T.panelAlt, borderRadius: T.rCard, outline: picked ? `1.5px solid ${T.good}` : "none", outlineOffset: -1 }}
+                  >
+                    <div className="w-5 h-5 mt-0.5 flex-shrink-0 flex items-center justify-center" style={{ borderRadius: 5, border: `1.5px solid ${picked ? T.good : T.line}`, background: picked ? T.good : "transparent" }}>
+                      {picked && <Check size={13} color={T.inverse} strokeWidth={3} />}
+                    </div>
+                    <div className="flex-1">{info}</div>
+                    {price}
+                  </button>
+                );
+              })}
+            </div>
+            {canPick ? (
+              <p className="text-[11px] mt-3" style={{ ...body, color: T.ashFaint }}>
+                Selected rentals are added to your total and paid together with your ticket at checkout.
+              </p>
+            ) : !rentalPick ? (
+              <p className="text-[11px] mt-3" style={{ ...body, color: T.ashFaint }}>
+                You can add rentals when you reserve a spot at one of this field's events.
+              </p>
+            ) : null}
           </div>
-          <p className="text-[11px] mt-3" style={{ ...body, color: T.ashFaint }}>
-            Selecting and paying for rentals happens during checkout.
-          </p>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }
@@ -2076,28 +2117,6 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </div>
           )}
 
-          {rentalOptions.length > 0 && !myBooking && !isPast && !ev.canceled && !usingVoucher && (
-            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-              <Eyebrow>Rental Gear (optional)</Eyebrow>
-              <div className="flex flex-wrap gap-2">
-                {rentalOptions.map((r) => {
-                  const picked = selectedRentalIds.includes(r.id);
-                  const priceLabel = r.priceCents % 100 === 0 ? `$${r.priceCents / 100}` : `$${(r.priceCents / 100).toFixed(2)}`;
-                  return (
-                    <button
-                      key={r.id}
-                      onClick={() => toggleRental(r.id)}
-                      className="px-3 py-2 text-[12px] font-semibold"
-                      style={{ ...body, color: picked ? T.inverse : T.ashDim, background: picked ? T.cta : T.panelAlt, borderRadius: 999 }}
-                    >
-                      {r.name} — {priceLabel}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {bestFieldVoucher && !myBooking && !isPast && !ev.canceled && (
             voucherCoversCost ? (
               // A toggle, not a second action button — applying the
@@ -2179,7 +2198,14 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
           {/* DEMO/PLACEHOLDER DATA — not scraped or owner-provided yet.
               Kept here for showcase purposes per explicit request; swap for
               real field-owner-entered data once that flow exists. */}
-          <FieldFacts field={field} />
+          <FieldFacts
+            field={field}
+            rentalPick={{
+              options: rentalOptions.length > 0 && !myBooking && !isPast && !ev.canceled && !usingVoucher ? rentalOptions : [],
+              selectedIds: selectedRentalIds,
+              onToggle: toggleRental,
+            }}
+          />
 
           {ev.sourceUrl && (
             <a
