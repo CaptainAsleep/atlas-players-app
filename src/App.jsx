@@ -3475,6 +3475,11 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
   const [localError, setLocalError] = useState("");
 
   const inputStyle = { ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+  // iOS Safari gives native date/time inputs an intrinsic width wider than a
+  // flex child, so they spill out of their container. Strip the native
+  // appearance, let them shrink (minWidth 0), and keep a fixed height since
+  // an unstyled empty date input otherwise collapses on iOS.
+  const dateTimeStyle = { ...inputStyle, display: "block", minWidth: 0, width: "100%", maxWidth: "100%", boxSizing: "border-box", WebkitAppearance: "none", appearance: "none", minHeight: 38, textAlign: "left" };
 
   const handleBannerSelected = async (e) => {
     const file = e.target.files?.[0];
@@ -3552,23 +3557,23 @@ function TeamEventForm({ team, fields, initial, onCancel, onSave, saving, error 
         className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
 
       <div className="flex gap-2">
-        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+        <label className="flex-1 min-w-0 text-[10px]" style={{ ...body, color: T.ashFaint }}>
           Start date
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={dateTimeStyle} />
         </label>
-        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+        <label className="flex-1 min-w-0 text-[10px]" style={{ ...body, color: T.ashFaint }}>
           End date (optional)
-          <input type="date" value={endDate} min={date || undefined} onChange={(e) => setEndDate(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+          <input type="date" value={endDate} min={date || undefined} onChange={(e) => setEndDate(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={dateTimeStyle} />
         </label>
       </div>
       <div className="flex gap-2">
-        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+        <label className="flex-1 min-w-0 text-[10px]" style={{ ...body, color: T.ashFaint }}>
           Start time
-          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={dateTimeStyle} />
         </label>
-        <label className="flex-1 text-[10px]" style={{ ...body, color: T.ashFaint }}>
+        <label className="flex-1 min-w-0 text-[10px]" style={{ ...body, color: T.ashFaint }}>
           End time
-          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={inputStyle} />
+          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full mt-0.5 px-2 py-2 text-[13px] outline-none" style={dateTimeStyle} />
         </label>
       </div>
 
