@@ -29,6 +29,7 @@ const fields = [
     phone: "(616) 520-3212",
     website: "https://www.cedarairsoftfield.com",
     ownerEmailDomain: "cedarairsoftfield.com", // for owner-app claim verification — must match the claiming email's domain
+    emailClaimEnabled: true, // owner-app offers the emailed-code claim; the allowed address lives privately (see scripts/setup-email-claim.mjs), never in this file
     facebook: "https://www.facebook.com/CedarAirsoftField",
     instagram: "https://www.instagram.com/cedarairsoft/",
     youtube: "https://www.youtube.com/channel/UCL5Nqz78FYM2UR3WV9ELx0w",

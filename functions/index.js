@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Resend } from "resend";
+import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 
 initializeApp();
 
@@ -41,6 +42,7 @@ const verifyEmailSectionTemplate = readFileSync(path.join(templatesDir, "verify-
 const bookingConfirmationFirstTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-first.html"), "utf-8");
 const bookingConfirmationRepeatTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-repeat.html"), "utf-8");
 const teamOfficerWelcomeTemplate = readFileSync(path.join(templatesDir, "team-officer-welcome.html"), "utf-8");
+import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
 
 // Plain [token] -> value substitution, same style already proven in
 // atlas-email-sender/send.mjs (html.split(token).join(value)) — no
@@ -1640,6 +1642,159 @@ export const verifyWebsiteClaim = onCall(
 );
 
 // ===========================================================================
+// Email-code field claim (alternative to website verification)
+// ===========================================================================
+// For a field where Michael already knows the owner's email address but it
+// isn't on the field's own domain (e.g. a Gmail), so the instant domain
+// match can't apply. Same trust model as requestFieldClaimCode/
+// verifyWebsiteClaim above: ownership is only ever granted server-side
+// (Admin SDK) after proof — here, proof of inbox ownership via a one-time
+// code emailed to the allowlisted address. The allowlisted address and the
+// pending code live in the field's PRIVATE subcollection (the field doc
+// itself is world-readable); the field doc only carries the public flag
+// emailClaimEnabled so the owner app knows to offer this route.
+const CLAIM_EMAIL_FROM = "Atlas <hello@airsoftatlas.app>";
+const EMAIL_CLAIM_TTL_MS = 15 * 60 * 1000;
+const EMAIL_CLAIM_RESEND_COOLDOWN_MS = 60 * 1000;
+const EMAIL_CLAIM_MAX_ATTEMPTS = 5;
+
+function hashEmailClaimCode(code, fieldId, uid) {
+  return createHash("sha256").update(`${code}:${fieldId}:${uid}`).digest("hex");
+}
+
+// Step 1: send the code. Returns { eligible: false } (and sends nothing) if
+// the signed-in account's email isn't the allowlisted one, so the owner app
+// can fall back to the website-verification flow without revealing who the
+// allowlisted address is.
+export const requestFieldEmailClaim = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const callerEmail = String(request.auth.token?.email || "").trim().toLowerCase();
+    const fieldId = request.data?.fieldId;
+    if (!fieldId) {
+      throw new HttpsError("invalid-argument", "Missing fieldId.");
+    }
+
+    const db = getFirestore();
+    const fieldRef = db.collection("fields").doc(fieldId);
+    const fieldSnap = await fieldRef.get();
+    if (!fieldSnap.exists) {
+      throw new HttpsError("not-found", "Field not found.");
+    }
+    if (fieldSnap.data().ownerId) {
+      throw new HttpsError("failed-precondition", "This field has already been claimed.");
+    }
+
+    const allowSnap = await fieldRef.collection("private").doc("emailClaim").get();
+    const allowedEmail = String(allowSnap.data()?.email || "").trim().toLowerCase();
+    if (!allowedEmail || !callerEmail || allowedEmail !== callerEmail) {
+      return { eligible: false };
+    }
+
+    const codeRef = fieldRef.collection("private").doc("emailClaimCode");
+    const existing = (await codeRef.get()).data();
+    const now = Date.now();
+    if (existing?.uid === uid && typeof existing.sentAtMs === "number" && now - existing.sentAtMs < EMAIL_CLAIM_RESEND_COOLDOWN_MS) {
+      throw new HttpsError("resource-exhausted", "A code was just sent — check your inbox, or wait a minute to request another.");
+    }
+
+    const code = String(randomInt(0, 1000000)).padStart(6, "0");
+    await codeRef.set({
+      codeHash: hashEmailClaimCode(code, fieldId, uid),
+      uid,
+      sentAtMs: now,
+      expiresAtMs: now + EMAIL_CLAIM_TTL_MS,
+      attempts: 0,
+    });
+
+    const fieldName = escapeHtml(fieldSnap.data().name || "your field");
+    const html = `<div style="font-family:Helvetica,Arial,sans-serif; max-width:480px; margin:0 auto; padding:32px 24px; color:#2A2E33;">
+  <div style="font-weight:700; font-size:13px; letter-spacing:0.04em; color:#002C48; margin-bottom:18px;">AIRSOFT ATLAS</div>
+  <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Here's your code to claim <b>${fieldName}</b> on Atlas:</p>
+  <div style="font-size:32px; font-weight:700; letter-spacing:0.28em; color:#002C48; background:#F2F2ED; border-radius:10px; padding:18px 0; text-align:center; margin:0 0 16px;">${code}</div>
+  <p style="font-size:13px; line-height:1.6; color:#686C72; margin:0;">It expires in 15 minutes. If you didn't ask for this, you can ignore this email &mdash; nothing happens without the code.</p>
+</div>`;
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: CLAIM_EMAIL_FROM,
+        to: callerEmail,
+        subject: `Your Atlas code to claim ${fieldSnap.data().name || "your field"}`,
+        html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+    } catch (err) {
+      console.error(`requestFieldEmailClaim: couldn't send code for ${fieldId}:`, err);
+      await codeRef.delete().catch(() => {});
+      throw new HttpsError("unavailable", "Couldn't send the code — try again in a moment.");
+    }
+
+    return { eligible: true, sentTo: callerEmail };
+  }
+);
+
+// Step 2: check the code and, only if it matches, hand over ownership.
+export const verifyFieldEmailClaim = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const fieldId = request.data?.fieldId;
+    const code = String(request.data?.code || "").replace(/\s+/g, "");
+    if (!fieldId || !/^\d{6}$/.test(code)) {
+      throw new HttpsError("invalid-argument", "Enter the 6-digit code from the email.");
+    }
+
+    const db = getFirestore();
+    const fieldRef = db.collection("fields").doc(fieldId);
+    const codeRef = fieldRef.collection("private").doc("emailClaimCode");
+    const ownerRef = db.collection("owners").doc(uid);
+
+    return db.runTransaction(async (t) => {
+      const [fieldSnap, codeSnap] = await Promise.all([t.get(fieldRef), t.get(codeRef)]);
+      if (!fieldSnap.exists) {
+        throw new HttpsError("not-found", "Field not found.");
+      }
+      if (fieldSnap.data().ownerId) {
+        throw new HttpsError("failed-precondition", "This field has already been claimed.");
+      }
+      const pending = codeSnap.data();
+      if (!pending || pending.uid !== uid) {
+        throw new HttpsError("failed-precondition", "Request a code for this field first.");
+      }
+      if (Date.now() > pending.expiresAtMs) {
+        t.delete(codeRef);
+        return { verified: false, reason: "expired" };
+      }
+      if ((pending.attempts || 0) >= EMAIL_CLAIM_MAX_ATTEMPTS) {
+        t.delete(codeRef);
+        return { verified: false, reason: "too-many-attempts" };
+      }
+
+      const given = Buffer.from(hashEmailClaimCode(code, fieldId, uid), "hex");
+      const stored = Buffer.from(String(pending.codeHash || ""), "hex");
+      const matches = given.length === stored.length && timingSafeEqual(given, stored);
+      if (!matches) {
+        t.update(codeRef, { attempts: (pending.attempts || 0) + 1 });
+        return { verified: false, reason: "wrong-code" };
+      }
+
+      t.update(fieldRef, { ownerId: uid, claimed: true, claimVerification: "email" });
+      t.set(ownerRef, { claimedFieldCount: FieldValue.increment(1) }, { merge: true });
+      t.delete(codeRef);
+      return { verified: true };
+    });
+  }
+);
+
+// ===========================================================================
 // Player-facing emails (signup welcome + booking confirmation)
 // ===========================================================================
 // Both functions below are pure Firestore triggers: they read data after a
@@ -1771,7 +1926,21 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
 
     let html;
     let subject;
-    if (isFirstBooking) {
+    if (isPartyBooking(booking)) {
+      // Guardian booked themselves AND child profile(s) — one email that
+      // names everyone covered. Replaces first/repeat for this booking
+      // (it carries its own "At the gate" step, so a guardian's first
+      // booking still gets onboarding). Solo bookings are untouched.
+      ({ html, subject } = renderPartyBookingEmail({
+        guardianCallsign: callsign,
+        attendees: booking.attendees,
+        fieldName,
+        eventTitle,
+        eventDateTime,
+        isPaid,
+        amountPaidCents,
+      }));
+    } else if (isFirstBooking) {
       html = fillTemplate(bookingConfirmationFirstTemplate, commonReplacements);
       subject = `You're locked in at ${fieldName}`;
     } else {
