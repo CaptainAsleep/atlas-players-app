@@ -273,6 +273,164 @@ function computeStandardFee(entryPriceCents) {
   return Math.min(Math.round(entryPriceCents * 0.035) + 130, 500);
 }
 
+// --- Child profiles / multi-attendee bookings -----------------------------
+// A booking is one guardian plus up to 4 child profiles (users/{uid}/
+// dependents). Keep these two constants in sync by hand with
+// MAX_ATTENDEES_PER_BOOKING / ADULT_AGE in the player app's
+// src/hooks/useDependents.js — functions/ and src/ share no module.
+const MAX_DEPENDENTS_PER_BOOKING = 4;
+const ADULT_AGE = 18;
+
+// Whole years old on a date, from plain YYYY-MM-DD strings (no Date
+// objects, so no timezone drift on a birthday). Mirrors ageOnDate() in
+// src/hooks/useDependents.js. null = malformed.
+function ageOnDateServer(dob, onDate) {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob || "");
+  const o = /^(\d{4})-(\d{2})-(\d{2})/.exec(onDate || "");
+  if (!d || !o) return null;
+  let age = Number(o[1]) - Number(d[1]);
+  if (Number(o[2]) < Number(d[2]) || (Number(o[2]) === Number(d[2]) && Number(o[3]) < Number(d[3]))) age -= 1;
+  return age;
+}
+
+// Fee for a booking of N tickets: every ticket carries its own
+// computeStandardFee(entry), and rentals (which grow the fee base) count
+// once, on the last ticket — so N=1 is byte-identical to the old single
+// computeStandardFee(entry + rentals). A $0 entry (free event + paid
+// rentals) adds no per-ticket fee for the extra people.
+function computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount) {
+  const perTicketFeeCents = entryPriceCents > 0 ? computeStandardFee(entryPriceCents) : 0;
+  return {
+    perTicketFeeCents,
+    bookingFeeCents: (attendeeCount - 1) * perTicketFeeCents + computeStandardFee(chargeableCents),
+  };
+}
+
+// Validates everything about who's coming, server-side, for all three
+// booking paths (paid checkout, free, voucher): each child profile is the
+// caller's own, still under 18 on the event's start date, old enough for
+// the field's minimum age, has a signed waiver doc, and the guardian has a
+// phone number on file. Returns the guardian + a snapshot of each child.
+async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds }) {
+  const ids = Array.isArray(dependentIds) ? dependentIds : [];
+  if (ids.length === 0) return { attendeeCount: 1, dependents: [] };
+  if (!ids.every((id) => typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id)) || new Set(ids).size !== ids.length) {
+    throw new HttpsError("invalid-argument", "Invalid attendee list.");
+  }
+  if (ids.length > MAX_DEPENDENTS_PER_BOOKING) {
+    throw new HttpsError("invalid-argument", `A booking can include you plus up to ${MAX_DEPENDENTS_PER_BOOKING} children.`);
+  }
+  const profile = profileData || (await db.collection("users").doc(uid).get()).data() || {};
+  if (!String(profile.phone || "").trim()) {
+    throw new HttpsError("failed-precondition", "Add your phone number in My Account before booking with a child — the field needs a way to reach you.");
+  }
+  const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
+  const depRefs = ids.map((id) => db.collection("users").doc(uid).collection("dependents").doc(id));
+  const sigRefs = ids.map((id) => db.collection("waiverSignatures").doc(`${uid}_${eventId}_${id}`));
+  const [depSnaps, sigSnaps] = await Promise.all([
+    Promise.all(depRefs.map((r) => r.get())),
+    eventData.waiver ? Promise.all(sigRefs.map((r) => r.get())) : Promise.resolve(null),
+  ]);
+  const dependents = depSnaps.map((snap, i) => {
+    if (!snap.exists) {
+      throw new HttpsError("invalid-argument", "One of the selected child profiles no longer exists.");
+    }
+    const d = snap.data();
+    const age = ageOnDateServer(d.dob, eventData.date);
+    if (age === null) {
+      throw new HttpsError("failed-precondition", `${d.callsign || "A child"}'s birthdate is missing or invalid.`);
+    }
+    if (age >= ADULT_AGE) {
+      throw new HttpsError("failed-precondition", `${d.callsign || "A child"} turns 18 by this event and needs their own account.`);
+    }
+    if (minAge && age < minAge) {
+      throw new HttpsError("failed-precondition", `${d.callsign || "A child"} is under this field's minimum age of ${minAge}.`);
+    }
+    let sig = null;
+    if (sigSnaps) {
+      if (!sigSnaps[i].exists) {
+        throw new HttpsError("failed-precondition", "Waiver must be signed for every attendee before booking.");
+      }
+      sig = sigSnaps[i].data();
+    }
+    return {
+      id: ids[i],
+      fullName: d.fullName,
+      callsign: d.callsign,
+      dob: d.dob,
+      avatar: d.avatar || null,
+      waiverSignatureId: sig ? sigSnaps[i].id : null,
+      waiverVersion: sig?.waiverVersion || null,
+      guardianNoticeVersion: sig?.guardianNoticeVersion || null,
+    };
+  });
+  return { attendeeCount: 1 + dependents.length, dependents };
+}
+
+// Same snapshot shape, for the webhook — payment has already happened by
+// then, so this is deliberately tolerant: a profile deleted between
+// checkout and payment degrades to the name recorded on the waiver doc
+// instead of failing a booking someone already paid for.
+async function snapshotDependentsForWebhook(db, uid, eventId, ids) {
+  return Promise.all(ids.map(async (id) => {
+    const [depSnap, sigSnap] = await Promise.all([
+      db.collection("users").doc(uid).collection("dependents").doc(id).get(),
+      db.collection("waiverSignatures").doc(`${uid}_${eventId}_${id}`).get(),
+    ]);
+    const d = depSnap.data() || {};
+    const sig = sigSnap.data() || {};
+    return {
+      id,
+      fullName: d.fullName || sig.dependentName || "Child",
+      callsign: d.callsign || "Child",
+      dob: d.dob || null,
+      avatar: d.avatar || null,
+      waiverSignatureId: sigSnap.exists ? sigSnap.id : null,
+      waiverVersion: sig.waiverVersion || null,
+      guardianNoticeVersion: sig.guardianNoticeVersion || null,
+    };
+  }));
+}
+
+// Non-PII only — the event-scoped booking doc is publicly readable, so it
+// carries just a count and callsigns. Nothing for a solo booking, so
+// existing bookings and single-player bookings look exactly as before
+// (a missing attendeeCount always means 1).
+function attendeePublicFields(profileData, dependents) {
+  if (!dependents.length) return {};
+  return {
+    attendeeCount: 1 + dependents.length,
+    attendees: [
+      { kind: "adult", callsign: profileData.callsign || "Player" },
+      ...dependents.map((d) => ({ kind: "minor", callsign: d.callsign || "Child" })),
+    ],
+  };
+}
+
+// The real snapshots (legal name, DOB, guardian contact, waiver ref) live
+// in a private subcollection — readable only by the guardian and the field
+// owner (firestore.rules), never on the public booking doc.
+function writeAttendeeDetails(t, bookingRef, uid, profileData, dependents) {
+  const guardianName = [profileData.firstName, profileData.lastName].filter(Boolean).join(" ") || profileData.callsign || "Guardian";
+  for (const d of dependents) {
+    t.set(bookingRef.collection("attendeeDetails").doc(d.id), {
+      kind: "minor",
+      dependentId: d.id,
+      fullName: d.fullName,
+      callsign: d.callsign,
+      dob: d.dob,
+      avatar: d.avatar,
+      guardianUid: uid,
+      guardianName,
+      guardianPhone: profileData.phone || null,
+      waiverSignatureId: d.waiverSignatureId,
+      waiverVersion: d.waiverVersion,
+      guardianNoticeVersion: d.guardianNoticeVersion,
+      createdAt: new Date(),
+    });
+  }
+}
+
 // The posted ticket price a cancellation voucher should be worth — never
 // the platform fee, never a rental's cost, never dependent on which fee
 // model the field happened to be on. A booking made after this shipped
@@ -283,7 +441,9 @@ function computeStandardFee(entryPriceCents) {
 // it, and always back out any rentals too, since amountPaidCents has
 // always included those regardless of fee model.
 function resolveVoucherAmountCents(booking, passFeeToPlayer) {
-  if (typeof booking.entryPriceCents === "number") return booking.entryPriceCents;
+  // x attendeeCount: a party's voucher is worth every ticket they paid for
+  // (missing attendeeCount = a solo booking = 1).
+  if (typeof booking.entryPriceCents === "number") return booking.entryPriceCents * Math.max(1, booking.attendeeCount || 1);
   const feeCents = typeof booking.bookingFeeCents === "number" ? booking.bookingFeeCents : 0;
   const rentalsCents = (booking.selectedRentals || []).reduce(
     (sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents : 0), 0
@@ -373,14 +533,9 @@ export const createBookingCheckout = onCall(
       }
     }
 
-    // Capacity check at checkout-creation time. Not a perfect guarantee
-    // against two people finishing checkout at nearly the same instant —
-    // the webhook below has the real, authoritative check that actually
-    // creates the booking — but this stops the overwhelming majority of
-    // oversells before someone even starts paying.
-    if (typeof eventData.maxCapacity === "number" && (eventData.bookedCount || 0) >= eventData.maxCapacity) {
-      throw new HttpsError("failed-precondition", "This event is full.");
-    }
+    // No capacity check here on purpose: the cap is soft. Payment is always
+    // accepted; the event page shows a "capacity reached" banner and the
+    // owner is emailed when bookings pass their cap (notifyOwnerOverCapacity).
 
     const existingBooking = await existingBookingPromise; // usually already resolved by now
     if (existingBooking.exists) {
@@ -398,6 +553,8 @@ export const createBookingCheckout = onCall(
       throw new HttpsError("failed-precondition", "This field hasn't finished payment setup yet.");
     }
 
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, dependentIds: request.data?.attendeeDependentIds });
+    const attendeeCount = attendees.attendeeCount;
     const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
     const { rentalsCents, selectedRentalDetails } = resolveRentalsTotal(fieldData, request.data?.selectedRentalIds);
     // Combined, not entry-only — this is what lets a free event become a
@@ -425,7 +582,9 @@ export const createBookingCheckout = onCall(
     // (should be impossible to reach here without one, since the owner
     // app gates further access on picking a fee model, but this keeps
     // the math sane rather than throwing if that ever changes).
-    const bookingFeeCents = computeStandardFee(chargeableCents);
+    // Total fee across all N tickets (see computeBookingFeeCents) — this is
+    // also exactly what goes on application_fee_amount below.
+    const { perTicketFeeCents, bookingFeeCents } = computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount);
     const passFeeToPlayer = ownerData.feeModel !== "absorb";
     // Only the entry line item's own price carries the fee (exactly as
     // before) — a rental's cost is a real, hard cost, never something an
@@ -434,7 +593,20 @@ export const createBookingCheckout = onCall(
     // price; the session's total (and therefore amountPaidCents on the
     // eventual booking) ends up as entry + rentals + fee (if passed to
     // the player) automatically, with no separate total to keep in sync.
-    const entryLineItemCents = passFeeToPlayer ? entryPriceCents + bookingFeeCents : entryPriceCents;
+    // The last (or only) ticket carries the rentals' share of the fee, so a
+    // solo booking's line is identical to before. For N > 1, the other N-1
+    // tickets go on one extra line at entry + their own per-ticket fee.
+    const entryLineItemCents = passFeeToPlayer ? entryPriceCents + computeStandardFee(chargeableCents) : entryPriceCents;
+    const ticketProductData = {
+      name: eventData.title,
+      description: selectedChoice
+        ? `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name} — ${selectedChoice.label}`
+        : `Entry to ${eventData.title} at ${eventData.fieldName || fieldData.name}`,
+    };
+    const extraTicketUnitCents = passFeeToPlayer ? entryPriceCents + perTicketFeeCents : entryPriceCents;
+    const extraTicketLineItems = attendeeCount > 1 && extraTicketUnitCents > 0
+      ? [{ price_data: { currency: "usd", product_data: ticketProductData, unit_amount: extraTicketUnitCents }, quantity: attendeeCount - 1 }]
+      : [];
 
     // A deterministic key, not a random one — the whole point is that a
     // second call for the same player + event (impatient re-tap after the
@@ -450,6 +622,7 @@ export const createBookingCheckout = onCall(
       mode: "payment",
       customer_email: request.auth.token?.email,
       line_items: [
+        ...extraTicketLineItems,
         {
           price_data: {
             currency: "usd",
@@ -484,6 +657,12 @@ export const createBookingCheckout = onCall(
         eventId,
         fieldId: eventData.fieldId,
         bookingFeeCents: String(bookingFeeCents),
+        // Lets the webhook recompute the expected total and refuse to book
+        // on a mismatch. attendeeCount / attendeeDependentIds appear only
+        // for a party (ids only — Stripe caps metadata values at 500
+        // chars; the webhook re-reads each profile itself).
+        passFeeToPlayer: passFeeToPlayer ? "true" : "false",
+        ...(attendeeCount > 1 ? { attendeeCount: String(attendeeCount), attendeeDependentIds: JSON.stringify(attendees.dependents.map((d) => d.id)) } : {}),
         // The real, resolved ticket price (base + whichever Price Option
         // was picked) — deliberately excludes rentals and the platform
         // fee, same as resolveEntryPrice returns it. Read back by the
@@ -602,6 +781,8 @@ export const bookFreeEvent = onCall(
     const profileSnap = await db.collection("users").doc(uid).get();
     const profileData = profileSnap.data() || {};
     const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {};
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds });
+    const attendeeCount = attendees.attendeeCount;
 
     // Walk-On Survivor: earned by creating an account and completing a
     // first-ever booking while physically at the field — the "extra
@@ -631,10 +812,9 @@ export const bookFreeEvent = onCall(
       if (existingBooking.exists) {
         throw new HttpsError("already-exists", "Already booked for this event.");
       }
+      // Soft cap: no capacity check, bookings past maxCapacity are accepted
+      // and the owner is emailed (notifyOwnerOverCapacity).
       const freshEventData = freshEventSnap.data();
-      if (typeof freshEventData.maxCapacity === "number" && (freshEventData.bookedCount || 0) >= freshEventData.maxCapacity) {
-        throw new HttpsError("failed-precondition", "This event is full.");
-      }
       // Re-confirmed inside the transaction rather than trusted from a
       // check earlier in the function — this is what actually stops two
       // simultaneous first bookings (two tabs, say) from both counting as
@@ -651,7 +831,9 @@ export const bookFreeEvent = onCall(
         bookedAt: now,
         ...choiceFields,
         ...walkOnFields,
+        ...attendeePublicFields(profileData, attendees.dependents),
       });
+      writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents);
       t.set(userBookingRef, {
         eventId,
         fieldId: eventData.fieldId,
@@ -662,8 +844,9 @@ export const bookFreeEvent = onCall(
         bookedAt: now,
         ...choiceFields,
         ...walkOnFields,
+        ...attendeePublicFields(profileData, attendees.dependents),
       });
-      t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + 1 });
+      t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + attendeeCount });
     });
 
     return { booked: true };
@@ -872,6 +1055,9 @@ export const grantVoucherToPlayer = onCall(
     const noticeRef = db.collection("users").doc(playerUid).collection("cancellationNotices").doc();
 
     let voucherAmountCents = 0;
+    // Private child snapshots go with the booking (a subcollection isn't
+    // deleted along with its parent doc).
+    const detailsSnap = await bookingRef.collection("attendeeDetails").get();
 
     await db.runTransaction(async (t) => {
       const [bookingSnap, freshEventSnap] = await Promise.all([t.get(bookingRef), t.get(eventRef)]);
@@ -899,7 +1085,8 @@ export const grantVoucherToPlayer = onCall(
       // SDK since an owner can't write to another player's own data.
       t.delete(bookingRef);
       t.delete(userBookingRef);
-      t.update(eventRef, { bookedCount: Math.max(0, (freshEventData.bookedCount || 0) - 1) });
+      detailsSnap.docs.forEach((d) => t.delete(d.ref));
+      t.update(eventRef, { bookedCount: Math.max(0, (freshEventData.bookedCount || 0) - (b.attendeeCount || 1)) });
 
       t.set(voucherRef, {
         fieldId: eventData.fieldId,
@@ -984,10 +1171,6 @@ export const bookEventWithVoucher = onCall(
       }
     }
 
-    if (typeof eventData.maxCapacity === "number" && (eventData.bookedCount || 0) >= eventData.maxCapacity) {
-      throw new HttpsError("failed-precondition", "This event is full.");
-    }
-
     const existingBooking = await bookingRef.get();
     if (existingBooking.exists) {
       throw new HttpsError("already-exists", "Already booked for this event.");
@@ -1011,6 +1194,13 @@ export const bookEventWithVoucher = onCall(
     const profileSnap = await db.collection("users").doc(uid).get();
     const profileData = profileSnap.data() || {};
     const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: selectedChoice.priceCents } : {};
+    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData: fieldSnap.data() || {}, profileData, dependentIds: request.data?.attendeeDependentIds });
+    const attendeeCount = attendees.attendeeCount;
+    // Full-cover only, now for the whole party: the voucher has to cover
+    // every attendee's ticket (a voucher from an N-person booking is worth
+    // N tickets — see resolveVoucherAmountCents).
+    const neededCents = entryPriceCents * attendeeCount;
 
     await db.runTransaction(async (t) => {
       const [voucherSnap, freshEventSnap, freshBookingSnap] = await Promise.all([
@@ -1041,18 +1231,15 @@ export const bookEventWithVoucher = onCall(
       if (freshEventData.canceled) {
         throw new HttpsError("failed-precondition", "This event has been canceled.");
       }
-      if (typeof freshEventData.maxCapacity === "number" && (freshEventData.bookedCount || 0) >= freshEventData.maxCapacity) {
-        throw new HttpsError("failed-precondition", "This event is full.");
-      }
-      if (voucher.amountCents < entryPriceCents) {
+      if (voucher.amountCents < neededCents) {
         throw new HttpsError(
           "failed-precondition",
-          `This voucher ($${(voucher.amountCents / 100).toFixed(2)}) doesn't cover this event's ticket price ($${(entryPriceCents / 100).toFixed(2)}) — book with a card instead.`
+          `This voucher ($${(voucher.amountCents / 100).toFixed(2)}) doesn't cover ${attendeeCount > 1 ? `${attendeeCount} tickets` : "this event's ticket price"} ($${(neededCents / 100).toFixed(2)}) — book with a card instead.`
         );
       }
 
       const now = new Date();
-      const remainingCents = voucher.amountCents - entryPriceCents;
+      const remainingCents = voucher.amountCents - neededCents;
       t.set(bookingRef, {
         uid,
         fieldId: eventData.fieldId,
@@ -1063,9 +1250,11 @@ export const bookEventWithVoucher = onCall(
         paid: true,
         paidByVoucher: true,
         voucherRedeemedId: voucherId,
-        voucherAppliedCents: entryPriceCents,
+        voucherAppliedCents: neededCents,
         ...choiceFields,
+        ...attendeePublicFields(profileData, attendees.dependents),
       });
+      writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents);
       t.set(userBookingRef, {
         eventId,
         fieldId: eventData.fieldId,
@@ -1078,8 +1267,9 @@ export const bookEventWithVoucher = onCall(
         paidByVoucher: true,
         voucherRedeemedId: voucherId,
         selectedChoiceLabel: selectedChoice?.label || null,
+        ...attendeePublicFields(profileData, attendees.dependents),
       });
-      t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + 1 });
+      t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + attendeeCount });
       t.update(voucherRef, {
         amountCents: remainingCents,
         status: remainingCents > 0 ? "active" : "redeemed",
@@ -1137,7 +1327,7 @@ export const stripeWebhook = onRequest(
           const session = event.data.object;
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta } = session.metadata;
             // Written by createBookingCheckout as a JSON string (Stripe
             // metadata values are strings only) — parsed back out here the
             // same defensive way selectedChoiceLabel/Cents are trusted:
@@ -1153,6 +1343,36 @@ export const stripeWebhook = onRequest(
                 parsedRentals = [];
               }
             }
+            // Party bookings: ids only came through metadata (written by
+            // createBookingCheckout off ids it had already validated). A
+            // solo booking has none, so attendeeCount stays 1.
+            let dependentIds = [];
+            if (attendeeIdsMeta) {
+              try {
+                const parsed = JSON.parse(attendeeIdsMeta);
+                if (Array.isArray(parsed)) dependentIds = parsed.filter((x) => typeof x === "string");
+              } catch {
+                dependentIds = [];
+              }
+            }
+            const bookedAttendeeCount = 1 + dependentIds.length;
+            // Payment data is untrusted until proven consistent: recompute
+            // what this session SHOULD have charged from the tickets,
+            // rentals and fee model recorded in its own metadata, and refuse
+            // to create the booking if Stripe's amount_total disagrees. Only
+            // sessions created after this shipped carry passFeeToPlayer, so
+            // any in-flight older session skips the check.
+            if (passFeeMeta != null) {
+              const expectedTotal =
+                bookedAttendeeCount * Number(entryPriceCents || 0) +
+                parsedRentals.reduce((sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents : 0), 0) +
+                (passFeeMeta === "true" ? Number(bookingFeeCents || 0) : 0);
+              if (expectedTotal !== session.amount_total) {
+                console.error(`stripeWebhook: amount mismatch for session ${session.id} (uid ${uid}, event ${eventId}) — expected ${expectedTotal}, Stripe charged ${session.amount_total}. NO booking created; needs manual review.`);
+                break;
+              }
+            }
+            const dependentSnapshots = dependentIds.length ? await snapshotDependentsForWebhook(db, uid, eventId, dependentIds) : [];
             const eventRef = db.collection("events").doc(eventId);
             const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
             const bookingRef = eventRef.collection("bookings").doc(uid);
@@ -1223,7 +1443,9 @@ export const stripeWebhook = onRequest(
                 // field is needed for the money side of this.
                 selectedRentals: parsedRentals,
                 ...walkOnFields,
+                ...attendeePublicFields(profileData, dependentSnapshots),
               });
+              writeAttendeeDetails(t, bookingRef, uid, profileData, dependentSnapshots);
               t.set(userBookingRef, {
                 eventId,
                 fieldId,
@@ -1235,8 +1457,9 @@ export const stripeWebhook = onRequest(
                 paid: true,
                 selectedChoiceLabel: selectedChoiceLabel || null,
                 ...walkOnFields,
+                ...attendeePublicFields(profileData, dependentSnapshots),
               });
-              t.update(eventRef, { bookedCount: (eventData?.bookedCount || 0) + 1 });
+              t.update(eventRef, { bookedCount: (eventData?.bookedCount || 0) + bookedAttendeeCount });
             });
           }
           break;
@@ -1744,6 +1967,57 @@ export const sendTeamOfficerWelcomeEmail = onDocumentWritten(
       }
     } catch (err) {
       console.error(`sendTeamOfficerWelcomeEmail: failed for ${teamId}/${uid}:`, err);
+    }
+  }
+);
+
+// ===========================================================================
+// Over-capacity heads-up for field owners
+// ===========================================================================
+// maxCapacity is a soft cap: bookings past it are always accepted. This
+// emails the owner each time a booking pushes the count further past a cap
+// they set, so they can decide what to do. Triggered off the event doc's
+// bookedCount (not the booking paths) so paid, free and voucher bookings
+// all notify the same way. Delivery is at-least-once, so a rare retry can
+// send the same heads-up twice. Resend email for now — there is no push
+// notification system yet.
+export const notifyOwnerOverCapacity = onDocumentUpdated(
+  { document: "events/{eventId}", secrets: [resendApiKey] },
+  async (event) => {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    const max = after.maxCapacity;
+    if (typeof max !== "number" || max <= 0) return;
+    const was = before.bookedCount || 0;
+    const now = after.bookedCount || 0;
+    if (now <= was || now <= max) return;
+
+    const db = getFirestore();
+    const fieldSnap = await db.collection("fields").doc(after.fieldId).get();
+    const ownerId = fieldSnap.data()?.ownerId;
+    if (!ownerId) return;
+    const ownerEmail = (await db.collection("owners").doc(ownerId).get()).data()?.email;
+    if (!ownerEmail) {
+      console.warn(`notifyOwnerOverCapacity: skipping event ${event.params.eventId} — owner ${ownerId} has no email on file.`);
+      return;
+    }
+
+    const over = now - max;
+    const title = after.title || "your event";
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: ATLAS_EMAIL_FROM,
+        to: ownerEmail,
+        subject: `${title}: ${now} booked, ${over} over your cap of ${max}`,
+        html: `<p>Heads up &mdash; <strong>${title}</strong> now has <strong>${now}</strong> people booked against your capacity of <strong>${max}</strong> (${over} over).</p>` +
+          `<p>Atlas keeps accepting bookings past your cap and shows players a note to contact you about additional spots. If you can't take more, reach out to the players and we can help make it right.</p>`,
+      });
+      if (error) {
+        console.error(`notifyOwnerOverCapacity: Resend error for event ${event.params.eventId}:`, error);
+      }
+    } catch (err) {
+      console.error(`notifyOwnerOverCapacity: failed for event ${event.params.eventId}:`, err);
     }
   }
 );

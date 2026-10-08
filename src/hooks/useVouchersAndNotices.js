@@ -87,9 +87,9 @@ export function useCancellationNotices(uid) {
 // credit it left them. A voucher that doesn't cover the ticket price
 // throws failed-precondition with a message safe to show as-is.
 export function useVoucherRedemption() {
-  async function redeemVoucher(eventId, voucherId, selectedChoiceId, location) {
+  async function redeemVoucher(eventId, voucherId, selectedChoiceId, location, attendeeDependentIds) {
     const call = httpsCallable(functions, "bookEventWithVoucher");
-    await call({ eventId, voucherId, selectedChoiceId: selectedChoiceId || null, location: location || null });
+    await call({ eventId, voucherId, selectedChoiceId: selectedChoiceId || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [] });
   }
   return { redeemVoucher };
 }

@@ -193,6 +193,24 @@ service cloud.firestore {
         allow update: if request.auth != null
           && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt"]);
+
+        // Private per-attendee details for a booking (legal name, DOB,
+        // guardian name/phone snapshots). The booking doc itself is
+        // publicly readable (rule above), so none of this can live on it —
+        // it lives here instead, readable only by the booking's own player
+        // (the parent) and the owner of the field the booking is for.
+        // Written only by Cloud Functions (Admin SDK bypasses rules). The
+        // parent may delete them, but only alongside a self-cancel of a
+        // free booking (same not-paid gate as deleting the booking itself).
+        match /attendeeDetails/{attId} {
+          allow read: if request.auth != null && (
+            request.auth.uid == uid
+            || get(/databases/$(database)/documents/fields/$(get(/databases/$(database)/documents/events/$(eventId)/bookings/$(uid)).data.fieldId)).data.ownerId == request.auth.uid
+          );
+          allow create, update: if false;
+          allow delete: if request.auth != null && request.auth.uid == uid
+            && get(/databases/$(database)/documents/events/$(eventId)/bookings/$(uid)).data.get('paid', false) != true;
+        }
       }
 
       // The real, per-event "who's interested" list — same pattern as
@@ -346,6 +364,34 @@ service cloud.firestore {
         );
       }
 
+      // Child profiles — NOT accounts: no auth identity, no login, just a
+      // record the parent keeps for booking a minor into an event. Parent
+      // only, nobody else ever reads this collection (field owners see a
+      // snapshot taken at booking time, under the booking's attendeeDetails,
+      // never this live profile). dob is permanent once created — an update
+      // can't change it, so a guardian can't edit a child's age to get past
+      // a field's minimum age; corrections go through support. avatar is a
+      // preset id string, never an uploaded photo.
+      match /dependents/{depId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['fullName', 'callsign', 'dob', 'avatar', 'createdAt'])
+          && request.resource.data.keys().hasAll(['fullName', 'callsign', 'dob', 'avatar', 'createdAt'])
+          && request.resource.data.fullName is string && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 80
+          && request.resource.data.callsign is string && request.resource.data.callsign.size() > 0 && request.resource.data.callsign.size() <= 40
+          && request.resource.data.dob is string && request.resource.data.dob.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 40
+          && request.resource.data.createdAt == request.time;
+        allow update: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['fullName', 'callsign', 'dob', 'avatar', 'createdAt'])
+          && request.resource.data.dob == resource.data.dob
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.fullName is string && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 80
+          && request.resource.data.callsign is string && request.resource.data.callsign.size() > 0 && request.resource.data.callsign.size() <= 40
+          && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 40;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+
       // Loosened to public read — favorited events/fields carry no PII,
       // and being viewable is the whole point once other players can look
       // at a profile (their Interested/Past events). Write stays owner-only.
@@ -470,7 +516,22 @@ service cloud.firestore {
         request.auth.uid == resource.data.uid
         || get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
       );
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      // Child waiver docs (guardian signing on behalf of a minor) reuse this
+      // exact pattern: one immutable doc per child per event, id
+      // uid_eventId_dependentId, created by the guardian in the same action
+      // as their own signature. A doc carrying a dependentId must have the
+      // matching id AND the dependent must exist under the signer's own
+      // users/{uid}/dependents — so a guardian can't sign for a child
+      // profile that isn't theirs. The booking Cloud Functions re-verify
+      // that every attendee has a signature doc before charging anything.
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
+        && (
+          !('dependentId' in request.resource.data)
+          || (
+            sigId == request.resource.data.uid + '_' + request.resource.data.eventId + '_' + request.resource.data.dependentId
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid)/dependents/$(request.resource.data.dependentId))
+          )
+        );
       allow update, delete: if false;
     }
 

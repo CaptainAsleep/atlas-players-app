@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2, Users, Shield,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy, Target, Flag, Rocket, Medal
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -21,6 +21,7 @@ import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./leg
 import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
+import { useDependents, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { FONTS } from "./theme";
@@ -1641,7 +1642,12 @@ function HomeScreen({
   );
 }
 
-function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver,
+// DRAFT wording, shown when a guardian signs for a child. Final text needs
+// Michael's sign-off (and attorney review) — bump GUARDIAN_NOTICE_VERSION in
+// hooks/useWaiverSignature.js whenever this changes.
+const GUARDIAN_NOTICE_TEXT = "By signing, I am signing this waiver on behalf of each child selected above, as their parent or legal guardian. I understand that Atlas is a booking platform and is not responsible for any liability arising from their participation.";
+
+function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver, dependents = [], signedDependentIds = [],
   myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout,
   fieldVouchers, redeemVoucher }) {
   const { T, display, body, mono, theme } = useTheme();
@@ -1653,6 +1659,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const basePriceCents = Math.round(parseFloat(String(ev.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
 
   const [showWaiver, setShowWaiver] = useState(false);
+  // Which child profiles are coming. The guardian is always an attendee, so
+  // this only tracks children; the server re-validates all of it.
+  const [selectedDependentIds, setSelectedDependentIds] = useState([]);
   // Best-effort location, used only for the Walk-On Survivor check
   // server-side — kicked off the moment this screen mounts rather than
   // when the player actually taps Book/Sign, so the up-to-4s GPS wait
@@ -1735,10 +1744,29 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // booking), so unlike the real Stripe total, "does it cover this?" is
   // exact, client-computable math — no server round-trip needed just to
   // decide whether to show the option.
+  const minAge = typeof field?.minimumAge === "number" && field.minimumAge > 0 ? field.minimumAge : null;
+  const hasGuardianPhone = !!(profile?.phone || "").trim();
+  // Why a child can't be selected for this event (null = eligible). Age is
+  // counted on the event's start date, not today.
+  const dependentBlockReason = (d) => {
+    const age = ageOnDate(d.dob, ev.date);
+    if (age === null) return "Birthdate missing";
+    if (age >= ADULT_AGE) return "Turns 18 by this event — needs their own account";
+    if (minAge && age < minAge) return `Minimum age here is ${minAge}`;
+    return null;
+  };
+  const selectedDependents = dependents.filter((d) => selectedDependentIds.includes(d.id) && !dependentBlockReason(d));
+  const attendeeCount = 1 + selectedDependents.length;
+  const attendeeDependentIds = selectedDependents.map((d) => d.id);
+  const fmtCents = (cents) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
+  const toggleDependent = (id) =>
+    setSelectedDependentIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : 1 + prev.length < MAX_ATTENDEES_PER_BOOKING ? [...prev, id] : prev
+    );
   const bestFieldVoucher = fieldVouchers && fieldVouchers.length > 0
     ? [...fieldVouchers].sort((a, b) => b.amountCents - a.amountCents)[0]
     : null;
-  const voucherCoversCost = !!bestFieldVoucher && entryPriceCents > 0 && bestFieldVoucher.amountCents >= entryPriceCents;
+  const voucherCoversCost = !!bestFieldVoucher && entryPriceCents > 0 && bestFieldVoucher.amountCents >= entryPriceCents * attendeeCount;
   const usingVoucher = applyVoucher && voucherCoversCost;
   const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
   // Set only if even the synchronously-pre-opened tab gets blocked (rare —
@@ -1750,8 +1778,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const [showAttendees, setShowAttendees] = useState(false);
   const [shareState, setShareState] = useState(null); // "copied" briefly, to confirm the clipboard fallback
 
-  const isFull = ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking;
-  const waiverBlocking = ev.waiver && !signature;
+  // Soft cap: reservations never lock. Past the cap we just tell the player
+  // up top that the field may still say yes — payment is always accepted.
+  const capacityReached = !!ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking && !isPast && !ev.canceled;
+  const waiverBlocking = ev.waiver && (!signature || selectedDependents.some((d) => !signedDependentIds.includes(d.id)));
   // An unclaimed field has no owner on Atlas to see or honor a booking —
   // block new ones here regardless of price, the same way the backend
   // now does (bookFreeEvent/createBookingCheckout). Gated on fieldsLoading
@@ -1775,7 +1805,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds);
         // Redirect the tab that was already opened synchronously at click
         // time (see handlePrimaryAction/handleSign) rather than calling
         // window.open here. By this point we're past getQuickLocation's
@@ -1798,7 +1828,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         setBookingBusy(false);
       } else {
         preOpenedWindow?.close(); // shouldn't exist on the free path, but don't leave a stray blank tab if it does
-        await bookEvent(user.uid, profile, ev, selectedChoice, location);
+        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds);
         setBookingBusy(false);
       }
     } catch (err) {
@@ -1844,7 +1874,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     setBookingError("");
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
-      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location);
+      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds);
       setBookingBusy(false);
     } catch (err) {
       console.error("voucher redemption failed:", err.code || err.message || err);
@@ -1862,6 +1892,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // button of its own.
   const handlePrimaryAction = () => {
     if (choiceMissing) return; // button is already disabled for this case — just a defensive no-op
+    if (selectedDependents.length > 0 && !hasGuardianPhone) {
+      setBookingError("Add your phone number in My Account to book with a child — the field needs a number to reach you.");
+      return;
+    }
     if (usingVoucher) {
       if (waiverBlocking) {
         setPendingVoucherRedeem(true);
@@ -1937,6 +1971,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         fieldId: ev.fieldId,
         signedName: legalName.trim(),
         waiverVersion: ev.waiver.version,
+        dependents: selectedDependents.map((d) => ({ id: d.id, fullName: d.fullName })),
       });
       setShowWaiver(false);
       // Signing is step one of booking now, not a standalone action —
@@ -1999,6 +2034,14 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         </div>
 
         <div className="px-5 mt-4 flex flex-col gap-3">
+          {capacityReached && (
+            <div className="p-4" style={{ background: "rgba(21,84,184,0.08)", border: `1px solid ${T.accent}`, borderRadius: 6 }}>
+              <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.accent }}>Event capacity reached</div>
+              <p className="text-[12px] leading-relaxed" style={{ ...body, color: T.ashDim }}>
+                Reservations are still open, but this event has hit its listed capacity. Reach out to the field owner — the field may allow additional bookings.
+              </p>
+            </div>
+          )}
           {!ev.canceled && ev.bookingOpensAt && (
             localDateStr() < ev.bookingOpensAt ? (
               <div className="p-4" style={{ background: "rgba(21,84,184,0.08)", border: `1px solid ${T.accent}`, borderRadius: 6 }}>
@@ -2114,6 +2157,66 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               {choiceMissing && (
                 <p className="text-[11px] mt-2" style={{ ...body, color: T.accent }}>Choose one to continue.</p>
               )}
+            </div>
+          )}
+
+          {dependents.length > 0 && !myBooking && !isPast && !ev.canceled && !fieldUnclaimed && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+              <Eyebrow>Who's attending?</Eyebrow>
+              <div className="flex flex-col gap-2 mt-1">
+                <div className="flex items-center gap-3 p-2" style={{ background: T.tintGood, borderRadius: 6 }}>
+                  <div className="w-5 h-5 flex items-center justify-center" style={{ borderRadius: 5, background: T.good }}>
+                    <Check size={13} color={T.inverse} strokeWidth={3} />
+                  </div>
+                  <div className="text-[13px] font-medium flex-1" style={{ ...body, color: T.ash }}>You</div>
+                  <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>always attending</div>
+                </div>
+                {dependents.map((d) => {
+                  const reason = dependentBlockReason(d) || (!hasGuardianPhone ? "Add your phone number in My Account first" : null);
+                  const picked = selectedDependentIds.includes(d.id) && !reason;
+                  const atMax = !picked && attendeeCount >= MAX_ATTENDEES_PER_BOOKING;
+                  const disabled = !!reason || atMax || bookingBusy;
+                  return (
+                    <button
+                      key={d.id}
+                      onClick={() => toggleDependent(d.id)}
+                      disabled={disabled}
+                      className="flex items-center gap-3 p-2 text-left"
+                      style={{ background: picked ? T.tintGood : T.panelAlt, borderRadius: 6, opacity: disabled && !picked ? 0.55 : 1 }}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center flex-shrink-0" style={{ borderRadius: 5, border: `1.5px solid ${picked ? T.good : T.line}`, background: picked ? T.good : "transparent" }}>
+                        {picked && <Check size={13} color={T.inverse} strokeWidth={3} />}
+                      </div>
+                      <ChildAvatar id={d.avatar} size={28} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-medium truncate" style={{ ...body, color: T.ash }}>{d.callsign || d.fullName}</div>
+                        {(reason || atMax) && (
+                          <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{reason || `Max ${MAX_ATTENDEES_PER_BOOKING} per booking`}</div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {attendeeCount > 1 && (
+                <p className="text-[12px] mt-3" style={{ ...body, color: T.ashDim }}>
+                  {attendeeCount} tickets{entryPriceCents > 0 ? ` · ${fmtCents(entryPriceCents * attendeeCount)}` : ""}. Booking fees, if any, are added once at checkout. Children's tickets are the same price.
+                </p>
+              )}
+            </div>
+          )}
+
+          {myBooking?.attendees?.length > 1 && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+              <Eyebrow>Your Party ({myBooking.attendees.length})</Eyebrow>
+              <div className="flex flex-col gap-1 mt-1">
+                {myBooking.attendees.map((a, i) => (
+                  <div key={i} className="text-[13px]" style={{ ...body, color: T.ash }}>
+                    {a.callsign}{a.kind === "minor" ? " · child" : ""}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] mt-2" style={{ ...body, color: T.ashFaint }}>One check-in QR covers everyone.</p>
             </div>
           )}
 
@@ -2233,8 +2336,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             <>
               <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Entry Cost</div>
               <div className="text-[18px] font-semibold" style={{ ...mono, color: usingVoucher ? T.good : T.ash }}>
-                {usingVoucher ? "$0 (voucher)" : priceDisplayText}
+                {usingVoucher ? "$0 (voucher)" : attendeeCount > 1 && entryPriceCents > 0 && !choiceMissing ? fmtCents(entryPriceCents * attendeeCount) : priceDisplayText}
               </div>
+              {attendeeCount > 1 && !myBooking && (
+                <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{attendeeCount} tickets</div>
+              )}
               {typeof ev.maxCapacity === "number" && (
                 <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
               )}
@@ -2283,10 +2389,6 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               <Check size={15} /> Reserved
             </button>
           )
-        ) : isFull ? (
-          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
-            Event Full
-          </span>
         ) : checkoutOpenedInfo ? (
           // Real gap this closes: bookingBusy clears the instant the Stripe
           // tab opens, so without this branch "Reserve This Event" goes right
@@ -2382,9 +2484,17 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               )}
               {scrolledToEnd && (
                 <>
+                  {selectedDependents.length > 0 && (
+                    <div className="p-3 mb-3 text-[12px] leading-relaxed" style={{ ...body, color: T.ashDim, background: T.panelAlt, borderRadius: 4, border: `1px solid ${T.line}` }}>
+                      <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>
+                        Signing for {selectedDependents.map((d) => d.callsign || d.fullName).join(", ")}
+                      </div>
+                      {GUARDIAN_NOTICE_TEXT}
+                    </div>
+                  )}
                   <label className="flex items-start gap-2 mb-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
                     <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
-                    I have read and agree to the terms above.
+                    {selectedDependents.length > 0 ? "I have read and agree to the terms above, and to the guardian notice." : "I have read and agree to the terms above."}
                   </label>
                   <div className="mb-3">
                     <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Signing As</div>
@@ -5569,6 +5679,226 @@ function YearInReviewScreen({ onBack, year, stats }) {
   );
 }
 
+// Preset avatar ids -> icons. A child's avatar is only ever one of these —
+// never an uploaded photo — and only the parent and the field owner see it
+// at all (everyone else gets the standard avatar icon).
+const CHILD_AVATAR_ICONS = { shield: Shield, target: Target, crosshair: Crosshair, compass: Compass, flag: Flag, star: Star, rocket: Rocket, medal: Medal };
+
+function ChildAvatar({ id, size = 40 }) {
+  const { T } = useTheme();
+  const Icon = CHILD_AVATAR_ICONS[id] || Shield;
+  return (
+    <div className="flex items-center justify-center flex-shrink-0" style={{ width: size, height: size, borderRadius: size / 2, background: T.panelAlt }}>
+      <Icon size={Math.round(size * 0.5)} color={T.ash} />
+    </div>
+  );
+}
+
+// Child profiles are NOT accounts — no login, no email. The parent keeps
+// them here, then picks who's attending when booking and signs the waiver
+// for them. Birthdate is set once and can't be edited afterward (the rules
+// enforce it too), so a guardian can't change a child's age to get past a
+// field's minimum age.
+function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDependent, updateDependent, deleteDependent, onBack, onOpenAccount }) {
+  const { T, display, body, mono } = useTheme();
+  const [editingId, setEditingId] = useState(null); // null = list, "new" = creating, else a dependent id
+  const [fullName, setFullName] = useState("");
+  const [callsign, setCallsign] = useState("");
+  const [dob, setDob] = useState("");
+  const [avatar, setAvatar] = useState(CHILD_AVATAR_IDS[0]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const hasPhone = !!(profile?.phone || "").trim();
+  const today = localDateStr();
+  const atLimit = dependents.length >= MAX_DEPENDENTS;
+  const isNew = editingId === "new";
+
+  const startNew = () => {
+    setFullName(""); setCallsign(""); setDob(""); setAvatar(CHILD_AVATAR_IDS[0]);
+    setError(""); setConfirmDelete(false); setEditingId("new");
+  };
+  const startEdit = (d) => {
+    setFullName(d.fullName || ""); setCallsign(d.callsign || ""); setDob(d.dob || ""); setAvatar(d.avatar || CHILD_AVATAR_IDS[0]);
+    setError(""); setConfirmDelete(false); setEditingId(d.id);
+  };
+  const closeForm = () => { setEditingId(null); setError(""); setConfirmDelete(false); };
+
+  const handleSave = async () => {
+    setError("");
+    if (!fullName.trim() || !callsign.trim()) {
+      setError("Enter your child's full name and a callsign.");
+      return;
+    }
+    if (isNew) {
+      const age = ageOnDate(dob, today);
+      if (age === null || age < 0) {
+        setError("Enter a valid birthdate.");
+        return;
+      }
+      if (age >= ADULT_AGE) {
+        setError("Players 18 and older need their own Atlas account.");
+        return;
+      }
+    }
+    setSaving(true);
+    try {
+      if (isNew) await addDependent({ fullName, callsign, dob, avatar });
+      else await updateDependent(editingId, { fullName, callsign, avatar });
+      closeForm();
+    } catch (err) {
+      console.error("save child profile failed:", err);
+      setError("Couldn't save — try again.");
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async () => {
+    setSaving(true);
+    try {
+      await deleteDependent(editingId);
+      closeForm();
+    } catch (err) {
+      console.error("delete child profile failed:", err);
+      setError("Couldn't delete — try again.");
+    }
+    setSaving(false);
+  };
+
+  const labelStyle = { ...mono, color: T.ashFaint, letterSpacing: "0.04em" };
+  const inputStyle = { ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+
+  return (
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={editingId ? closeForm : onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>
+          {isNew ? "New Child Profile" : editingId ? "Edit Child Profile" : "Child Profiles"}
+        </h1>
+      </div>
+
+      {!editingId ? (
+        <div className="px-6 pt-5 flex flex-col gap-3">
+          <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+            A child profile isn't a separate account — you book, sign waivers, and manage everything from yours. Your child's legal name and avatar are only visible to you and the field you book with.
+          </p>
+
+          {!hasPhone && (
+            <div className="p-4" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: T.rCard }}>
+              <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Add your phone number first</div>
+              <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+                Fields use it to reach you if anything happens while your child is on site.
+              </p>
+              <button onClick={onOpenAccount} className="px-4 py-2 text-[12px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill }}>
+                Add Phone Number
+              </button>
+            </div>
+          )}
+
+          {dependentsLoading ? (
+            <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>Loading…</p>
+          ) : (
+            dependents.map((d) => {
+              const age = ageOnDate(d.dob, today);
+              return (
+                <button key={d.id} onClick={() => startEdit(d)} className="w-full flex items-center gap-3 p-3 text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                  <ChildAvatar id={d.avatar} size={44} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-semibold truncate" style={{ ...display, color: T.ash }}>{d.callsign}</div>
+                    <div className="text-[11px] truncate" style={{ ...mono, color: T.ashDim }}>{d.fullName}{age !== null ? ` · Age ${age}` : ""}</div>
+                  </div>
+                  <ChevronRight size={15} color={T.ashFaint} />
+                </button>
+              );
+            })
+          )}
+
+          {hasPhone && (
+            atLimit ? (
+              <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>You've added the maximum of {MAX_DEPENDENTS} child profiles.</p>
+            ) : (
+              <button onClick={startNew} className="w-full py-3 font-semibold text-[14px] flex items-center justify-center gap-2" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}>
+                <Plus size={16} /> Add Child Profile
+              </button>
+            )
+          )}
+        </div>
+      ) : (
+        <div className="px-6 pt-5 flex flex-col gap-3">
+          <div>
+            <label className="text-[10px] font-semibold uppercase block mb-1" style={labelStyle}>Full Legal Name</label>
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={80} autoComplete="off" className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none" style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase block mb-1" style={labelStyle}>Callsign</label>
+            <input value={callsign} onChange={(e) => setCallsign(e.target.value)} maxLength={40} autoComplete="off" className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none" style={inputStyle} />
+            <p className="text-[11px] mt-1" style={{ ...body, color: T.ashFaint }}>Callsigns are public, like yours. Pick one you're comfortable with other players seeing.</p>
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase block mb-1" style={labelStyle}>Birthdate (Month / Day / Year)</label>
+            {isNew ? (
+              <>
+                <input type="date" value={dob} max={today} onChange={(e) => setDob(e.target.value)} className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none" style={inputStyle} />
+                <p className="text-[11px] mt-1" style={{ ...body, color: T.ashFaint }}>Can't be changed after you save.</p>
+              </>
+            ) : (
+              <>
+                <div className="w-full px-3 py-2.5 text-[14px]" style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ashDim }}>
+                  {dob ? new Date(dob + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : ""}
+                </div>
+                <p className="text-[11px] mt-1" style={{ ...body, color: T.ashFaint }}>Birthdate is locked once saved. Contact support if it needs correcting.</p>
+              </>
+            )}
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase block mb-2" style={labelStyle}>Avatar</label>
+            <div className="grid grid-cols-4 gap-3">
+              {CHILD_AVATAR_IDS.map((id) => (
+                <button key={id} onClick={() => setAvatar(id)} className="flex items-center justify-center py-2" style={{ borderRadius: T.rCard, border: `2px solid ${avatar === id ? T.cta : "transparent"}`, background: T.panel }}>
+                  <ChildAvatar id={id} size={44} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</p>}
+
+          <button onClick={handleSave} disabled={saving} className="w-full py-3 font-semibold text-[14px] mt-1" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Saving…" : isNew ? "Add Child Profile" : "Save Changes"}
+          </button>
+
+          {!isNew && (
+            <div className="mt-2">
+              {!confirmDelete ? (
+                <button onClick={() => setConfirmDelete(true)} className="w-full text-center text-[13px] font-medium py-2" style={{ ...body, color: T.alert }}>
+                  Delete Profile
+                </button>
+              ) : (
+                <div className="p-4" style={{ background: "rgba(188,51,39,0.08)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
+                  <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+                    Delete this profile? Bookings and waivers already signed for past events are kept.
+                  </p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setConfirmDelete(false)} className="flex-1 py-2.5 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>
+                      Cancel
+                    </button>
+                    <button onClick={handleDelete} disabled={saving} className="flex-1 py-2.5 text-[12px] font-semibold" style={{ ...display, background: T.alert, color: T.inverse, borderRadius: T.rPill, opacity: saving ? 0.5 : 1 }}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAvatar, deleteAccount }) {
   const { T, display, body, mono } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
@@ -5781,7 +6111,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers }) {
   const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
@@ -6003,6 +6333,13 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenPatches
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>My Account</span>
             <div className="flex items-center gap-2">
               <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{profile?.callsign}</span>
+              <ChevronRight size={15} color={T.ashFaint} />
+            </div>
+          </button>
+          <button onClick={onOpenChildProfiles} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Child Profiles</span>
+            <div className="flex items-center gap-2">
+              {dependentCount > 0 && <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{dependentCount}</span>}
               <ChevronRight size={15} color={T.ashFaint} />
             </div>
           </button>
@@ -6956,6 +7293,7 @@ function AppShell() {
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signInWithGoogle, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
+  const { dependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
   const {
@@ -7051,7 +7389,7 @@ function AppShell() {
   const goTab = (tab) => setStack([tab]);
 
   const activeEvent = events.find((e) => e.id === activeEventId) || null;
-  const { signature, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
+  const { signature, signedDependentIds, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
   const { booking: myBooking, bookingLoading: myBookingLoading } = useMyBooking(user?.uid, activeEvent?.id);
   const { bookings: whosGoing, bookingsLoading: whosGoingLoading } = useEventBookings(activeEvent?.id);
   const { interested: whosInterested, interestedLoading: whosInterestedLoading } = useEventInterested(activeEvent?.id);
@@ -7155,6 +7493,7 @@ function AppShell() {
     push("field");
   };
   const openAccount = () => push("account");
+  const openChildProfiles = () => push("childProfiles");
   const openPatches = () => push("patches");
   const openYearInReview = () => push("yearInReview");
   const openSecretPatchQR = () => push("secretPatchQR");
@@ -7278,6 +7617,8 @@ function AppShell() {
         profile={profile}
         signature={signature}
         signWaiver={signWaiver}
+        dependents={dependents}
+        signedDependentIds={signedDependentIds}
         myBooking={myBooking}
         myBookingLoading={myBookingLoading}
         whosGoing={whosGoing}
@@ -7408,6 +7749,8 @@ function AppShell() {
         user={user}
         onNavigate={goTab}
         onOpenAccount={openAccount}
+        onOpenChildProfiles={openChildProfiles}
+        dependentCount={dependents.length}
         onOpenPatches={openPatches}
         onOpenYearInReview={openYearInReview}
         onOpenSecretPatchQR={openSecretPatchQR}
@@ -7431,6 +7774,19 @@ function AppShell() {
         updateProfileFields={updateProfileFields}
         uploadAvatar={uploadAvatar}
         deleteAccount={deleteAccount}
+      />
+    );
+  } else if (screen === "childProfiles") {
+    content = (
+      <ChildProfilesScreen
+        profile={profile}
+        dependents={dependents}
+        dependentsLoading={dependentsLoading}
+        addDependent={addDependent}
+        updateDependent={updateDependent}
+        deleteDependent={deleteDependent}
+        onBack={pop}
+        onOpenAccount={openAccount}
       />
     );
   } else if (screen === "patches") {

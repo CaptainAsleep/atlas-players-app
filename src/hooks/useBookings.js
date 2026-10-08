@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, writeBatch } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../lib/firebase";
 
@@ -101,19 +101,30 @@ export function useBookingActions() {
   // bookFreeEvent resolves the real price itself and only writes if it
   // actually comes out to $0 — profile lookup and all three writes now
   // happen server-side, in one transaction, so this is just the trigger.
-  async function bookEvent(uid, profile, event, selectedChoice, location) {
+  async function bookEvent(uid, profile, event, selectedChoice, location, attendeeDependentIds) {
     const call = httpsCallable(functions, "bookFreeEvent");
     // location is a best-effort { lat, lng } reading (or null) the caller
     // already tried to grab — used server-side only to decide the
     // Walk-On Survivor patch, never required for booking to succeed.
-    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null });
+    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [] });
   }
 
   async function cancelBooking(uid, eventId) {
+    // A party booking frees one spot per attendee, and its private child
+    // snapshots (a subcollection isn't removed with its parent doc) go with
+    // it. attendeeCount lives on the player's own mirror doc; a missing one
+    // is a solo booking = 1. Only reachable for an unpaid booking (the
+    // delete rules still refuse a paid one).
+    const mirrorSnap = await getDoc(doc(db, "users", uid, "bookings", eventId));
+    const attendeeCount = Math.max(1, mirrorSnap.data()?.attendeeCount || 1);
+    const detailsSnap = attendeeCount > 1
+      ? await getDocs(collection(db, "events", eventId, "bookings", uid, "attendeeDetails"))
+      : null;
     const batch = writeBatch(db);
+    detailsSnap?.docs.forEach((d) => batch.delete(d.ref));
     batch.delete(doc(db, "events", eventId, "bookings", uid));
     batch.delete(doc(db, "users", uid, "bookings", eventId));
-    batch.update(doc(db, "events", eventId), { bookedCount: increment(-1) });
+    batch.update(doc(db, "events", eventId), { bookedCount: increment(-attendeeCount) });
     await batch.commit();
   }
 
@@ -122,7 +133,7 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds) {
     const call = httpsCallable(functions, "createBookingCheckout");
     // Same best-effort { lat, lng } (or null) as bookEvent — carried
     // through Checkout Session metadata since the webhook that actually
@@ -136,6 +147,9 @@ export function useBookingActions() {
       selectedChoiceId: selectedChoiceId || null,
       location: location || null,
       selectedRentalIds: selectedRentalIds && selectedRentalIds.length > 0 ? selectedRentalIds : null,
+      // Child profile ids only — the server re-reads each one (ownership, age at
+      // event date, signature) and works out the real attendee count and total.
+      attendeeDependentIds: attendeeDependentIds || [],
     });
     return result.data.url;
   }
