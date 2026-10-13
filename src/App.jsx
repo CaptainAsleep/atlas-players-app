@@ -321,6 +321,25 @@ const STATUS_LABEL = {
 };
 
 /* ---------- primitives ---------- */
+// Blue "verified" badge shown next to a field's name when the field has been
+// claimed by its owner on Atlas (field.ownerId set — same check the booking
+// flow uses for fieldUnclaimed). Fixed Atlas blue in both themes on purpose:
+// dark mode's T.accent is night-vision green, and this should read as a
+// consistent verification mark rather than a theme accent.
+function ClaimedBadge({ size = 14 }) {
+  return (
+    <span
+      title="Claimed on Atlas"
+      aria-label="Claimed on Atlas"
+      role="img"
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{ width: size, height: size, borderRadius: 999, background: "#1554B8", marginLeft: Math.round(size * 0.35), verticalAlign: "-0.12em" }}
+    >
+      <Check size={Math.round(size * 0.68)} color="#FFFFFF" strokeWidth={3.5} />
+    </span>
+  );
+}
+
 function Tag({ children, tone = "neutral" }) {
   const { T, display, body, mono } = useTheme();
   const map = {
@@ -551,7 +570,7 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
   );
 }
 
-function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
+function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick }) {
   const { T, display, body, mono } = useTheme();
   const isToday = ev.date === localDateStr();
   return (
@@ -582,7 +601,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, onClick }) {
           </div>
         )}
       </div>
-      <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+      <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}{claimed && <ClaimedBadge size={12} />}</div>
       <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
       <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{formatDate(ev.date, ev.endDate)}{ev.startTime ? ` · ${formatTimeStr(ev.startTime)}` : ""}</div>
       <div className="flex items-center justify-between mt-1.5">
@@ -1598,7 +1617,7 @@ function HomeScreen({
                 >
                   <div className="w-14 h-14 flex-shrink-0" style={{ ...heroStyle(f.imageUrl, f.id), borderRadius: 4 }} />
                   <div className="flex-1">
-                    <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}</div>
+                    <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}{f.ownerId && <ClaimedBadge size={14} />}</div>
                     <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{f.city}</div>
                     {typeof dist === "number" && (
                       <div className="text-[11px] font-medium flex items-center gap-1 mt-0.5" style={{ ...mono, color: T.ashDim }}>
@@ -1631,6 +1650,7 @@ function HomeScreen({
               ev={ev}
               fallbackImageUrl={fields.find((f) => f.id === ev.fieldId)?.imageUrl}
               distanceMi={nearbyOnly ? fieldDistance(fields.find((f) => f.id === ev.fieldId)) ?? undefined : undefined}
+              claimed={!!fields.find((f) => f.id === ev.fieldId)?.ownerId}
               onClick={() => onOpenEvent(ev)}
             />
           ))
@@ -2087,7 +2107,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             <button onClick={onOpenField} className="flex gap-3 items-start text-left" disabled={!field}>
               <MapPin size={17} color={T.ashDim} className="mt-0.5" />
               <div>
-                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.fieldName}</div>
+                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.fieldName}{field?.ownerId && <ClaimedBadge size={14} />}</div>
                 {field?.city && <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{field.city}</div>}
               </div>
             </button>
@@ -2685,7 +2705,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
               className="text-[24px] font-semibold"
               style={{ ...display, color: "#FFFFFF", textShadow: "0 1px 4px rgba(0,0,0,0.65)", WebkitTextStroke: "0.4px rgba(0,0,0,0.35)" }}
             >
-              {field.name}
+              {field.name}{field.ownerId && <ClaimedBadge size={20} />}
             </div>
           </div>
         </div>
