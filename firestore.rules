@@ -41,6 +41,12 @@ service cloud.firestore {
         (resource.data.get('ownerId', null) == null
           && resource.data.get('ownerEmailDomain', null) != null
           && request.auth.token.get('email', '').split('@')[1] == resource.data.get('ownerEmailDomain', null)
+          // Security fix 2026-10-13: the domain match alone proved nothing —
+          // email/password sign-up never confirms the inbox, so anyone could
+          // register name@<field's domain> and take the listing. The token's
+          // email_verified claim is only true once the inbox clicked a
+          // verification link (or the provider vouches for it, e.g. Google).
+          && request.auth.token.get('email_verified', false) == true
           && request.resource.data.ownerId == request.auth.uid
           && request.resource.data.claimed == true)
         ||
@@ -134,15 +140,40 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/fields/$(request.resource.data.fieldId)).data.ownerId == request.auth.uid;
       allow delete: if request.auth != null
         && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid;
+      // Security fix 2026-10-13: these counters used to accept ANY value from
+      // any signed-in user — enough to fake "capacity reached" on any event,
+      // and to email-bomb an owner (notifyOwnerOverCapacity sends one email
+      // per increase past the cap). bookedCount is otherwise maintained by
+      // Cloud Functions (Admin SDK, not subject to rules); the only client
+      // write left is cancelBooking() in the player app's useBookings.js,
+      // which must free exactly the seats of the caller's own unpaid booking
+      // in the same batch that deletes it.
+      function cancelFreesOwnSeats() {
+        let bookingPath = /databases/$(database)/documents/events/$(eventId)/bookings/$(request.auth.uid);
+        let mirrorPath = /databases/$(database)/documents/users/$(request.auth.uid)/bookings/$(eventId);
+        let n = exists(mirrorPath) ? get(mirrorPath).data.get('attendeeCount', 1) : 1;
+        let seats = (n is number && n > 1) ? n : 1;
+        return exists(bookingPath)
+          && get(bookingPath).data.get('paid', false) != true
+          && !existsAfter(bookingPath)
+          && request.resource.data.bookedCount == resource.data.get('bookedCount', 0) - seats;
+      }
       allow update: if request.auth != null && (
-        // Any signed-in player bumping the interest counter or the real
-        // booking counter — narrow, single-field changes only. A player
-        // action only ever touches one of these at a time; both stay
-        // listed since either alone is a legitimate, separate action.
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["interestCount", "bookedCount"])
+        // Favorite toggle (useFavorites.js): interestCount moves by exactly
+        // one in either direction, nothing else changes.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["interestCount"])
+          && (request.resource.data.interestCount == resource.data.get('interestCount', 0) + 1
+              || request.resource.data.interestCount == resource.data.get('interestCount', 0) - 1))
         ||
-        // The event's own field owner making a full edit.
-        get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+        // Unpaid-booking cancel (useBookings.js): see cancelFreesOwnSeats.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["bookedCount"])
+          && cancelFreesOwnSeats())
+        ||
+        // The event's own field owner making a full edit — but not moving
+        // the event onto a different field (fieldId is part of what decides
+        // who owns it; changing it could plant events on someone else's page).
+        (get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+          && request.resource.data.fieldId == resource.data.fieldId)
       );
 
       // Real bookings — public read, same openness as team rosters, so a
@@ -231,7 +262,22 @@ service cloud.firestore {
     //
     match /owners/{ownerId} {
       allow read: if request.auth != null && (request.auth.uid == ownerId || isAdmin());
-      allow create, delete: if request.auth != null && request.auth.uid == ownerId;
+      // Security fix 2026-10-13: create used to accept any keys, so an
+      // owner doc could be born with payoutsEnabled/stripeConnectAccountId
+      // /feeModel already set — exactly the fields createBookingCheckout
+      // trusts and the update rule below protects. The app only ever creates
+      // this doc with email/name/createdAt (plus acceptedTerms*/name via a
+      // merge set), so those protected keys are simply refused on create.
+      allow create: if request.auth != null && request.auth.uid == ownerId
+        && !request.resource.data.keys().hasAny([
+          "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
+          "connectOnboardingComplete", "feeModel", "claimedFieldCount"
+        ]);
+      // Still client-deletable: the owner app's deleteAccount() removes this
+      // doc itself. Known leftover: delete + recreate lets an owner pick
+      // feeModel again. It only changes who pays Atlas's fee, not the fee.
+      // Closing it fully means moving account deletion into a Cloud Function.
+      allow delete: if request.auth != null && request.auth.uid == ownerId;
       // Subscription and billing fields are readable (so the owner app can
       // show real status) but never writable by the owner's own client —
       // only Cloud Functions, via the admin SDK, can set these, after
@@ -489,8 +535,16 @@ service cloud.firestore {
     // controls. Doc id convention: "{fromUid}_{toUid}".
     match /friendRequests/{requestId} {
       allow read: if request.auth != null && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      // Security fix 2026-10-13: requestId and toUid used to be free, so a
+      // player could file a request at {self}_{victim} addressed to
+      // themselves, "accept" it, and pass the friend check on
+      // users/{victim}/bookings. The id now has to be {fromUid}_{toUid}
+      // (what useFriends.js already uses) and you can't friend yourself.
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.fromUid
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && requestId == request.auth.uid + '_' + request.resource.data.toUid
         && request.resource.data.status == "pending";
       // Only the recipient can accept — and only the status field changes.
       allow update: if request.auth != null

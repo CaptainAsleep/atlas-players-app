@@ -6,3 +6,10 @@ dist
 scripts/serviceAccountKey.json
 firebase-debug.log
 firebase-debug.*.log
+
+# Security cleanup 2026-10-13 — never commit these again
+firebase-debug*.log
+scripts/_tmp_*
+.fuse_hidden*
+# iCloud sync duplicates ("App 2.jsx", "index 2.css", …)
+* 2.*
