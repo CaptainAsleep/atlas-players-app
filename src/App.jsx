@@ -321,22 +321,37 @@ const STATUS_LABEL = {
 };
 
 /* ---------- primitives ---------- */
-// Blue "verified" badge shown next to a field's name when the field has been
-// claimed by its owner on Atlas (field.ownerId set — same check the booking
-// flow uses for fieldUnclaimed). Fixed Atlas blue in both themes on purpose:
-// dark mode's T.accent is night-vision green, and this should read as a
-// consistent verification mark rather than a theme accent.
-function ClaimedBadge({ size = 14 }) {
+// Blue "Claimed on Atlas" seal shown next to a field's name wherever a
+// claimed field is listed. Claimed = field.ownerId set (same check the
+// booking flow uses for fieldUnclaimed). Fixed Atlas blue in both themes on
+// purpose: dark mode's T.accent is night-vision green, and this should read
+// as one consistent verification mark rather than a theme accent.
+//
+// Pass `claimed` directly when the field object is in hand; otherwise pass
+// `fieldId` and it's looked up from ClaimedFieldsContext (provided in
+// AppShell from useFields()), so screens that only have an event/voucher/
+// team with a fieldId don't need the fields list threaded through.
+// `ring` adds a white outline for use over photos.
+const ClaimedFieldsContext = React.createContext(null);
+const CLAIMED_SEAL_PATH = "M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z";
+function ClaimedBadge({ claimed, fieldId, size = 14, ring = false }) {
+  const claimedIds = React.useContext(ClaimedFieldsContext);
+  const isClaimed = claimed !== undefined ? !!claimed : !!(fieldId && claimedIds && claimedIds.has(fieldId));
+  if (!isClaimed) return null;
   return (
-    <span
-      title="Claimed on Atlas"
-      aria-label="Claimed on Atlas"
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
       role="img"
-      className="inline-flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: size, borderRadius: 999, background: "#1554B8", marginLeft: Math.round(size * 0.35), verticalAlign: "-0.12em" }}
+      aria-label="Claimed on Atlas"
+      className="inline-block flex-shrink-0"
+      style={{ marginLeft: Math.round(size * 0.3), verticalAlign: "-0.15em", overflow: "visible" }}
     >
-      <Check size={Math.round(size * 0.68)} color="#FFFFFF" strokeWidth={3.5} />
-    </span>
+      <title>Claimed on Atlas</title>
+      <path d={CLAIMED_SEAL_PATH} fill="#1554B8" stroke={ring ? "#FFFFFF" : "none"} strokeWidth={ring ? 1.6 : 0} strokeLinejoin="round" />
+      <path d="m8.6 12.1 2.4 2.4 4.6-4.8" fill="none" stroke="#FFFFFF" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -601,7 +616,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick }) {
           </div>
         )}
       </div>
-      <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}{claimed && <ClaimedBadge size={12} />}</div>
+      <div className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}<ClaimedBadge claimed={claimed} size={12} /></div>
       <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{ev.title}</div>
       <div className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{formatDate(ev.date, ev.endDate)}{ev.startTime ? ` · ${formatTimeStr(ev.startTime)}` : ""}</div>
       <div className="flex items-center justify-between mt-1.5">
@@ -686,7 +701,7 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
           {pins.map((f) => (
             <Marker key={f.id} position={[f.lat, f.lng]} icon={fieldPinIcon} eventHandlers={{ click: () => onOpenField(f) }}>
               <Popup>
-                <div style={{ ...body, fontSize: 12, fontWeight: 600 }}>{f.name}</div>
+                <div style={{ ...body, fontSize: 12, fontWeight: 600 }}>{f.name}<ClaimedBadge claimed={f.ownerId} size={12} /></div>
                 <div style={{ ...body, fontSize: 11, color: "#666" }}>{f.city}</div>
               </Popup>
             </Marker>
@@ -867,7 +882,7 @@ function FieldFacts({ field, rentalPick }) {
   );
 }
 
-function LocationCard({ label, name, address, lat, lng, phone }) {
+function LocationCard({ label, name, claimed, address, lat, lng, phone }) {
   const { T, display, body, mono, theme } = useTheme();
   if (!address) return null;
   const hasCoords = typeof lat === "number" && typeof lng === "number";
@@ -887,7 +902,7 @@ function LocationCard({ label, name, address, lat, lng, phone }) {
       <div className="p-4 pb-3">
         <Eyebrow>{label}</Eyebrow>
         {name && (
-          <div className="text-[13px] font-medium mb-1" style={{ ...display, color: T.ash }}>{name}</div>
+          <div className="text-[13px] font-medium mb-1" style={{ ...display, color: T.ash }}>{name}<ClaimedBadge claimed={claimed} size={13} /></div>
         )}
         <div className="flex items-center gap-2 text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
           <MapPin size={13} color={T.ashFaint} /> {address}
@@ -1318,7 +1333,7 @@ function HomeScreen({
             )}
           </div>
           <div className="text-[12px] mb-4" style={{ ...body, color: T.ashDim }}>
-            {nextGame.fieldName} — {formatDate(nextGame.date, nextGame.endDate)}{nextGame.startTime ? ` · ${formatTimeStr(nextGame.startTime)}` : ""}
+            {nextGame.fieldName}<ClaimedBadge fieldId={nextGame.fieldId} size={12} /> — {formatDate(nextGame.date, nextGame.endDate)}{nextGame.startTime ? ` · ${formatTimeStr(nextGame.startTime)}` : ""}
           </div>
 
           {nextGameIsToday ? (
@@ -1617,7 +1632,7 @@ function HomeScreen({
                 >
                   <div className="w-14 h-14 flex-shrink-0" style={{ ...heroStyle(f.imageUrl, f.id), borderRadius: 4 }} />
                   <div className="flex-1">
-                    <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}{f.ownerId && <ClaimedBadge size={14} />}</div>
+                    <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}<ClaimedBadge claimed={f.ownerId} size={14} /></div>
                     <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{f.city}</div>
                     {typeof dist === "number" && (
                       <div className="text-[11px] font-medium flex items-center gap-1 mt-0.5" style={{ ...mono, color: T.ashDim }}>
@@ -2107,7 +2122,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             <button onClick={onOpenField} className="flex gap-3 items-start text-left" disabled={!field}>
               <MapPin size={17} color={T.ashDim} className="mt-0.5" />
               <div>
-                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.fieldName}{field?.ownerId && <ClaimedBadge size={14} />}</div>
+                <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.fieldName}<ClaimedBadge claimed={field?.ownerId} size={14} /></div>
                 {field?.city && <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{field.city}</div>}
               </div>
             </button>
@@ -2128,6 +2143,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
           <LocationCard
             label="Event Location"
             name={ev.venueName || field?.name}
+            claimed={!ev.venueName && !!field?.ownerId}
             address={ev.address || fullAddress(field)}
             lat={typeof ev.lat === "number" ? ev.lat : field?.lat}
             lng={typeof ev.lng === "number" ? ev.lng : field?.lng}
@@ -2705,7 +2721,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
               className="text-[24px] font-semibold"
               style={{ ...display, color: "#FFFFFF", textShadow: "0 1px 4px rgba(0,0,0,0.65)", WebkitTextStroke: "0.4px rgba(0,0,0,0.35)" }}
             >
-              {field.name}{field.ownerId && <ClaimedBadge size={20} />}
+              {field.name}<ClaimedBadge claimed={field.ownerId} size={20} ring />
             </div>
           </div>
         </div>
@@ -2912,7 +2928,7 @@ function FavoritesScreen({ onNavigate, favorites, favoritesLoading, fields, onOp
                   >
                     <div className="w-14 h-14" style={{ ...heroStyle(f.imageUrl, f.id), borderRadius: 4 }} />
                     <div className="flex-1">
-                      <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}</div>
+                      <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{f.name}<ClaimedBadge claimed={f.ownerId} size={14} /></div>
                       <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{f.city}</div>
                     </div>
                     <ChevronRight size={16} color={T.ashFaint} />
@@ -2989,7 +3005,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
             <div className="w-12 h-12" style={{ ...heroStyle(ev.imageUrl || fields.find((f) => f.id === ev.fieldId)?.imageUrl, ev.id || ev.title), borderRadius: 4 }} />
             <div className="flex-1">
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
-              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}<ClaimedBadge fieldId={ev.fieldId} size={11} /></div>
               <div className="text-[11px] font-medium" style={{ ...mono, color: isPastEv ? T.ashFaint : T.accent }}>{formatDate(ev.date, ev.endDate)}</div>
             </div>
             {ev.canceled ? <Tag tone="alert">CANCELED</Tag> : ev.checkedIn ? <Tag tone="good">CHECKED IN</Tag> : isPastEv ? <Tag tone="good">PAST</Tag> : <ChevronRight size={16} color={T.ashFaint} />}
@@ -3387,7 +3403,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
             booked.map((ev) => (
               <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                 <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
-                <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+                <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}<ClaimedBadge fieldId={ev.fieldId} size={11} /></div>
               </button>
             ))
           )
@@ -3397,7 +3413,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
           interested.map((ev) => (
             <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
-              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}<ClaimedBadge fieldId={ev.fieldId} size={11} /></div>
             </button>
           ))
         )}
@@ -3406,7 +3422,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
           past.map((ev) => (
             <button key={ev.id} onClick={() => onOpenEvent(ev)} className="mb-2 p-3 w-full text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, opacity: 0.7 }}>
               <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{ev.title}</div>
-              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{ev.fieldName}<ClaimedBadge fieldId={ev.fieldId} size={11} /></div>
             </button>
           ))
         )}
@@ -3733,7 +3749,7 @@ function TeamEventForm({ team, fields, atlasEvents, initial, onCancel, onSave, s
             <div className="min-w-0">
               <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{pickedAtlasEvent.title}</div>
               <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>
-                {[pickedAtlasEvent.fieldName, formatDate(pickedAtlasEvent.date, pickedAtlasEvent.endDate)].filter(Boolean).join(" · ")}
+                {pickedAtlasEvent.fieldName}<ClaimedBadge fieldId={pickedAtlasEvent.fieldId} size={11} />{pickedAtlasEvent.fieldName ? " · " : ""}{formatDate(pickedAtlasEvent.date, pickedAtlasEvent.endDate)}
               </div>
             </div>
             <button onClick={() => setAtlasEventId(null)} className="text-[11px] font-semibold flex-shrink-0" style={{ ...body, color: T.accent }}>Change</button>
@@ -3750,7 +3766,7 @@ function TeamEventForm({ team, fields, atlasEvents, initial, onCancel, onSave, s
                 <button key={e.id} onClick={() => { setAtlasEventId(e.id); setEventSearch(""); }}
                   className="w-full py-2 text-left" style={{ ...body, color: T.ash }}>
                   <div className="text-[13px]">{e.title}</div>
-                  <div className="text-[11px]" style={{ color: T.ashFaint }}>{[e.fieldName, formatDate(e.date, e.endDate)].filter(Boolean).join(" · ")}</div>
+                  <div className="text-[11px]" style={{ color: T.ashFaint }}>{e.fieldName}<ClaimedBadge fieldId={e.fieldId} size={11} />{e.fieldName ? " · " : ""}{formatDate(e.date, e.endDate)}</div>
                 </button>
               ))}
             </div>
@@ -3813,7 +3829,7 @@ function TeamEventForm({ team, fields, atlasEvents, initial, onCancel, onSave, s
       <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Location</div>
       {fieldId && !pickingField ? (
         <div className="flex items-center justify-between px-3 py-2" style={{ background: T.panelAlt, borderRadius: 4, border: `1px solid ${T.line}` }}>
-          <span className="text-[13px]" style={{ ...body, color: T.ash }}>{fieldName}</span>
+          <span className="text-[13px]" style={{ ...body, color: T.ash }}>{fieldName}<ClaimedBadge fieldId={fieldId} size={13} /></span>
           <button onClick={() => { setFieldId(null); setFieldName(""); setPickingField(true); }} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>
             Change
           </button>
@@ -3830,7 +3846,7 @@ function TeamEventForm({ team, fields, atlasEvents, initial, onCancel, onSave, s
                 <button key={f.id}
                   onClick={() => { setFieldId(f.id); setFieldName(f.name); setPickingField(false); setFieldSearch(""); }}
                   className="w-full py-2 text-left text-[13px]" style={{ ...body, color: T.ash }}>
-                  {f.name} <span style={{ color: T.ashFaint }}>· {f.city}</span>
+                  {f.name}<ClaimedBadge claimed={f.ownerId} size={12} /> <span style={{ color: T.ashFaint }}>· {f.city}</span>
                 </button>
               ))}
           </div>
@@ -3944,7 +3960,7 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
           <div className="flex items-center gap-1.5 mt-1">
             <MapPin size={12} color={T.ashFaint} />
             <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>
-              {[location, event.regionalArea].filter(Boolean).join(" · ")}
+              {location}{event.fieldName && <ClaimedBadge fieldId={event.fieldId} size={12} />}{location && event.regionalArea ? " · " : ""}{event.regionalArea}
             </span>
           </div>
         )}
@@ -4855,7 +4871,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
           <div className="mb-4 p-3 flex items-center justify-between" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="flex items-center gap-2">
               <MapPin size={14} color={T.ashFaint} />
-              <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{team.homeFieldName}</span>
+              <span className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>{team.homeFieldName}<ClaimedBadge fieldId={team.homeFieldId} size={13} /></span>
             </div>
             {isOfficer && (
               <button onClick={() => setShowFieldPicker(true)} className="text-[11px] font-semibold" style={{ ...body, color: T.accent }}>Change</button>
@@ -4893,7 +4909,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                   className="w-full py-2 text-left text-[13px]"
                   style={{ ...body, color: T.ash }}
                 >
-                  {f.name} <span style={{ color: T.ashFaint }}>· {f.city}</span>
+                  {f.name}<ClaimedBadge claimed={f.ownerId} size={12} /> <span style={{ color: T.ashFaint }}>· {f.city}</span>
                 </button>
               ))}
             </div>
@@ -6327,6 +6343,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <div className="text-[13px] font-medium truncate" style={{ ...body, color: T.ash }}>{v.fieldName || "Unknown field"}</div>
+                        <ClaimedBadge fieldId={v.fieldId} size={12} />
                         {isExpired && (
                           <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
                             EXPIRED
@@ -7327,6 +7344,7 @@ function AppShell() {
   }, []);
 
   const { fields, loading: fieldsLoading } = useFields();
+  const claimedFieldIds = useMemo(() => new Set(fields.filter((f) => f.ownerId).map((f) => f.id)), [fields]);
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signInWithGoogle, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
@@ -7852,6 +7870,7 @@ function AppShell() {
   }
 
   return (
+    <ClaimedFieldsContext.Provider value={claimedFieldIds}>
     <div className="w-full flex flex-col app-shell-height" style={{ background: T.void }}>
       <style>{FONTS}</style>
       <div key={`${screen}:${activeEventId}:${activeFieldId}:${activeTeamId}:${activePlayerId}`} className="flex-1 min-h-0 relative screen-transition">
@@ -7865,6 +7884,7 @@ function AppShell() {
       )}
       {needRefresh && <UpdateAvailableToast onRefresh={refreshNow} />}
     </div>
+    </ClaimedFieldsContext.Provider>
   );
 }
 
