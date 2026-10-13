@@ -42,6 +42,11 @@ const verifyEmailSectionTemplate = readFileSync(path.join(templatesDir, "verify-
 const bookingConfirmationFirstTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-first.html"), "utf-8");
 const bookingConfirmationRepeatTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-repeat.html"), "utf-8");
 const teamOfficerWelcomeTemplate = readFileSync(path.join(templatesDir, "team-officer-welcome.html"), "utf-8");
+// Field-claim emails (2026-10-13): branded on the same shell as the other
+// Atlas emails, replacing Firebase's default verification email and the
+// old bare-bones inline-HTML claim code.
+const ownerClaimVerifyTemplate = readFileSync(path.join(templatesDir, "owner-claim-verify.html"), "utf-8");
+const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim-code.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
 
 // Plain [token] -> value substitution, same style already proven in
@@ -1712,17 +1717,15 @@ export const requestFieldEmailClaim = onCall(
     });
 
     const fieldName = escapeHtml(fieldSnap.data().name || "your field");
-    const html = `<div style="font-family:Helvetica,Arial,sans-serif; max-width:480px; margin:0 auto; padding:32px 24px; color:#2A2E33;">
-  <div style="font-weight:700; font-size:13px; letter-spacing:0.04em; color:#002C48; margin-bottom:18px;">AIRSOFT ATLAS</div>
-  <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Here's your code to claim <b>${fieldName}</b> on Atlas:</p>
-  <div style="font-size:32px; font-weight:700; letter-spacing:0.28em; color:#002C48; background:#F2F2ED; border-radius:10px; padding:18px 0; text-align:center; margin:0 0 16px;">${code}</div>
-  <p style="font-size:13px; line-height:1.6; color:#686C72; margin:0;">It expires in 15 minutes. If you didn't ask for this, you can ignore this email &mdash; nothing happens without the code.</p>
-</div>`;
+    const html = fillTemplate(fieldClaimCodeTemplate, { "[FIELD NAME]": fieldName, "[CODE]": code });
 
     try {
       const resend = new Resend(resendApiKey.value());
       const { error } = await resend.emails.send({
-        from: CLAIM_EMAIL_FROM,
+        // Signed as Michael like every other Atlas email (the template's
+        // sign-off invites a reply) — was CLAIM_EMAIL_FROM (hello@) before
+        // the 2026-10-13 rebrand.
+        from: ATLAS_EMAIL_FROM,
         to: callerEmail,
         subject: `Your Atlas code to claim ${fieldSnap.data().name || "your field"}`,
         html,
@@ -1735,6 +1738,127 @@ export const requestFieldEmailClaim = onCall(
     }
 
     return { eligible: true, sentTo: callerEmail };
+  }
+);
+
+// ===========================================================================
+// Branded "confirm your email" for the instant domain claim (2026-10-13)
+// ===========================================================================
+// The owner app's domain-claim path (useOwnerFields.js claimField) needs a
+// VERIFIED email since the 2026-10-13 security fix (firestore.rules checks
+// request.auth.token.email_verified). This sends the verification link the
+// moment an unverified owner taps Claim on a field whose ownerEmailDomain
+// matches their address — Atlas-branded via Resend instead of Firebase's
+// default template. Grants nothing by itself: the link only flips the Auth
+// account's emailVerified flag, and the claim write still goes through the
+// rules. Server-side checks keep it from being used as a generic
+// send-email-to-myself endpoint: the field must exist, be unclaimed, and its
+// ownerEmailDomain must match the caller's own Auth email; one send per
+// minute per account (server-only emailSends doc — no client rule matches).
+const OWNER_CLAIM_VERIFY_COOLDOWN_MS = 60 * 1000;
+const OWNER_APP_URL = "https://ownerapp.airsoftatlas.app/";
+
+export const sendOwnerClaimVerification = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const fieldId = request.data?.fieldId;
+    if (!fieldId) {
+      throw new HttpsError("invalid-argument", "Missing fieldId.");
+    }
+
+    // Live Auth record, not the (possibly stale) ID token — if they already
+    // verified in another tab, tell the app to go ahead and claim.
+    const authUser = await getAuth().getUser(uid);
+    if (authUser.emailVerified) {
+      return { alreadyVerified: true };
+    }
+    const email = String(authUser.email || "").trim();
+    if (!email) {
+      throw new HttpsError("failed-precondition", "This account has no email address on file.");
+    }
+
+    const db = getFirestore();
+    const fieldSnap = await db.collection("fields").doc(fieldId).get();
+    if (!fieldSnap.exists) {
+      throw new HttpsError("not-found", "Field not found.");
+    }
+    const field = fieldSnap.data();
+    if (field.ownerId) {
+      throw new HttpsError("failed-precondition", "This field has already been claimed.");
+    }
+    const domain = String(field.ownerEmailDomain || "").trim().toLowerCase();
+    if (!domain || email.toLowerCase().split("@")[1] !== domain) {
+      throw new HttpsError("failed-precondition", "This field isn't set up for instant claim with this email address.");
+    }
+
+    const sendRef = db.collection("emailSends").doc(`ownerClaimVerify_${uid}`);
+    const now = Date.now();
+    const allowed = await db.runTransaction(async (t) => {
+      const s = await t.get(sendRef);
+      const last = s.data()?.sentAtMs;
+      if (typeof last === "number" && now - last < OWNER_CLAIM_VERIFY_COOLDOWN_MS) return false;
+      t.set(sendRef, { uid, fieldId, sentAtMs: now, sendCount: FieldValue.increment(1) }, { merge: true });
+      return true;
+    });
+    if (!allowed) {
+      // A link went out under a minute ago — the app shows the same
+      // "check your email" message either way.
+      return { sent: false, throttled: true, sentTo: email };
+    }
+    const releaseCooldown = () => sendRef.update({ sentAtMs: FieldValue.delete() }).catch(() => {});
+
+    let verifyLink;
+    try {
+      verifyLink = await getAuth().generateEmailVerificationLink(email, { url: OWNER_APP_URL });
+    } catch (err) {
+      // If ownerapp.airsoftatlas.app isn't on Firebase Auth's authorized
+      // domains list, a continue URL is refused — the plain link still
+      // verifies the address, it just has no "back to the app" hop.
+      if (err?.code === "auth/unauthorized-continue-uri" || err?.code === "auth/invalid-continue-uri") {
+        console.warn(`sendOwnerClaimVerification: continue URL refused (${err.code}), sending link without it.`);
+        try {
+          verifyLink = await getAuth().generateEmailVerificationLink(email);
+        } catch (err2) {
+          console.error(`sendOwnerClaimVerification: couldn't generate link for ${uid}:`, err2);
+          await releaseCooldown();
+          throw new HttpsError("unavailable", "Couldn't send the verification email — try again in a moment.");
+        }
+      } else {
+        console.error(`sendOwnerClaimVerification: couldn't generate link for ${uid}:`, err);
+        await releaseCooldown();
+        throw new HttpsError("unavailable", "Couldn't send the verification email — try again in a moment.");
+      }
+    }
+
+    const ownerSnap = await db.collection("owners").doc(uid).get();
+    const ownerName = ownerSnap.data()?.name || authUser.displayName || email.split("@")[0];
+    const fieldName = field.name || "your field";
+    const html = fillTemplate(ownerClaimVerifyTemplate, {
+      "[VERIFY_LINK]": escapeHtml(verifyLink),
+      "[OWNER NAME]": escapeHtml(ownerName),
+      "[FIELD NAME]": escapeHtml(fieldName),
+    });
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: ATLAS_EMAIL_FROM,
+        to: email,
+        subject: `Confirm your email to claim ${fieldName} on Atlas`,
+        html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+    } catch (err) {
+      console.error(`sendOwnerClaimVerification: Resend failed for ${uid} / ${fieldId}:`, err);
+      await releaseCooldown();
+      throw new HttpsError("unavailable", "Couldn't send the verification email — try again in a moment.");
+    }
+
+    return { sent: true, sentTo: email };
   }
 );
 
