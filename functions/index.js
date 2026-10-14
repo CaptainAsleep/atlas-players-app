@@ -2093,6 +2093,13 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
       subject = `You're booked at ${fieldName}`;
     }
 
+    // Written back onto the event-scoped booking doc (events/{eventId}/bookings/{userId}),
+    // not this trigger's own users/{userId}/bookings/{eventId} doc -- that's the one the
+    // admin portal's useAdminData.js already fetches wholesale for every event, so this
+    // needs no new read path there. Admin-SDK write, bypasses firestore.rules entirely, so
+    // no rules change needed. Bookings sent before this shipped simply have neither field --
+    // the admin UI shows "not tracked" for those, never a false "failed".
+    const eventBookingRef = db.collection("events").doc(eventId).collection("bookings").doc(userId);
     try {
       const resend = new Resend(resendApiKey.value());
       const { error } = await resend.emails.send({
@@ -2103,9 +2110,22 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
       });
       if (error) {
         console.error(`sendBookingConfirmationEmail: Resend error for ${userId}/${eventId}:`, error);
+        await eventBookingRef.update({
+          confirmationEmailError: String(error.message || error),
+          confirmationEmailSentAt: FieldValue.delete(),
+        }).catch(() => {});
+      } else {
+        await eventBookingRef.update({
+          confirmationEmailSentAt: FieldValue.serverTimestamp(),
+          confirmationEmailError: FieldValue.delete(),
+        }).catch(() => {});
       }
     } catch (err) {
       console.error(`sendBookingConfirmationEmail: failed for ${userId}/${eventId}:`, err);
+      await eventBookingRef.update({
+        confirmationEmailError: String(err.message || err),
+        confirmationEmailSentAt: FieldValue.delete(),
+      }).catch(() => {});
     }
   }
 );
