@@ -239,39 +239,6 @@ function timeBasedGreeting() {
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
-// Opens the tab Stripe Checkout will load into, synchronously inside the
-// click handler (see handlePrimaryAction/handleSign for why it has to be
-// opened this early). It used to be left as a bare about:blank page while
-// the waiver saved and the checkout session was created, which players
-// reported as "a blank screen". Now it shows a small branded placeholder
-// instead, with a note on what to do if it sits there. Writing into the
-// new window is best-effort only: if the browser won't let us, the tab
-// still works exactly as before, it just stays blank.
-function openCheckoutPlaceholderTab() {
-  const win = window.open("", "_blank");
-  if (!win) return null;
-  try {
-    win.document.open();
-    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparing Secure Checkout</title>
-<style>
-  html,body{margin:0;height:100%;background:#0B1220;color:#E6EAF2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;text-align:center}
-  .spin{width:36px;height:36px;border-radius:50%;border:3px solid rgba(230,234,242,0.18);border-top-color:#E6EAF2;animation:s 0.9s linear infinite;margin-bottom:20px}
-  @keyframes s{to{transform:rotate(360deg)}}
-  h1{font-size:18px;font-weight:600;margin:0 0 8px}
-  p{font-size:13px;line-height:1.5;color:#9AA4B5;margin:0;max-width:300px}
-</style></head><body><div class="wrap">
-  <div class="spin"></div>
-  <h1>Preparing Secure Checkout</h1>
-  <p>This page will switch to the payment page in a moment.</p>
-  <p style="margin-top:16px">Still here after 30 seconds? Close this tab, go back to Atlas, and tap Reserve again.</p>
-</div></body></html>`);
-    win.document.close();
-  } catch (e) {
-    // Leave the tab as-is; navigation to Stripe still works.
-  }
-  return win;
-}
 // Best-effort location for the Walk-On Survivor check — resolves to null
 // (never rejects) on missing geolocation support, a denied/dismissed
 // permission prompt, or a timeout, so a booking never waits on or fails
@@ -1837,11 +1804,14 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const voucherCoversCost = !!bestFieldVoucher && entryPriceCents > 0 && bestFieldVoucher.amountCents >= entryPriceCents * attendeeCount;
   const usingVoucher = applyVoucher && voucherCoversCost;
   const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
-  // Set only if even the synchronously-pre-opened tab gets blocked (rare —
-  // an aggressive popup blocker that blocks everything, not just
-  // post-await opens) — gives the player a real, tappable link instead of
-  // a silent dead end.
+  // The Stripe Checkout URL, once the waiver is saved and the session is
+  // created. The player opens it with a second tap on "Continue to
+  // Payment" (a real link), so no tab is ever opened while work is still
+  // in flight — see proceedToBook.
   const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState(null);
+  // Whether the player has tapped "Continue to Payment" yet. Switches the
+  // bottom bar from that button to "Confirming Payment…".
+  const [paymentTabOpened, setPaymentTabOpened] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
   const [shareState, setShareState] = useState(null); // "copied" briefly, to confirm the clipboard fallback
@@ -1860,7 +1830,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // Extracted so both a normal "Reserve This Event" tap AND a just-completed
   // waiver signature can trigger the same real booking action — signing is
   // now step one of booking, not a separate standalone thing on this page.
-  const proceedToBook = async (preOpenedWindow = null) => {
+  const proceedToBook = async () => {
     setBookingBusy(true);
     setBookingError("");
     setPendingCheckoutUrl(null);
@@ -1874,33 +1844,23 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     try {
       if (isPaidEvent) {
         const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds);
-        // Redirect the tab that was already opened synchronously at click
-        // time (see handlePrimaryAction/handleSign) rather than calling
-        // window.open here. By this point we're past getQuickLocation's
-        // await and the createBookingCheckout round trip — a fresh
-        // window.open this late is no longer within the trusted
-        // user-gesture window on Safari (and unreliably on Chrome) and
-        // gets silently blocked, which is exactly the bug this replaces:
-        // no tab ever appeared, with the button stuck on "Confirming
-        // Payment…" and no error surfaced anywhere.
-        if (preOpenedWindow && !preOpenedWindow.closed) {
-          preOpenedWindow.location.href = url;
-        } else {
-          // No usable pre-opened tab — best-effort fresh open, and if
-          // that's blocked too, fall back to a visible manual link
-          // (pendingCheckoutUrl below) instead of a silent dead end.
-          const fresh = window.open(url, "_blank");
-          if (!fresh) setPendingCheckoutUrl(url);
-        }
+        // Two-tap checkout (2026-10-14). This used to pre-open a blank tab
+        // at tap time and point it at Stripe once the URL came back. On
+        // some phones, opening that tab backgrounded Atlas and paused it
+        // before the waiver save or this call finished, leaving the player
+        // on a blank tab with no waiver on file. Now nothing opens until
+        // all the work is done: the URL is held here and the player taps
+        // "Continue to Payment" (a plain target=_blank link, its own fresh
+        // gesture, so no popup blocker gets in the way).
+        setPendingCheckoutUrl(url);
+        setPaymentTabOpened(false);
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
-        preOpenedWindow?.close(); // shouldn't exist on the free path, but don't leave a stray blank tab if it does
         await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds);
         setBookingBusy(false);
       }
     } catch (err) {
-      preOpenedWindow?.close(); // don't leave a stray blank tab behind on a failed attempt
       // Every HttpsError createBookingCheckout/bookFreeEvent actually
       // throw (failed-precondition, already-exists, not-found,
       // invalid-argument, unauthenticated) is already a complete,
@@ -1978,11 +1938,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
       setShowWaiver(true);
       return;
     }
-    // Pre-open a blank tab synchronously, in direct response to this
-    // click, before proceedToBook's awaits — see proceedToBook for why.
-    // Only for a paid event; a free booking never opens a tab at all.
-    const preOpenedWindow = isPaidEvent ? openCheckoutPlaceholderTab() : null;
-    proceedToBook(preOpenedWindow);
+    proceedToBook();
   };
 
   const handleCancel = async () => {
@@ -2021,15 +1977,6 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
 
   const handleSign = async () => {
     if (!legalName.trim() || !agreed || !user) return;
-    // This tap is the real trusted gesture when a waiver was required —
-    // the original "Reserve This Event" tap only opened the waiver sheet,
-    // it never reached proceedToBook. So the blank tab has to be grabbed
-    // right here, synchronously, before signWaiver/proceedToBook's awaits
-    // — otherwise the eventual window.open lands well outside the
-    // trusted-gesture window on Safari and gets silently blocked. Never
-    // opened for a voucher redemption (no Stripe involved) or a free
-    // event.
-    const preOpenedWindow = (!pendingVoucherRedeem && isPaidEvent) ? openCheckoutPlaceholderTab() : null;
     setSigning(true);
     setSignError("");
     try {
@@ -2048,13 +1995,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
       // signature saves, rather than making the player tap a second time.
       if (pendingVoucherRedeem) {
         setPendingVoucherRedeem(false);
-        preOpenedWindow?.close(); // guard's already false above, but never leave a stray blank tab
         await proceedToRedeemVoucher();
       } else {
-        await proceedToBook(preOpenedWindow);
+        await proceedToBook();
       }
     } catch (err) {
-      preOpenedWindow?.close(); // signWaiver itself failed — don't leave a stray blank tab behind
       setSignError("Couldn't save your signature — try again.");
     } finally {
       setSigning(false);
@@ -2468,9 +2413,22 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
           // this is the UI half, so it doesn't even look tappable in the
           // meantime. "Didn't finish, try again?" below is the escape
           // hatch for someone who genuinely canceled on Stripe's page.
-          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
-            Confirming Payment…
-          </span>
+          pendingCheckoutUrl && !paymentTabOpened ? (
+            <a
+              href={pendingCheckoutUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setPaymentTabOpened(true)}
+              className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}
+            >
+              Continue to Payment
+            </a>
+          ) : (
+            <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
+              Confirming Payment…
+            </span>
+          )
         ) : fieldUnclaimed ? (
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
             Not Available
@@ -2493,22 +2451,13 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
       )}
       {checkoutOpenedInfo && !myBooking && (
         <div className="absolute bottom-20 left-0 right-0 px-5">
-          <p className="text-[12px] text-center py-2" style={{ ...body, color: T.ash, background: T.panel, borderRadius: 4, border: `1px solid ${T.line}` }}>
-            Complete your payment in the new tab — this page will update on its own once it's confirmed.
+          <p className="text-[12px] text-center py-2 px-2" style={{ ...body, color: T.ash, background: T.panel, borderRadius: 4, border: `1px solid ${T.line}` }}>
+            {paymentTabOpened
+              ? "Complete your payment in the new tab — this page will update on its own once it's confirmed."
+              : "Checkout is ready. Tap Continue to Payment to pay securely with Stripe."}
           </p>
-          {pendingCheckoutUrl && (
-            <a
-              href={pendingCheckoutUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full text-center text-[12px] font-semibold mt-1.5 py-2"
-              style={{ ...body, color: T.inverse, background: T.cta, borderRadius: T.rPill }}
-            >
-              Open Payment Page
-            </a>
-          )}
           <button
-            onClick={() => { setCheckoutOpenedInfo(false); setPendingCheckoutUrl(null); }}
+            onClick={() => { setCheckoutOpenedInfo(false); setPendingCheckoutUrl(null); setPaymentTabOpened(false); }}
             className="w-full text-center text-[11px] font-medium mt-1.5"
             style={{ ...body, color: T.accent }}
           >
