@@ -239,6 +239,39 @@ function timeBasedGreeting() {
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
+// Opens the tab Stripe Checkout will load into, synchronously inside the
+// click handler (see handlePrimaryAction/handleSign for why it has to be
+// opened this early). It used to be left as a bare about:blank page while
+// the waiver saved and the checkout session was created, which players
+// reported as "a blank screen". Now it shows a small branded placeholder
+// instead, with a note on what to do if it sits there. Writing into the
+// new window is best-effort only: if the browser won't let us, the tab
+// still works exactly as before, it just stays blank.
+function openCheckoutPlaceholderTab() {
+  const win = window.open("", "_blank");
+  if (!win) return null;
+  try {
+    win.document.open();
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparing Secure Checkout</title>
+<style>
+  html,body{margin:0;height:100%;background:#0B1220;color:#E6EAF2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;text-align:center}
+  .spin{width:36px;height:36px;border-radius:50%;border:3px solid rgba(230,234,242,0.18);border-top-color:#E6EAF2;animation:s 0.9s linear infinite;margin-bottom:20px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  h1{font-size:18px;font-weight:600;margin:0 0 8px}
+  p{font-size:13px;line-height:1.5;color:#9AA4B5;margin:0;max-width:300px}
+</style></head><body><div class="wrap">
+  <div class="spin"></div>
+  <h1>Preparing Secure Checkout</h1>
+  <p>This page will switch to the payment page in a moment.</p>
+  <p style="margin-top:16px">Still here after 30 seconds? Close this tab, go back to Atlas, and tap Reserve again.</p>
+</div></body></html>`);
+    win.document.close();
+  } catch (e) {
+    // Leave the tab as-is; navigation to Stripe still works.
+  }
+  return win;
+}
 // Best-effort location for the Walk-On Survivor check — resolves to null
 // (never rejects) on missing geolocation support, a denied/dismissed
 // permission prompt, or a timeout, so a booking never waits on or fails
@@ -1948,7 +1981,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     // Pre-open a blank tab synchronously, in direct response to this
     // click, before proceedToBook's awaits — see proceedToBook for why.
     // Only for a paid event; a free booking never opens a tab at all.
-    const preOpenedWindow = isPaidEvent ? window.open("", "_blank") : null;
+    const preOpenedWindow = isPaidEvent ? openCheckoutPlaceholderTab() : null;
     proceedToBook(preOpenedWindow);
   };
 
@@ -1996,7 +2029,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     // trusted-gesture window on Safari and gets silently blocked. Never
     // opened for a voucher redemption (no Stripe involved) or a free
     // event.
-    const preOpenedWindow = (!pendingVoucherRedeem && isPaidEvent) ? window.open("", "_blank") : null;
+    const preOpenedWindow = (!pendingVoucherRedeem && isPaidEvent) ? openCheckoutPlaceholderTab() : null;
     setSigning(true);
     setSignError("");
     try {
