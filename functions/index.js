@@ -313,6 +313,15 @@ function computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount)
   };
 }
 
+// A usable US phone number: exactly 10 digits (area code included), with an
+// optional leading country-code 1. Mirrors normalizeUSPhone() in the player
+// app's src/hooks/useDependents.js.
+function hasValidPhone(raw) {
+  let digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length === 11 && digits[0] === "1") digits = digits.slice(1);
+  return digits.length === 10 && digits[0] !== "0" && digits[0] !== "1";
+}
+
 // Validates everything about who's coming, server-side, for all three
 // booking paths (paid checkout, free, voucher): each child profile is the
 // caller's own, still under 18 on the event's start date, old enough for
@@ -328,8 +337,8 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
     throw new HttpsError("invalid-argument", `A booking can include you plus up to ${MAX_DEPENDENTS_PER_BOOKING} children.`);
   }
   const profile = profileData || (await db.collection("users").doc(uid).get()).data() || {};
-  if (!String(profile.phone || "").trim()) {
-    throw new HttpsError("failed-precondition", "Add your phone number in My Account before booking with a child — the field needs a way to reach you.");
+  if (!hasValidPhone(profile.phone)) {
+    throw new HttpsError("failed-precondition", "Add a 10-digit phone number (with area code) in My Account before booking with a child — the field needs a way to reach you.");
   }
   const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
   const depRefs = ids.map((id) => db.collection("users").doc(uid).collection("dependents").doc(id));

@@ -21,7 +21,7 @@ import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./leg
 import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
-import { useDependents, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
+import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { FONTS } from "./theme";
@@ -1813,7 +1813,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // exact, client-computable math — no server round-trip needed just to
   // decide whether to show the option.
   const minAge = typeof field?.minimumAge === "number" && field.minimumAge > 0 ? field.minimumAge : null;
-  const hasGuardianPhone = !!(profile?.phone || "").trim();
+  const hasGuardianPhone = !!normalizeUSPhone(profile?.phone);
   // Why a child can't be selected for this event (null = eligible). Age is
   // counted on the event's start date, not today.
   const dependentBlockReason = (d) => {
@@ -1961,7 +1961,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const handlePrimaryAction = () => {
     if (choiceMissing) return; // button is already disabled for this case — just a defensive no-op
     if (selectedDependents.length > 0 && !hasGuardianPhone) {
-      setBookingError("Add your phone number in My Account to book with a child — the field needs a number to reach you.");
+      setBookingError("Add a 10-digit phone number (with area code) in My Account to book with a child — the field needs a number to reach you.");
       return;
     }
     if (usingVoucher) {
@@ -2241,7 +2241,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                   <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>always attending</div>
                 </div>
                 {dependents.map((d) => {
-                  const reason = dependentBlockReason(d) || (!hasGuardianPhone ? "Add your phone number in My Account first" : null);
+                  const reason = dependentBlockReason(d) || (!hasGuardianPhone ? "Add a 10-digit phone number in My Account first" : null);
                   const picked = selectedDependentIds.includes(d.id) && !reason;
                   const atMax = !picked && attendeeCount >= MAX_ATTENDEES_PER_BOOKING;
                   const disabled = !!reason || atMax || bookingBusy;
@@ -5779,7 +5779,7 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const hasPhone = !!(profile?.phone || "").trim();
+  const hasPhone = !!normalizeUSPhone(profile?.phone);
   const today = localDateStr();
   const atLimit = dependents.length >= MAX_DEPENDENTS;
   const isNew = editingId === "new";
@@ -6014,6 +6014,13 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
       setSaveError("Callsign can't be empty.");
       return;
     }
+    // Optional, but if given it has to be a full 10-digit number with area
+    // code — a field owner can't call back a 7-digit number.
+    const cleanPhone = phone.trim() ? normalizeUSPhone(phone) : "";
+    if (cleanPhone === null) {
+      setSaveError("Enter a 10-digit phone number including the area code, like (517) 555-0123.");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     setSaveSuccess(false);
@@ -6022,8 +6029,9 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
         callsign: callsign.trim(),
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        phone: phone.trim(),
+        phone: cleanPhone,
       });
+      setPhone(cleanPhone);
       setSaveSuccess(true);
     } catch (err) {
       console.error("My Account save failed:", err);
@@ -6114,9 +6122,11 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
           <label className="text-[10px] font-semibold uppercase block mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Phone Number</label>
           <input
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
             type="tel"
-            placeholder="+1 (555) 000-0000"
+            inputMode="tel"
+            autoComplete="tel-national"
+            placeholder="(555) 000-0000"
             className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none"
             style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
           />

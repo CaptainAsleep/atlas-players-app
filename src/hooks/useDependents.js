@@ -16,6 +16,28 @@ export const ADULT_AGE = 18;
 // to a default there, so adding an id here later is safe.
 export const CHILD_AVATAR_IDS = ["shield", "target", "crosshair", "compass", "flag", "star", "rocket", "medal"];
 
+// US phone numbers are stored as "(517) 555-0123": exactly 10 digits,
+// area code included. Returns that formatted string, or null if the input
+// isn't a complete 10-digit number (a leading country-code 1 is tolerated
+// and dropped; an area code can't start with 0 or 1). Mirrors
+// hasValidPhone() in functions/index.js.
+export function normalizeUSPhone(raw) {
+  let digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length === 11 && digits[0] === "1") digits = digits.slice(1);
+  if (digits.length !== 10 || digits[0] === "0" || digits[0] === "1") return null;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+// Formats as the user types, so a missing area code is obvious on screen.
+export function formatPhoneInput(raw) {
+  let digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length > 10 && digits[0] === "1") digits = digits.slice(1);
+  digits = digits.slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 // Whole years old on a given date, from plain YYYY-MM-DD strings — no
 // Date objects, so there's no timezone drift to get a child's age wrong
 // by a day on their birthday. Returns null for anything malformed. Mirrors
