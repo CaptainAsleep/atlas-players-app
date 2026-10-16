@@ -124,7 +124,9 @@ const achievementPatches = [
 
   { id: "first-atlas-event", name: "First Atlas Event", imageFile: "firstatlasevent.png",
     details: "Attend the first ever event run on Atlas at The Compound Airsoft in Auburn, MI on October 24th, 2026",
-    trigger: { type: "filtered_checkin_count", count: 1, filter: { fieldId: "the-compound", dateRange: { start: "2026-10-24", end: "2026-10-24" } } } },
+    // Catalog-only now — granted by the Oct 24 event's own check-in reward
+    // patch instead. Having both fire gave players two copies.
+    trigger: null },
 
   { id: "motorcity-regular", name: "Motorcity Regular", imageFile: "motorcityregular.png",
     details: "Unlocked after checking into 5 games at MotorCity Airsoft",
@@ -200,8 +202,8 @@ const achievementPatches = [
     details: "Be a member of WhiteHorse Milsim", trigger: null },
 
   { id: "first-booking", name: "First Booking", imageFile: "firstbooking.png",
-    details: "A 1-of-1 patch, awarded to the very first person to ever book an event on Atlas",
-    trigger: null },
+    details: "Book your first event on Atlas",
+    trigger: { type: "total_booking_count", count: 1 } },
 ];
 
 async function uploadAndSeed() {

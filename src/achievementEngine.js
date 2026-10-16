@@ -145,6 +145,16 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
         qualifies = checkedIn.length >= trigger.count;
         break;
       }
+      // Counts bookings, not check-ins — the moment being rewarded is the
+      // booking itself. Every users/{uid}/bookings doc is written
+      // server-side only (bookFreeEvent, bookEventWithVoucher, or the
+      // Stripe webhook once payment succeeds), so a pending/abandoned
+      // checkout never appears here. Being evaluated on every app load,
+      // this also grants retroactively to anyone who already booked.
+      case "total_booking_count": {
+        qualifies = myBookings.length >= trigger.count;
+        break;
+      }
       case "field_checkin_count": {
         qualifies = checkedIn.filter((x) => x.event.fieldId === trigger.fieldId).length >= trigger.count;
         break;
