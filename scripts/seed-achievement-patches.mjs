@@ -202,8 +202,8 @@ const achievementPatches = [
     details: "Be a member of WhiteHorse Milsim", trigger: null },
 
   { id: "first-booking", name: "First Booking", imageFile: "firstbooking.png",
-    details: "Book your first event on Atlas",
-    trigger: { type: "total_booking_count", count: 1 } },
+    details: "A 1-of-1 patch, awarded to the very first person to ever book an event on Atlas",
+    trigger: null },
 ];
 
 async function uploadAndSeed() {
