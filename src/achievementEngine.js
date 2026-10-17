@@ -145,6 +145,22 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
         qualifies = checkedIn.length >= trigger.count;
         break;
       }
+      // Counts bookings (not check-ins) on events at a claimed field, i.e.
+      // one with an ownerId. Every users/{uid}/bookings doc is written
+      // server-side only (bookFreeEvent, bookEventWithVoucher, or the
+      // Stripe webhook after payment succeeds), so an abandoned checkout
+      // never shows up here. New bookings on unclaimed fields are already
+      // refused server-side; this filter is for older ones made before
+      // that gate existed. Evaluated on every app load, so it also grants
+      // retroactively to anyone who already booked.
+      case "claimed_field_booking_count": {
+        const claimedBookings = myBookings.filter((b) => {
+          const fieldId = b.fieldId || events.find((e) => e.id === b.eventId)?.fieldId;
+          return !!fields.find((f) => f.id === fieldId)?.ownerId;
+        });
+        qualifies = claimedBookings.length >= trigger.count;
+        break;
+      }
       case "field_checkin_count": {
         qualifies = checkedIn.filter((x) => x.event.fieldId === trigger.fieldId).length >= trigger.count;
         break;

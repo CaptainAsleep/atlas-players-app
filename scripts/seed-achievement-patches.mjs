@@ -204,6 +204,9 @@ const achievementPatches = [
   { id: "first-booking", name: "First Booking", imageFile: "firstbooking.png",
     details: "A 1-of-1 patch, awarded to the very first person to ever book an event on Atlas",
     trigger: null },
+  { id: "my-first-booking", name: "My First Booking", imageFile: "myfirstbooking.png",
+    details: "Book Your First Event Through Atlas",
+    trigger: { type: "claimed_field_booking_count", count: 1 } },
 ];
 
 async function uploadAndSeed() {
