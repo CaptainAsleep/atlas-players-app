@@ -7552,6 +7552,18 @@ function AppShell() {
     }).catch((err) => console.error("achievement evaluation failed:", err));
   }, [user, myBookings, myBookingsLoading, events, fields, patches, patchesLoading, profile, achievementCatalog, achievementCatalogLoading]);
 
+  // featuredPatch is denormalized onto users/{uid} and publicProfiles/{uid},
+  // which only the player can write. If an admin removes the patch it points
+  // at, clear it here on the player's next load so their callsign stops
+  // showing a patch they no longer own.
+  useEffect(() => {
+    if (!user || patchesLoading || !profile?.featuredPatch) return;
+    const stillOwned = patches.some((p) => p.name === profile.featuredPatch.name);
+    if (!stillOwned) {
+      setFeaturedPatch(user.uid, null).catch((err) => console.error("clearing stale featured patch failed:", err));
+    }
+  }, [user, patches, patchesLoading, profile?.featuredPatch]);
+
   const activeField =
     fields.find((f) => f.id === activeFieldId) ||
     (activeEvent ? fields.find((f) => f.id === activeEvent.fieldId) : null);
