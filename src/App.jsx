@@ -79,6 +79,18 @@ function stateNameFromCity(city) {
   const trimmed = city.trim();
   return Object.values(US_STATES).includes(trimmed) ? trimmed : null; // handles a bare state name like Sektor7's "Michigan"
 }
+// Atlas Major events have no field — the venue lives on the event itself
+// (venueName/address/venueCity/venueState, lat/lng optional). These helpers
+// give the feed one place to ask "where is this event" for either kind.
+// venueState is stored as a 2-letter code but a full name is tolerated.
+function eventStateName(ev, field) {
+  if (ev?.isMajor) {
+    const st = (ev.venueState || "").trim();
+    if (US_STATES[st.toUpperCase()]) return US_STATES[st.toUpperCase()];
+    return Object.values(US_STATES).includes(st) ? st : null;
+  }
+  return stateNameFromCity(field?.city);
+}
 // Combines a field's street address with its city/state for display,
 // without duplicating — older scraped addresses already have city/state
 // baked into the string (e.g. "1154 W Seidlers Rd, Auburn, MI 48611"),
@@ -209,8 +221,10 @@ function computePlayerYearStats(myBookings, patches, year) {
   );
   const fieldCounts = {};
   attended.forEach((b) => {
-    const key = b.fieldId || "unknown";
-    if (!fieldCounts[key]) fieldCounts[key] = { fieldId: b.fieldId, fieldName: b.fieldName || "Unknown field", count: 0 };
+    // Atlas Major bookings carry fieldId null — key them by event so they
+    // don't all collapse into one "unknown" bucket.
+    const key = b.fieldId || (b.hostOwnerId ? `major:${b.eventId || b.id || b.fieldName}` : "unknown");
+    if (!fieldCounts[key]) fieldCounts[key] = { fieldId: b.fieldId ?? null, fieldName: b.fieldName || "Unknown field", count: 0 };
     fieldCounts[key].count += 1;
   });
   const byField = Object.values(fieldCounts).sort((a, b) => b.count - a.count);
@@ -1154,18 +1168,20 @@ function HomeScreen({
     if (cat?.type && ev.type !== cat.type) return false;
     if (activeTodayOnly && !isLiveToday(ev)) return false;
     if (!eventPassesAdvanced(ev)) return false;
-    if (nearbyOnly) {
+    if (nearbyOnly && !ev.isMajor) {
+      // Majors are exempt: their distance is unknown in Phase 1 (no
+      // geocoding), and unknown must not mean filtered out.
       const dist = fieldDistance(fields.find((f) => f.id === ev.fieldId));
       if (dist === null || dist > radiusMiles) return false;
     }
     if (search.trim()) {
       const q = search.toLowerCase();
-      const haystack = `${ev.title} ${ev.fieldName}`.toLowerCase();
+      const haystack = `${ev.title ?? ""} ${ev.fieldName ?? ""} ${ev.venueCity ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     if (selectedState) {
       const evField = fields.find((f) => f.id === ev.fieldId);
-      if (stateNameFromCity(evField?.city) !== selectedState) return false;
+      if (eventStateName(ev, evField) !== selectedState) return false;
     }
     return true;
   });
@@ -1779,7 +1795,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // booking), so unlike the real Stripe total, "does it cover this?" is
   // exact, client-computable math — no server round-trip needed just to
   // decide whether to show the option.
-  const minAge = typeof field?.minimumAge === "number" && field.minimumAge > 0 ? field.minimumAge : null;
+  // A Major has no field — its minimum age (if any) lives on the event.
+  const minAgeSource = ev.isMajor ? ev.minimumAge : field?.minimumAge;
+  const minAge = typeof minAgeSource === "number" && minAgeSource > 0 ? minAgeSource : null;
   const hasGuardianPhone = !!normalizeUSPhone(profile?.phone);
   // Why a child can't be selected for this event (null = eligible). Age is
   // counted on the event's start date, not today.
@@ -1983,7 +2001,8 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
       await signWaiver({
         uid: user.uid,
         eventId: ev.id,
-        fieldId: ev.fieldId,
+        fieldId: ev.fieldId ?? null,
+        hostOwnerId: ev.hostOwnerId ?? null,
         signedName: legalName.trim(),
         waiverVersion: ev.waiver.version,
         dependents: selectedDependents.map((d) => ({ id: d.id, fullName: d.fullName })),
@@ -2101,7 +2120,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               <MapPin size={17} color={T.ashDim} className="mt-0.5" />
               <div>
                 <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.fieldName}<ClaimedBadge claimed={field?.ownerId} size={14} /></div>
-                {field?.city && <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{field.city}</div>}
+                {ev.isMajor
+                  ? ([ev.venueCity, ev.venueState].filter(Boolean).length > 0 && <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{[ev.venueCity, ev.venueState].filter(Boolean).join(", ")}</div>)
+                  : (field?.city && <div className="text-[12px]" style={{ ...body, color: T.ashFaint }}>{field.city}</div>)}
               </div>
             </button>
             {ev.interestCount > 0 && (
@@ -2122,7 +2143,12 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             label="Event Location"
             name={ev.venueName || field?.name}
             claimed={!ev.venueName && !!field?.ownerId}
-            address={ev.address || fullAddress(field)}
+            // A Major's address is street-only on the event; append city/state so
+            // the directions link (which searches by this text when there are
+            // no coordinates) lands in the right town.
+            address={ev.isMajor
+              ? [ev.address, ev.venueCity, ev.venueState].filter(Boolean).join(", ")
+              : (ev.address || fullAddress(field))}
             lat={typeof ev.lat === "number" ? ev.lat : field?.lat}
             lng={typeof ev.lng === "number" ? ev.lng : field?.lng}
           />
@@ -2480,7 +2506,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             <div className="sticky top-0 px-5 pt-4 pb-3 flex items-center justify-between" style={{ background: T.void, borderBottom: `1px solid ${T.line}` }}>
               <div>
                 <h2 className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Sign to Reserve</h2>
-                <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{field?.name || ev.fieldName} Waiver</p>
+                <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{field?.name || ev.venueName || ev.fieldName} Waiver</p>
               </div>
               <button onClick={() => !signing && setShowWaiver(false)} className="w-8 h-8 flex items-center justify-center">
                 <X size={18} color={T.ashDim} />
@@ -4125,9 +4151,27 @@ function TeamCalendarSection({ team, user, profile, isMember, isOfficer, fields,
 
 // Officer-only role manager (create / edit / delete). Everyone can see the
 // role list; assignment to members happens in the roster.
+// Collapsible section header for Team Ranks / Team Roles — same ▴/▾ idiom
+// as the "Past events" and "who's going" toggles. Collapsed by default.
+function CollapsibleEyebrow({ label, count, open, onToggle }) {
+  const { T, mono } = useTheme();
+  return (
+    <button
+      onClick={onToggle}
+      aria-expanded={open}
+      className="w-full flex items-center justify-between text-[10px] font-semibold uppercase mb-2 text-left"
+      style={{ ...mono, color: T.ashFaint, letterSpacing: "0.08em" }}
+    >
+      <span>{label}{count > 0 ? ` (${count})` : ""}</span>
+      <span>{open ? "▴" : "▾"}</span>
+    </button>
+  );
+}
+
 function TeamRolesSection({ team, user, members, roles, isOfficer }) {
   const { T, display, body } = useTheme();
   const { createTeamRole, reorderTeamRoles, updateTeamRole, deleteTeamRole } = useTeamActions();
+  const [open, setOpen] = useState(false); // collapsed by default
   const [editingId, setEditingId] = useState(null); // role id, or "new"
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -4185,7 +4229,9 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
 
   return (
     <>
-      <Eyebrow>Team Roles</Eyebrow>
+      <CollapsibleEyebrow label="Team Roles" count={roles.length} open={open} onToggle={() => setOpen((o) => !o)} />
+      {!open && <div className="mb-5" />}
+      {open && (<>
       <div className="flex flex-col gap-2 mb-3">
         {roles.map((r, i) => (
           <div key={r.id} className="p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -4234,6 +4280,7 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
           </button>
         </>
       )}
+      </>)}
     </>
   );
 }
@@ -4244,6 +4291,7 @@ function TeamRolesSection({ team, user, members, roles, isOfficer }) {
 function TeamRanksSection({ team, user, members, ranks, isOfficer }) {
   const { T, display, body } = useTheme();
   const { createTeamRank, updateTeamRank, deleteTeamRank, swapTeamRankOrder } = useTeamActions();
+  const [open, setOpen] = useState(false); // collapsed by default
   const [editingId, setEditingId] = useState(null); // rank id, or "new"
   const [title, setTitle] = useState("");
   const [requirements, setRequirements] = useState("");
@@ -4327,7 +4375,9 @@ function TeamRanksSection({ team, user, members, ranks, isOfficer }) {
 
   return (
     <>
-      <Eyebrow>Team Ranks</Eyebrow>
+      <CollapsibleEyebrow label="Team Ranks" count={ranks.length} open={open} onToggle={() => setOpen((o) => !o)} />
+      {!open && <div className="mb-5" />}
+      {open && (<>
       <div className="flex flex-col gap-2 mb-3">
         {ranks.map((r, i) => (
           <div key={r.id} className="p-3 flex items-start gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -4393,6 +4443,7 @@ function TeamRanksSection({ team, user, members, ranks, isOfficer }) {
           </button>
         </>
       )}
+      </>)}
     </>
   );
 }
@@ -4523,6 +4574,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const ranks = useTeamRanks(team?.id);
   const { setMemberRoleIds, setJoinPolicy, setMemberRank } = useTeamActions();
   const [assigningUid, setAssigningUid] = useState(null);
+  const [menuUid, setMenuUid] = useState(null); // roster row whose kebab menu is open
   const [policyBusy, setPolicyBusy] = useState(false);
 
   const myMembership = members.find((m) => m.uid === user?.uid);
@@ -4986,9 +5038,9 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
         <Eyebrow>Roster ({members.length})</Eyebrow>
         <div className="flex flex-col gap-2 mb-5">
           {members.map((m) => (
-            <div key={m.uid} className="p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className="flex items-center gap-3">
-              <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 flex items-center gap-3 text-left">
+            <div key={m.uid} className="p-3 relative" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            <div className={`flex items-center gap-3 ${isOfficer && ((roles.length > 0 || ranks.length > 0) || m.uid !== user?.uid) ? "pr-8" : ""}`}>
+              <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
                 {m.avatarUrl ? (
                   <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
                 ) : (
@@ -4996,8 +5048,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                     {m.callsign.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div className="flex-1">
-                  <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{m.callsign}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{m.callsign}</div>
                   {ranks.find((r) => r.id === m.rankId) && (
                     <div className="flex items-center gap-1.5 text-[11px]" style={{ ...body, color: T.ashDim }}>
                       {ranks.find((r) => r.id === m.rankId).imageUrl && (
@@ -5013,35 +5065,61 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                   )}
                 </div>
               </button>
-              {m.role === "officer" && <Tag tone="accent">OFFICER</Tag>}
-              {isOfficer && (roles.length > 0 || ranks.length > 0) && (
-                <button
-                  onClick={() => setAssigningUid(assigningUid === m.uid ? null : m.uid)}
-                  className="px-2 py-1 text-[10px] font-semibold"
-                  style={{ ...body, border: `1px solid ${T.line}`, color: T.accent, borderRadius: T.rPill }}
-                >
-                  Assign
-                </button>
-              )}
-              {isOfficer && m.uid !== user?.uid && (
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setMemberRole(team.id, m.uid, m.role === "officer" ? "member" : "officer")}
-                    className="px-2 py-1 text-[10px] font-semibold"
-                    style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}
-                  >
-                    {m.role === "officer" ? "Demote" : "Promote"}
-                  </button>
-                  <button
-                    onClick={() => removeMember(team.id, m.uid)}
-                    className="px-2 py-1 text-[10px] font-semibold"
-                    style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: T.rPill }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              )}
+              {m.role === "officer" && <div className="flex-shrink-0"><Tag tone="accent">OFFICER</Tag></div>}
             </div>
+            {isOfficer && ((roles.length > 0 || ranks.length > 0) || m.uid !== user?.uid) && (
+              <div className="absolute top-2 right-2">
+                <button
+                  onClick={() => setMenuUid(menuUid === m.uid ? null : m.uid)}
+                  aria-label="Member options"
+                  aria-expanded={menuUid === m.uid}
+                  className="w-8 h-8 flex items-center justify-center"
+                  style={{ color: T.ashDim, borderRadius: 999 }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <circle cx="8" cy="3" r="1.4" /><circle cx="8" cy="8" r="1.4" /><circle cx="8" cy="13" r="1.4" />
+                  </svg>
+                </button>
+                {menuUid === m.uid && (
+                  <>
+                    <button aria-label="Close menu" onClick={() => setMenuUid(null)} className="fixed inset-0 z-40 cursor-default" style={{ background: "transparent" }} />
+                    <div className="absolute right-0 top-9 z-50 flex flex-col py-1 min-w-[150px]" style={{ background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                      {(roles.length > 0 || ranks.length > 0) && (
+                        <button
+                          onClick={() => { setAssigningUid(assigningUid === m.uid ? null : m.uid); setMenuUid(null); }}
+                          className="px-3 py-2 text-left text-[12px] font-semibold"
+                          style={{ ...body, color: T.accent }}
+                        >
+                          {assigningUid === m.uid ? "Close assign" : "Assign rank / roles"}
+                        </button>
+                      )}
+                      {m.uid !== user?.uid && (
+                        <>
+                          <button
+                            onClick={() => { setMemberRole(team.id, m.uid, m.role === "officer" ? "member" : "officer"); setMenuUid(null); }}
+                            className="px-3 py-2 text-left text-[12px] font-semibold"
+                            style={{ ...body, color: T.ash }}
+                          >
+                            {m.role === "officer" ? "Demote to member" : "Promote to officer"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setMenuUid(null);
+                              if (!window.confirm(`Remove ${m.callsign} from ${team.name}? They'll lose their rank and roles on this team.`)) return;
+                              removeMember(team.id, m.uid);
+                            }}
+                            className="px-3 py-2 text-left text-[12px] font-semibold"
+                            style={{ ...body, color: T.alert }}
+                          >
+                            Remove from team
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {isOfficer && assigningUid === m.uid && ranks.length > 0 && (
               <div className="mt-2">
                 <div className="text-[10px] font-semibold mb-1" style={{ ...body, color: T.ashFaint }}>RANK</div>
@@ -7724,7 +7802,12 @@ function AppShell() {
         cancelBooking={cancelBooking}
         createBookingCheckout={createBookingCheckout}
         fieldVouchers={activeEvent ? myVouchers.filter((v) =>
-          v.fieldId === activeEvent.fieldId &&
+          // Host-scoped for Atlas Major events (voucher carries hostOwnerId,
+          // fieldId null); field-scoped otherwise. The !!v.fieldId guard stops
+          // null === null from matching a Major voucher to every fieldless event.
+          (activeEvent.hostOwnerId
+            ? v.hostOwnerId === activeEvent.hostOwnerId
+            : (!v.hostOwnerId && !!v.fieldId && v.fieldId === activeEvent.fieldId)) &&
           !(v.expiresAt && v.expiresAt.toDate() < new Date()) &&
           v.excludedEventId !== activeEvent.id
         ) : []}

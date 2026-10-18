@@ -136,10 +136,30 @@ service cloud.firestore {
       allow read: if true;
       // Creating a new event requires owning the field it belongs to —
       // checked by reading that field's own ownerId.
-      allow create: if request.auth != null
-        && get(/databases/$(database)/documents/fields/$(request.resource.data.fieldId)).data.ownerId == request.auth.uid;
-      allow delete: if request.auth != null
-        && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid;
+      //
+      // Atlas Major (2026-10-18): an organizer with no field creates an event
+      // carrying isMajor + hostOwnerId == their own uid and NO fieldId, so
+      // there is no field for anyone else to be planted onto. The two
+      // branches are mutually exclusive on purpose: an ordinary field event
+      // may not carry isMajor/hostOwnerId (otherwise a field owner could
+      // flip their own event into the uncapped-fee Major path), and a Major
+      // may not name a field. Every read of an optional key uses .get() — a
+      // bare read of a missing key errors, which denies.
+      allow create: if request.auth != null && (
+        (request.resource.data.get('isMajor', false) == true
+          && request.resource.data.get('hostOwnerId', null) == request.auth.uid
+          && request.resource.data.get('fieldId', null) == null)
+        ||
+        (request.resource.data.get('isMajor', false) != true
+          && request.resource.data.get('hostOwnerId', null) == null
+          && get(/databases/$(database)/documents/fields/$(request.resource.data.fieldId)).data.ownerId == request.auth.uid)
+      );
+      allow delete: if request.auth != null && (
+        resource.data.get('hostOwnerId', null) == request.auth.uid
+        ||
+        (resource.data.get('hostOwnerId', null) == null
+          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid)
+      );
       // Security fix 2026-10-13: these counters used to accept ANY value from
       // any signed-in user — enough to fake "capacity reached" on any event,
       // and to email-bomb an owner (notifyOwnerOverCapacity sends one email
@@ -172,8 +192,20 @@ service cloud.firestore {
         // The event's own field owner making a full edit — but not moving
         // the event onto a different field (fieldId is part of what decides
         // who owns it; changing it could plant events on someone else's page).
-        (get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+        (resource.data.get('hostOwnerId', null) == null
+          && request.resource.data.get('hostOwnerId', null) == null
+          && request.resource.data.get('isMajor', false) != true
+          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
           && request.resource.data.fieldId == resource.data.fieldId)
+        ||
+        // Atlas Major: the hosting organizer making a full edit. fieldId,
+        // hostOwnerId and isMajor are immutable — they decide who owns the
+        // event and which fee/payout path it takes, so changing any of them
+        // could hand the event (or its payouts) to someone else.
+        (resource.data.get('hostOwnerId', null) == request.auth.uid
+          && request.resource.data.get('hostOwnerId', null) == resource.data.get('hostOwnerId', null)
+          && request.resource.data.get('isMajor', false) == resource.data.get('isMajor', false)
+          && request.resource.data.get('fieldId', null) == resource.data.get('fieldId', null))
       );
 
       // Real bookings — public read, same openness as team rosters, so a
@@ -221,8 +253,13 @@ service cloud.firestore {
         // time) rather than chaining through the event doc — a single
         // lookup instead of two, consistent with how this schema always
         // prefers denormalization over nested reads.
+        // hostOwnerId (Atlas Major) is denormalized onto the booking by the
+        // Cloud Function that creates it (client create is blocked above), so
+        // it can be trusted here; field-based bookings fall back to the field.
         allow update: if request.auth != null
-          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+          && (resource.data.get('hostOwnerId', null) == request.auth.uid
+            || (resource.data.get('hostOwnerId', null) == null
+              && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid))
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt"]);
 
         // Private per-attendee details for a booking (legal name, DOB,
@@ -236,6 +273,7 @@ service cloud.firestore {
         match /attendeeDetails/{attId} {
           allow read: if request.auth != null && (
             request.auth.uid == uid
+            || get(/databases/$(database)/documents/events/$(eventId)/bookings/$(uid)).data.get('hostOwnerId', null) == request.auth.uid
             || get(/databases/$(database)/documents/fields/$(get(/databases/$(database)/documents/events/$(eventId)/bookings/$(uid)).data.fieldId)).data.ownerId == request.auth.uid
           );
           allow create, update: if false;
@@ -382,8 +420,13 @@ service cloud.firestore {
           // before it ever got evaluated.
           && resource.data.get('paid', false) != true;
 
+        // hostOwnerId (Atlas Major) is denormalized onto the booking by the
+        // Cloud Function that creates it (client create is blocked above), so
+        // it can be trusted here; field-based bookings fall back to the field.
         allow update: if request.auth != null
-          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+          && (resource.data.get('hostOwnerId', null) == request.auth.uid
+            || (resource.data.get('hostOwnerId', null) == null
+              && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid))
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt"]);
 
         // Real bookings are a real commitment ("I will physically be at
@@ -568,7 +611,11 @@ service cloud.firestore {
     match /waiverSignatures/{sigId} {
       allow read: if request.auth != null && (
         request.auth.uid == resource.data.uid
-        || get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid
+        || resource.data.get('hostOwnerId', null) == request.auth.uid
+        // Guarded so a Major's signature (fieldId null) short-circuits to false
+        // here instead of erroring on fields/$(null).
+        || (resource.data.get('fieldId', null) != null
+          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid)
       );
       // Child waiver docs (guardian signing on behalf of a minor) reuse this
       // exact pattern: one immutable doc per child per event, id

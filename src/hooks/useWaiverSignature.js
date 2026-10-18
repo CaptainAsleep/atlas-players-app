@@ -46,13 +46,16 @@ export function useWaiverSignature(uid, eventId) {
   // per child that doesn't have one — all in a single batch, so it either
   // fully lands or not at all. waiverVersion is a permanent record of
   // exactly which wording was agreed to, in case the owner edits it later.
-  async function signWaiver({ uid, eventId, fieldId, signedName, waiverVersion, dependents = [] }) {
+  async function signWaiver({ uid, eventId, fieldId = null, hostOwnerId = null, signedName, waiverVersion, dependents = [] }) {
     const batch = writeBatch(db);
     if (!signature) {
       batch.set(doc(db, "waiverSignatures", `${uid}_${eventId}`), {
         uid,
         eventId,
-        fieldId,
+        fieldId: fieldId ?? null,
+        // Atlas Major: no field, so the organizer is the one who needs to
+        // read this signature (firestore.rules waiverSignatures read).
+        ...(hostOwnerId ? { hostOwnerId } : {}),
         signedName,
         waiverVersion,
         signedAt: serverTimestamp(),
@@ -63,7 +66,10 @@ export function useWaiverSignature(uid, eventId) {
       batch.set(doc(db, "waiverSignatures", `${uid}_${eventId}_${dep.id}`), {
         uid,
         eventId,
-        fieldId,
+        fieldId: fieldId ?? null,
+        // Atlas Major: no field, so the organizer is the one who needs to
+        // read this signature (firestore.rules waiverSignatures read).
+        ...(hostOwnerId ? { hostOwnerId } : {}),
         dependentId: dep.id,
         dependentName: dep.fullName,
         signedName,

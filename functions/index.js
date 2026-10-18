@@ -147,10 +147,15 @@ export const createConnectOnboardingLink = onCall(
 
     // Account Links expire quickly and are single-use by design — always
     // generate a fresh one rather than trying to cache or reuse one.
+    // Two apps onboard through here (field owners and event organizers).
+    // Exact-match allowlist only — never an arbitrary caller-supplied URL,
+    // which would be an open redirect on a payments flow.
+    const allowedAppOrigins = ["https://ownerapp.airsoftatlas.app", "https://organizers.airsoftatlas.app"];
+    const appOrigin = allowedAppOrigins.includes(request.data?.appOrigin) ? request.data.appOrigin : allowedAppOrigins[0];
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: "https://ownerapp.airsoftatlas.app/?connect=refresh",
-      return_url: "https://ownerapp.airsoftatlas.app/?connect=return",
+      refresh_url: `${appOrigin}/?connect=refresh`,
+      return_url: `${appOrigin}/?connect=return`,
       type: "account_onboarding",
     });
 
@@ -276,8 +281,45 @@ function resolveRentalsTotal(fieldData, selectedRentalIds) {
 // default) or it's deducted from the field's payout (feeModel "absorb")
 // is decided by the caller — this only computes the fee amount itself,
 // same number either way.
-function computeStandardFee(entryPriceCents) {
-  return Math.min(Math.round(entryPriceCents * 0.035) + 130, 500);
+// Major events (organizer-hosted, see isMajorEvent below) use the same
+// formula with the $5 cap removed, and the fee is always absorbed by the
+// host — see createBookingCheckout.
+function computeStandardFee(entryPriceCents, uncapped = false) {
+  const fee = Math.round(entryPriceCents * 0.035) + 130;
+  return uncapped ? fee : Math.min(fee, 500);
+}
+
+// A "Major" event is created by an organizer who owns no field: it carries
+// isMajor + hostOwnerId, has no fieldId, and keeps its venue inline on the
+// event doc (venueName/address/venueCity/venueState, optional lat/lng and
+// minimumAge). Both flags are required, and isMajor is only ever read from
+// the stored event doc — never from a request — and is locked after create
+// by firestore.rules.
+function isMajorEvent(eventData) {
+  return eventData?.isMajor === true && !!eventData?.hostOwnerId;
+}
+
+// One place that answers "who gets paid for / manages this event, and what
+// field-like data applies to it". For an ordinary event that is the field
+// doc and its owner, exactly as before. For a Major it is the host plus a
+// field-shaped object built from the event's inline venue. Every function
+// below that used to do fields.doc(eventData.fieldId) goes through this —
+// doc(undefined) throws a generic Error on a field-less event.
+async function resolveEventHost(db, eventData) {
+  const isMajor = isMajorEvent(eventData);
+  let fieldData = {};
+  if (eventData.fieldId) {
+    fieldData = (await db.collection("fields").doc(eventData.fieldId).get()).data() || {};
+  } else if (isMajor) {
+    fieldData = {
+      name: eventData.venueName || eventData.fieldName || "",
+      lat: typeof eventData.lat === "number" ? eventData.lat : undefined,
+      lng: typeof eventData.lng === "number" ? eventData.lng : undefined,
+      minimumAge: typeof eventData.minimumAge === "number" ? eventData.minimumAge : undefined,
+    };
+  }
+  const ownerId = eventData.hostOwnerId || fieldData.ownerId || null;
+  return { fieldData, ownerId, isMajor };
 }
 
 // --- Child profiles / multi-attendee bookings -----------------------------
@@ -305,11 +347,11 @@ function ageOnDateServer(dob, onDate) {
 // once, on the last ticket — so N=1 is byte-identical to the old single
 // computeStandardFee(entry + rentals). A $0 entry (free event + paid
 // rentals) adds no per-ticket fee for the extra people.
-function computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount) {
-  const perTicketFeeCents = entryPriceCents > 0 ? computeStandardFee(entryPriceCents) : 0;
+function computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount, uncapped = false) {
+  const perTicketFeeCents = entryPriceCents > 0 ? computeStandardFee(entryPriceCents, uncapped) : 0;
   return {
     perTicketFeeCents,
-    bookingFeeCents: (attendeeCount - 1) * perTicketFeeCents + computeStandardFee(chargeableCents),
+    bookingFeeCents: (attendeeCount - 1) * perTicketFeeCents + computeStandardFee(chargeableCents, uncapped),
   };
 }
 
@@ -537,7 +579,7 @@ export const createBookingCheckout = onCall(
     // Depends only on eventData.fieldId, now known — kicked off here so
     // it runs in parallel with the waiver-signature read (and the sync
     // capacity check) below, instead of waiting for both to finish first.
-    const fieldPromise = db.collection("fields").doc(eventData.fieldId).get();
+    const hostPromise = resolveEventHost(db, eventData);
 
     // Waiver requirement, re-checked server-side — the client already
     // gates this in the UI, but a real payment endpoint can't trust the
@@ -558,12 +600,11 @@ export const createBookingCheckout = onCall(
       throw new HttpsError("already-exists", "Already booked for this event.");
     }
 
-    const fieldSnap = await fieldPromise; // had a head start since eventData.fieldId became known
-    const fieldData = fieldSnap.data();
-    if (!fieldData?.ownerId) {
-      throw new HttpsError("failed-precondition", "This field isn't set up to accept payments yet.");
+    const { fieldData, ownerId, isMajor } = await hostPromise; // had a head start since eventData became known
+    if (!ownerId) {
+      throw new HttpsError("failed-precondition", isMajor ? "This event isn't set up to accept payments yet." : "This field isn't set up to accept payments yet.");
     }
-    const ownerSnap = await db.collection("owners").doc(fieldData.ownerId).get();
+    const ownerSnap = await db.collection("owners").doc(ownerId).get();
     const ownerData = ownerSnap.data();
     if (!ownerData?.payoutsEnabled || !ownerData?.stripeConnectAccountId) {
       throw new HttpsError("failed-precondition", "This field hasn't finished payment setup yet.");
@@ -600,8 +641,11 @@ export const createBookingCheckout = onCall(
     // the math sane rather than throwing if that ever changes).
     // Total fee across all N tickets (see computeBookingFeeCents) — this is
     // also exactly what goes on application_fee_amount below.
-    const { perTicketFeeCents, bookingFeeCents } = computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount);
-    const passFeeToPlayer = ownerData.feeModel !== "absorb";
+    const { perTicketFeeCents, bookingFeeCents } = computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount, isMajor);
+    // Major events: the fee is never passed to the player, whatever (or
+    // whether) the host's owners doc says — a host with no field never
+    // picks a fee model, and the unset default would be pass-to-player.
+    const passFeeToPlayer = isMajor ? false : ownerData.feeModel !== "absorb";
     // Only the entry line item's own price carries the fee (exactly as
     // before) — a rental's cost is a real, hard cost, never something an
     // owner "absorbs" the way Atlas's own fee can be. Each rental gets its
@@ -612,7 +656,7 @@ export const createBookingCheckout = onCall(
     // The last (or only) ticket carries the rentals' share of the fee, so a
     // solo booking's line is identical to before. For N > 1, the other N-1
     // tickets go on one extra line at entry + their own per-ticket fee.
-    const entryLineItemCents = passFeeToPlayer ? entryPriceCents + computeStandardFee(chargeableCents) : entryPriceCents;
+    const entryLineItemCents = passFeeToPlayer ? entryPriceCents + computeStandardFee(chargeableCents, isMajor) : entryPriceCents;
     const ticketProductData = {
       name: eventData.title,
       description: selectedChoice
@@ -671,7 +715,9 @@ export const createBookingCheckout = onCall(
       metadata: {
         firebaseUid: uid,
         eventId,
-        fieldId: eventData.fieldId,
+        // Omitted (not undefined/empty) for a field-less Major event.
+        ...(eventData.fieldId ? { fieldId: eventData.fieldId } : {}),
+        ...(isMajor ? { isMajor: "true", hostOwnerId: ownerId } : {}),
         bookingFeeCents: String(bookingFeeCents),
         // Lets the webhook recompute the expected total and refuse to book
         // on a mismatch. attendeeCount / attendeeDependentIds appear only
@@ -788,9 +834,8 @@ export const bookFreeEvent = onCall(
     // unclaimed field has no owner on Atlas to see or honor this booking,
     // so it doesn't matter that this particular event happens to be free —
     // block it here too rather than only when money's involved.
-    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
-    const fieldData = fieldSnap.data();
-    if (!fieldData?.ownerId) {
+    const { fieldData, ownerId } = await resolveEventHost(db, eventData);
+    if (!ownerId) {
       throw new HttpsError("failed-precondition", "This field hasn't been claimed by an owner yet, so bookings aren't available.");
     }
 
@@ -840,7 +885,8 @@ export const bookFreeEvent = onCall(
       const now = new Date();
       t.set(bookingRef, {
         uid,
-        fieldId: eventData.fieldId,
+        fieldId: eventData.fieldId ?? null,
+        ...(eventData.hostOwnerId ? { hostOwnerId: eventData.hostOwnerId } : {}),
         teamId: profileData.teamId || null,
         callsign: profileData.callsign || "Player",
         avatarUrl: profileData.avatarUrl || null,
@@ -852,7 +898,8 @@ export const bookFreeEvent = onCall(
       writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents);
       t.set(userBookingRef, {
         eventId,
-        fieldId: eventData.fieldId,
+        fieldId: eventData.fieldId ?? null,
+        ...(eventData.hostOwnerId ? { hostOwnerId: eventData.hostOwnerId } : {}),
         eventTitle: eventData.title || null,
         fieldName: eventData.fieldName || null,
         date: eventData.date || null,
@@ -901,11 +948,10 @@ export const cancelEventWithVouchers = onCall(
     }
     const eventData = eventSnap.data();
 
-    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
-    if (!fieldSnap.exists || fieldSnap.data().ownerId !== uid) {
-      throw new HttpsError("permission-denied", "You don't own this event's field.");
+    const { fieldData, ownerId, isMajor } = await resolveEventHost(db, eventData);
+    if (!ownerId || ownerId !== uid) {
+      throw new HttpsError("permission-denied", isMajor ? "You don't own this event." : "You don't own this event's field.");
     }
-    const fieldData = fieldSnap.data();
 
     // Needed to back the Atlas platform fee out of each voucher's value —
     // a voucher only replaces the ticket, not the booking fee (Atlas's
@@ -913,8 +959,8 @@ export const cancelEventWithVouchers = onCall(
     // platforms' convenience fees). feeModel is locked in for good once
     // an owner picks it, so the current value is safe to use even for a
     // booking made earlier under the same owner.
-    const ownerSnap = fieldData.ownerId ? await db.collection("owners").doc(fieldData.ownerId).get() : null;
-    const passFeeToPlayer = (ownerSnap?.data()?.feeModel) !== "absorb";
+    const ownerSnap = ownerId ? await db.collection("owners").doc(ownerId).get() : null;
+    const passFeeToPlayer = isMajor ? false : (ownerSnap?.data()?.feeModel) !== "absorb";
 
     if (eventData.canceled) {
       // Already canceled — nothing new to do, but don't error the owner
@@ -973,7 +1019,8 @@ export const cancelEventWithVouchers = onCall(
           // rental either.
           voucherAmountCents = resolveVoucherAmountCents(b, passFeeToPlayer);
           batch.set(voucherRef, {
-            fieldId: eventData.fieldId,
+            fieldId: eventData.fieldId ?? null,
+            ...(isMajor ? { hostOwnerId: ownerId } : {}),
             fieldName: eventData.fieldName || fieldData.name || null,
             amountCents: voucherAmountCents,
             originalAmountCents: voucherAmountCents,
@@ -995,7 +1042,8 @@ export const cancelEventWithVouchers = onCall(
           type: "event_canceled",
           eventId,
           eventTitle: eventData.title || null,
-          fieldId: eventData.fieldId,
+          fieldId: eventData.fieldId ?? null,
+          ...(isMajor ? { hostOwnerId: ownerId } : {}),
           fieldName: eventData.fieldName || fieldData.name || null,
           voucherId,
           voucherAmountCents,
@@ -1048,18 +1096,17 @@ export const grantVoucherToPlayer = onCall(
     }
     const eventData = eventSnap.data();
 
-    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
-    if (!fieldSnap.exists || fieldSnap.data().ownerId !== ownerUid) {
-      throw new HttpsError("permission-denied", "You don't own this event's field.");
+    const { fieldData, ownerId, isMajor } = await resolveEventHost(db, eventData);
+    if (!ownerId || ownerId !== ownerUid) {
+      throw new HttpsError("permission-denied", isMajor ? "You don't own this event." : "You don't own this event's field.");
     }
-    const fieldData = fieldSnap.data();
 
     if (eventData.canceled) {
       throw new HttpsError("failed-precondition", "This event is already canceled — the whole roster already got vouchers.");
     }
 
-    const ownerSnap = fieldData.ownerId ? await db.collection("owners").doc(fieldData.ownerId).get() : null;
-    const passFeeToPlayer = (ownerSnap?.data()?.feeModel) !== "absorb";
+    const ownerSnap = ownerId ? await db.collection("owners").doc(ownerId).get() : null;
+    const passFeeToPlayer = isMajor ? false : (ownerSnap?.data()?.feeModel) !== "absorb";
     const savedExpirationDays = ownerSnap?.data()?.voucherExpirationDays;
     const expirationDays = Number.isInteger(savedExpirationDays) && savedExpirationDays >= 1 && savedExpirationDays <= 3650
       ? savedExpirationDays
@@ -1105,7 +1152,8 @@ export const grantVoucherToPlayer = onCall(
       t.update(eventRef, { bookedCount: Math.max(0, (freshEventData.bookedCount || 0) - (b.attendeeCount || 1)) });
 
       t.set(voucherRef, {
-        fieldId: eventData.fieldId,
+        fieldId: eventData.fieldId ?? null,
+        ...(isMajor ? { hostOwnerId: ownerId } : {}),
         fieldName: eventData.fieldName || fieldData.name || null,
         amountCents: voucherAmountCents,
         originalAmountCents: voucherAmountCents,
@@ -1128,7 +1176,8 @@ export const grantVoucherToPlayer = onCall(
         type: "voucher_granted",
         eventId,
         eventTitle: eventData.title || null,
-        fieldId: eventData.fieldId,
+        fieldId: eventData.fieldId ?? null,
+        ...(isMajor ? { hostOwnerId: ownerId } : {}),
         fieldName: eventData.fieldName || fieldData.name || null,
         voucherId: voucherRef.id,
         voucherAmountCents,
@@ -1210,8 +1259,8 @@ export const bookEventWithVoucher = onCall(
     const profileSnap = await db.collection("users").doc(uid).get();
     const profileData = profileSnap.data() || {};
     const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: selectedChoice.priceCents } : {};
-    const fieldSnap = await db.collection("fields").doc(eventData.fieldId).get();
-    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData: fieldSnap.data() || {}, profileData, dependentIds: request.data?.attendeeDependentIds });
+    const { fieldData } = await resolveEventHost(db, eventData);
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds });
     const attendeeCount = attendees.attendeeCount;
     // Full-cover only, now for the whole party: the voucher has to cover
     // every attendee's ticket (a voucher from an N-person booking is worth
@@ -1231,8 +1280,13 @@ export const bookEventWithVoucher = onCall(
       if (voucher.status !== "active") {
         throw new HttpsError("failed-precondition", "This voucher has already been used.");
       }
-      if (voucher.fieldId !== eventData.fieldId) {
-        throw new HttpsError("failed-precondition", "This voucher isn't valid at this field.");
+      // Field vouchers match on the field; a Major event's vouchers are
+      // scoped to its host (hostOwnerId) instead, since it has no field.
+      const voucherScopeMatches = eventData.hostOwnerId
+        ? voucher.hostOwnerId === eventData.hostOwnerId
+        : (!voucher.hostOwnerId && voucher.fieldId === eventData.fieldId);
+      if (!voucherScopeMatches) {
+        throw new HttpsError("failed-precondition", eventData.hostOwnerId ? "This voucher isn't valid for this organizer's events." : "This voucher isn't valid at this field.");
       }
       if (voucher.expiresAt && voucher.expiresAt.toDate() < new Date()) {
         throw new HttpsError("failed-precondition", "This voucher has expired.");
@@ -1258,7 +1312,8 @@ export const bookEventWithVoucher = onCall(
       const remainingCents = voucher.amountCents - neededCents;
       t.set(bookingRef, {
         uid,
-        fieldId: eventData.fieldId,
+        fieldId: eventData.fieldId ?? null,
+        ...(eventData.hostOwnerId ? { hostOwnerId: eventData.hostOwnerId } : {}),
         teamId: profileData.teamId || null,
         callsign: profileData.callsign || "Player",
         avatarUrl: profileData.avatarUrl || null,
@@ -1273,7 +1328,8 @@ export const bookEventWithVoucher = onCall(
       writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents);
       t.set(userBookingRef, {
         eventId,
-        fieldId: eventData.fieldId,
+        fieldId: eventData.fieldId ?? null,
+        ...(eventData.hostOwnerId ? { hostOwnerId: eventData.hostOwnerId } : {}),
         eventTitle: eventData.title || null,
         fieldName: eventData.fieldName || null,
         date: eventData.date || null,
@@ -1420,7 +1476,8 @@ export const stripeWebhook = onRequest(
 
               t.set(bookingRef, {
                 uid,
-                fieldId,
+                fieldId: fieldId || null,
+                ...(eventData?.hostOwnerId ? { hostOwnerId: eventData.hostOwnerId } : {}),
                 teamId: profileData.teamId || null,
                 callsign: profileData.callsign || "Player",
                 avatarUrl: profileData.avatarUrl || null,
@@ -1464,7 +1521,8 @@ export const stripeWebhook = onRequest(
               writeAttendeeDetails(t, bookingRef, uid, profileData, dependentSnapshots);
               t.set(userBookingRef, {
                 eventId,
-                fieldId,
+                fieldId: fieldId || null,
+                ...(eventData?.hostOwnerId ? { hostOwnerId: eventData.hostOwnerId } : {}),
                 eventTitle: eventData?.title || null,
                 fieldName: eventData?.fieldName || null,
                 date: eventData?.date || null,
@@ -2315,8 +2373,8 @@ export const notifyOwnerOverCapacity = onDocumentUpdated(
     if (now <= was || now <= max) return;
 
     const db = getFirestore();
-    const fieldSnap = await db.collection("fields").doc(after.fieldId).get();
-    const ownerId = fieldSnap.data()?.ownerId;
+    const ownerId = after.hostOwnerId
+      || (after.fieldId ? (await db.collection("fields").doc(after.fieldId).get()).data()?.ownerId : null);
     if (!ownerId) return;
     const ownerEmail = (await db.collection("owners").doc(ownerId).get()).data()?.email;
     if (!ownerEmail) {
@@ -2341,5 +2399,100 @@ export const notifyOwnerOverCapacity = onDocumentUpdated(
     } catch (err) {
       console.error(`notifyOwnerOverCapacity: failed for event ${event.params.eventId}:`, err);
     }
+  }
+);
+
+// ===========================================================================
+// Admin portal: live Resend email stats (Email & signup insights page)
+// ===========================================================================
+// Resend-only data -- email volume by day/type and delivery outcome
+// (delivered/opened/clicked/bounced/complained/suppressed). Has to run
+// server-side: resend.emails.list() needs RESEND_API_KEY, which must never
+// reach the browser. The account-to-booking conversion funnel shown
+// alongside this on the same admin-portal page is computed entirely from
+// data the admin portal already has from Firestore (see summarize() in
+// atlas-admin-portal's useAdminData.js) -- this function has nothing to do
+// with that half, and does no Firestore reads at all.
+//
+// Admin-gated the same way isAdmin() does it in firestore.rules (same
+// hardcoded uid, also ATLAS_OWNER_UID in the admin portal's firebase.js) --
+// this is the first Cloud Function the admin portal has ever called, so
+// there's no Firestore rule to lean on for authorization; the check has to
+// live here instead.
+const ADMIN_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
+
+// Collapses every email subject into the same 5 buckets already shown in
+// the one-off dashboard this replaces (docs/Atlas_Signup_Email_Insights.html)
+// -- "Booking confirmation (first)" and "(repeat / party)" merge into one
+// bucket here, and "Field owner welcome" plus the catch-all "Personal
+// outreach" both land in "Field & outreach", matching what Michael already
+// saw and approved.
+function categorizeEmailSubject(subject) {
+  const s = subject || "";
+  if (/test|forwarding|\[TEST\]|\[Test copy\]/i.test(s)) return "Internal tests";
+  if (/here's the rundown before your first game/i.test(s)) return "Player welcome";
+  if (/locked in at|are booked at|you're booked at|thanks for booking/i.test(s)) return "Booking confirmation";
+  if (/yours to run|you're an officer/i.test(s)) return "Team officer";
+  return "Field & outreach";
+}
+
+const EMAIL_INSIGHTS_SERIES = ["Player welcome", "Booking confirmation", "Team officer", "Field & outreach", "Internal tests"];
+
+export const getEmailInsights = onCall(
+  { secrets: [resendApiKey] },
+  async (request) => {
+    if (request.auth?.uid !== ADMIN_UID) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+
+    const resend = new Resend(resendApiKey.value());
+    let all = [];
+    let after;
+    // ~20 pages of headroom (2,000 emails) -- current volume is under 100
+    // as of this writing. Same pagination shape as the one-off script
+    // this replaces (atlas-email-sender/_to_delete/_tmp_agg_resend.mjs).
+    for (let i = 0; i < 20; i++) {
+      const r = await resend.emails.list({ limit: 100, ...(after ? { after } : {}) });
+      const rows = r.data?.data || [];
+      all.push(...rows);
+      if (!r.data?.has_more || !rows.length) break;
+      after = rows[rows.length - 1].id;
+    }
+
+    // Detroit-time day bucket, matching every other Detroit-time
+    // formatting already used across this codebase for player-facing
+    // dates (see formatEventDateForEmail and friends above).
+    const dayKey = (iso) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Detroit" });
+
+    const emailByType = {};
+    const emailStatus = {};
+    const emailByDay = {};
+    for (const e of all) {
+      const type = categorizeEmailSubject(e.subject);
+      const day = dayKey(e.created_at);
+      emailByType[type] = (emailByType[type] || 0) + 1;
+      // last_event is whatever Resend's own lifecycle name is --
+      // delivered/opened/clicked/bounced/complained -- shown as-is rather
+      // than re-mapped, so a new status Resend adds later still shows up
+      // instead of silently vanishing into an "unknown" bucket.
+      const status = e.last_event || "unknown";
+      emailStatus[status] = (emailStatus[status] || 0) + 1;
+      (emailByDay[day] ||= {})[type] = ((emailByDay[day] || {})[type] || 0) + 1;
+    }
+
+    const emailByTypeOut = Object.fromEntries(EMAIL_INSIGHTS_SERIES.map((t) => [t, emailByType[t] || 0]));
+    const emailDaily = Object.keys(emailByDay).sort().map((d) => ({
+      d,
+      ...Object.fromEntries(EMAIL_INSIGHTS_SERIES.map((t) => [t, emailByDay[d][t] || 0])),
+    }));
+
+    return {
+      emailTotal: all.length,
+      emailByType: emailByTypeOut,
+      emailStatus,
+      emailDaily,
+      emailSeries: EMAIL_INSIGHTS_SERIES,
+      fetchedAt: new Date().toISOString(),
+    };
   }
 );

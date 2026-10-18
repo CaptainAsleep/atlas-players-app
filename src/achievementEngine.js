@@ -167,7 +167,9 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
       }
       case "single_field_checkin_count": {
         const counts = {};
-        checkedIn.forEach((x) => { counts[x.event.fieldId] = (counts[x.event.fieldId] || 0) + 1; });
+        // Atlas Major events have no field (fieldId null) — they are not a repeat
+        // visit to one place, so they must not pile up under one shared key.
+        checkedIn.forEach((x) => { if (!x.event.fieldId) return; counts[x.event.fieldId] = (counts[x.event.fieldId] || 0) + 1; });
         qualifies = Object.values(counts).some((c) => c >= trigger.count);
         break;
       }
@@ -175,7 +177,7 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
         const matching = trigger.filter
           ? checkedIn.filter((x) => matchesFilter(x.booking, x.event, x.field, trigger.filter))
           : checkedIn;
-        qualifies = new Set(matching.map((x) => x.event.fieldId)).size >= trigger.count;
+        qualifies = new Set(matching.map((x) => x.event.fieldId).filter(Boolean)).size >= trigger.count;
         break;
       }
       case "filtered_checkin_count": {
@@ -192,7 +194,10 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
       }
       case "distinct_states_count": {
         const states = new Set(
-          checkedIn.map((x) => stateNameFromCityLocal(x.field?.city, US_STATES)).filter(Boolean)
+          checkedIn.map((x) => stateNameFromCityLocal(
+            x.field?.city || (x.event.isMajor && x.event.venueState ? `${x.event.venueCity || ""}, ${x.event.venueState}` : null),
+            US_STATES
+          )).filter(Boolean)
         );
         qualifies = states.size >= trigger.count;
         break;
