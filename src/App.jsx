@@ -5039,7 +5039,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
         <div className="flex flex-col gap-2 mb-5">
           {members.map((m) => (
             <div key={m.uid} className="p-3 relative" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className={`flex items-center gap-3 ${isOfficer && ((roles.length > 0 || ranks.length > 0) || m.uid !== user?.uid) ? "pr-8" : ""}`}>
+            <div className="flex items-center gap-3">
               <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
                 {m.avatarUrl ? (
                   <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
@@ -5066,9 +5066,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                 </div>
               </button>
               {m.role === "officer" && <div className="flex-shrink-0"><Tag tone="accent">OFFICER</Tag></div>}
-            </div>
             {isOfficer && ((roles.length > 0 || ranks.length > 0) || m.uid !== user?.uid) && (
-              <div className="absolute top-2 right-2">
+              <div className="relative flex-shrink-0 flex items-center">
                 <button
                   onClick={() => setMenuUid(menuUid === m.uid ? null : m.uid)}
                   aria-label="Member options"
@@ -5120,6 +5119,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                 )}
               </div>
             )}
+            </div>
             {isOfficer && assigningUid === m.uid && ranks.length > 0 && (
               <div className="mt-2">
                 <div className="text-[10px] font-semibold mb-1" style={{ ...body, color: T.ashFaint }}>RANK</div>
