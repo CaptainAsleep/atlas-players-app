@@ -5864,6 +5864,12 @@ I have had sufficient time to read this entire document and, should I choose to 
     fieldId: "bloomingdale-airsoft-paintball",
     fieldName: "Bloomingdale Airsoft and Paintball (B.A.P.)",
     title: "Drug Wars Event brought to by Screaming Wombats",
+    // Display-only (2026-10-19, per Michael): shows the Organizer card and
+    // the small MAJOR tag in the player app. This is NOT an Atlas Major
+    // (no isMajor / hostOwnerId): ticketing stays on Pintuna, and isMajor
+    // would switch on the organizer fee, venue and checkout paths.
+    hostName: "Screaming Wombats",
+    showMajorTag: true,
     date: "2026-10-25",
     startTime: "7:30 AM",
     endTime: "5:30 PM",
