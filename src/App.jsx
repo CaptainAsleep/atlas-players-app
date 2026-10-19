@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2, Users, Shield,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy, Target, Flag, Rocket, Medal
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy, Target, Flag, Rocket, Medal, Flame
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -649,6 +649,163 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick }) {
   );
 }
 
+/* ---------- community spotlight ---------- */
+// Top-of-feed carousel of the most popular upcoming events. For now it's
+// purely popularity-ranked; the intent is to monetize these slots later
+// (paid placement), at which point a paid/pinned event would be merged in
+// ahead of the organic ranking inside rankSpotlightEvents -- the carousel
+// itself shouldn't need to change.
+//
+// Signals: bookedCount (reserved tickets, maintained server-side by the
+// booking transaction / webhook -- never written by the client) weighted
+// above interestCount (hearts), since a paid reservation is a much
+// stronger "people are going" signal than a save. Ties break on the
+// sooner date.
+const SPOTLIGHT_SIZE = 5;
+const SPOTLIGHT_BOOKING_WEIGHT = 3;
+const spotlightScore = (ev) => (ev.bookedCount || 0) * SPOTLIGHT_BOOKING_WEIGHT + (ev.interestCount || 0);
+
+function rankSpotlightEvents(events, today) {
+  const upcoming = events.filter((ev) => (ev.endDate || ev.date) >= today && !ev.canceled);
+  const byDate = (a, b) => a.date.localeCompare(b.date);
+  const popular = upcoming
+    .filter((ev) => spotlightScore(ev) > 0)
+    .sort((a, b) => spotlightScore(b) - spotlightScore(a) || byDate(a, b));
+  const picked = popular.slice(0, SPOTLIGHT_SIZE);
+  // Early days, fewer than five events have any bookings/hearts yet --
+  // backfill with the soonest upcoming events so the carousel stays full
+  // rather than showing one or two lonely slides.
+  if (picked.length < SPOTLIGHT_SIZE) {
+    const ids = new Set(picked.map((e) => e.id));
+    picked.push(...upcoming.filter((ev) => !ids.has(ev.id)).sort(byDate).slice(0, SPOTLIGHT_SIZE - picked.length));
+  }
+  return picked;
+}
+
+function CommunitySpotlight({ events, fields, onOpenEvent }) {
+  const { T, display, body, mono } = useTheme();
+  const trackRef = useRef(null);
+  const [active, setActive] = useState(0);
+  const activeRef = useRef(0);
+  const pausedRef = useRef(false);
+  const resumeTimerRef = useRef(null);
+  const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  const slides = () => (trackRef.current ? Array.from(trackRef.current.querySelectorAll("[data-slide]")) : []);
+  const goTo = (i) => {
+    const el = trackRef.current;
+    const s = slides();
+    if (!el || !s[i]) return;
+    el.scrollTo({ left: s[i].offsetLeft - s[0].offsetLeft, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+  const handleScroll = () => {
+    const el = trackRef.current;
+    const s = slides();
+    if (!el || s.length === 0) return;
+    let nearest = 0;
+    s.forEach((node, i) => {
+      if (Math.abs(node.offsetLeft - s[0].offsetLeft - el.scrollLeft) < Math.abs(s[nearest].offsetLeft - s[0].offsetLeft - el.scrollLeft)) nearest = i;
+    });
+    if (nearest !== activeRef.current) {
+      activeRef.current = nearest;
+      setActive(nearest);
+    }
+  };
+  // Any touch/press pauses auto-advance; it resumes a while after the
+  // player lets go, so it never yanks a slide out from under them.
+  const pause = () => {
+    pausedRef.current = true;
+    clearTimeout(resumeTimerRef.current);
+  };
+  const resumeLater = () => {
+    clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => { pausedRef.current = false; }, 8000);
+  };
+
+  useEffect(() => {
+    if (reduceMotion || events.length < 2) return;
+    const id = setInterval(() => {
+      if (pausedRef.current || document.visibilityState !== "visible") return;
+      goTo((activeRef.current + 1) % events.length);
+    }, 5000);
+    return () => { clearInterval(id); clearTimeout(resumeTimerRef.current); };
+  }, [events.length, reduceMotion]);
+
+  if (events.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <div className="px-6 flex items-center gap-2 mb-3">
+        <Flame size={16} color={T.alert} strokeWidth={2} />
+        <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>Community Spotlight</span>
+      </div>
+      <div
+        ref={trackRef}
+        onScroll={handleScroll}
+        onTouchStart={pause}
+        onTouchEnd={resumeLater}
+        onMouseEnter={pause}
+        onMouseLeave={resumeLater}
+        className="flex gap-3 overflow-x-auto px-6"
+        style={{ scrollSnapType: "x mandatory", scrollPaddingLeft: 24, scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+        aria-roledescription="carousel"
+        aria-label="Community Spotlight"
+      >
+        {events.map((ev, i) => {
+          const field = fields.find((f) => f.id === ev.fieldId);
+          const booked = ev.bookedCount || 0;
+          const interested = ev.interestCount || 0;
+          return (
+            <button
+              key={ev.id}
+              data-slide
+              onClick={() => onOpenEvent(ev)}
+              className="text-left flex-shrink-0 p-2.5 transition-transform duration-100 active:scale-[0.98]"
+              style={{ width: "86%", scrollSnapAlign: "start", background: T.panel, borderRadius: T.rHero, boxShadow: T.shadowMd }}
+              aria-label={`${i + 1} of ${events.length}: ${ev.title}`}
+            >
+              <div className="h-44 relative" style={{ ...heroStyle(ev.imageUrl || field?.imageUrl, ev.id || ev.title), borderRadius: T.rMedia, overflow: "hidden" }}>
+                <div className="absolute top-3 left-3 flex gap-2">
+                  <Tag tone="live">#{i + 1}</Tag>
+                  {ev.type && <Tag>{ev.type}</Tag>}
+                  {(ev.isMajor || ev.showMajorTag) && <Tag>MAJOR</Tag>}
+                </div>
+                <div className="absolute left-3 right-3 bottom-3">
+                  <div className="text-[11px] font-medium" style={{ ...body, color: "rgba(255,255,255,0.8)" }}>{ev.fieldName}<ClaimedBadge claimed={!!field?.ownerId} size={12} /></div>
+                  <div className="text-[17px] font-semibold leading-tight" style={{ ...display, color: "#fff" }}>{ev.title}</div>
+                  <div className="text-[12px] mt-0.5" style={{ ...mono, color: "rgba(255,255,255,0.85)" }}>{formatDate(ev.date, ev.endDate)}{ev.startTime ? ` · ${formatTimeStr(ev.startTime)}` : ""}</div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-2.5 px-0.5">
+                <div className="flex items-center gap-3 text-[11px] font-medium" style={{ ...mono, color: T.ashDim }}>
+                  {booked > 0 && <span className="flex items-center gap-1"><Ticket size={11} /> {booked} reserved</span>}
+                  {interested > 0 && <span className="flex items-center gap-1"><Heart size={11} /> {interested} interested</span>}
+                  {booked === 0 && interested === 0 && <span style={{ color: T.ashFaint }}>Coming up soon</span>}
+                </div>
+                <div className="text-[12px] font-semibold" style={{ ...mono, color: T.ash }}>{displayPrice(ev.price)}</div>
+              </div>
+            </button>
+          );
+        })}
+        {/* Trailing spacer: padding-right on a scroll container is dropped by some browsers, so the last slide would sit flush against the edge without this. */}
+        <div className="flex-shrink-0" style={{ width: 12 }} aria-hidden="true" />
+      </div>
+      {events.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-3">
+          {events.map((ev, i) => (
+            <button
+              key={ev.id}
+              onClick={() => { pause(); goTo(i); resumeLater(); }}
+              aria-label={`Show spotlight event ${i + 1}`}
+              style={{ width: i === active ? 18 : 6, height: 6, borderRadius: 999, background: i === active ? T.cta : T.line, transition: "width 200ms ease, background 200ms ease" }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- map ---------- */
 // Custom pin matching the app's palette instead of Leaflet's default blue
 // teardrop marker, which would clash badly with the dark theme.
@@ -1218,6 +1375,11 @@ function HomeScreen({
     filteredEvents = [...filteredEvents].sort((a, b) => a.date.localeCompare(b.date));
   }
 
+  // Deliberately independent of the feed's search/category/state filters --
+  // it's a curated shelf (and later a paid placement), so it shouldn't
+  // reshuffle or vanish as the player filters the list below it.
+  const spotlightEvents = useMemo(() => rankSpotlightEvents(events, today), [events, today]);
+
   // Every field, filtered by the same criteria as the events feed — this is
   // what makes a field with zero scheduled events still show up here, in
   // the Fields list and on the Map, instead of only being reachable through
@@ -1616,6 +1778,10 @@ function HomeScreen({
           );
         })}
       </div>
+
+      {viewMode === "list" && !eventsLoading && (
+        <CommunitySpotlight events={spotlightEvents} fields={fields} onOpenEvent={onOpenEvent} />
+      )}
 
       <div className="px-6 flex items-center justify-between mb-3">
         <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>
