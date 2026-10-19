@@ -6372,6 +6372,266 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     },
   },
   {
+    id: "darkfire-airsoft-2026-10-24-open-play",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Saturday Open Plays",
+    date: "2026-10-24",
+    startTime: "9:00 AM",
+    endTime: "5:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    description: "General open play across the 38-acre forested field. Preregister for a better ticket rate and to reserve rentals.",
+    sourceUrl: "https://www.darkfireairsoft.com/events/saturday-open-plays-2026-10-24-09-00",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-10-25-skirmish-open-play",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Skirmish Open Play",
+    date: "2026-10-25",
+    startTime: "10:00 AM",
+    endTime: "3:00 PM",
+    price: "$15",
+    type: "OUTDOOR",
+    description: "General open play on the same field, shorter format. Preregister for a better ticket rate and to reserve rentals.",
+    sourceUrl: "https://www.darkfireairsoft.com/events/skirmish-open-play-2026-10-25-10-00",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-10-31-build-day",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Build Day",
+    date: "2026-10-31",
+    startTime: "10:00 AM",
+    endTime: "3:00 PM",
+    description: "Volunteer work day to begin construction on the field's CQC arena. Not a game day -- volunteers who stay at least 1 hour earn a free game ticket, redeemable at any future open play.",
+    sourceUrl: "https://www.darkfireairsoft.com/events/build-day-9",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-10-31-halloween-night-game",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Open Play Halloween Night Game!",
+    date: "2026-10-31",
+    endDate: "2026-11-01",
+    startTime: "5:00 PM",
+    endTime: "1:00 AM",
+    price: "$25",
+    type: "OUTDOOR",
+    description: "Low-light night game across the forested field: gates and chrono at 5pm, briefing at 6pm, games 6:30pm until 1am. Eerie night scenarios, emphasis on stealth, communication, and low-light tactics.",
+    sourceUrl: "https://www.darkfireairsoft.com/events/open-play-halloween-night-game-4",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-11-07-open-play",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Saturday Open Plays",
+    date: "2026-11-07",
+    startTime: "9:00 AM",
+    endTime: "5:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    description: "General open play across the 38-acre forested field. Preregister for a better ticket rate and to reserve rentals.",
+    sourceUrl: "https://www.darkfireairsoft.com/events-1",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-11-08-skirmish-open-play",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Skirmish Open Play",
+    date: "2026-11-08",
+    startTime: "10:00 AM",
+    endTime: "3:00 PM",
+    price: "$15",
+    type: "OUTDOOR",
+    description: "General open play on the same field, shorter format. Preregister for a better ticket rate and to reserve rentals.",
+    sourceUrl: "https://www.darkfireairsoft.com/events-1",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-11-14-open-play",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Saturday Open Plays",
+    date: "2026-11-14",
+    startTime: "9:00 AM",
+    endTime: "5:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    description: "General open play across the 38-acre forested field. Preregister for a better ticket rate and to reserve rentals.",
+    sourceUrl: "https://www.darkfireairsoft.com/events/saturday-open-plays-2026-10-24-09-00",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-11-21-thanksgiving-game",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Open Play Thanksgiving Game",
+    date: "2026-11-21",
+    startTime: "9:00 AM",
+    endTime: "5:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    description: "\"Gobble Games: Airsoft Turkey Shoot\" -- a turkey-themed open-play skirmish. Dress tactical, think poultry.",
+    sourceUrl: "https://www.darkfireairsoft.com/events/open-play-thanksgiving-game-2",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "darkfire-airsoft-2026-12-19-christmas-game",
+    fieldId: "darkfire-airsoft",
+    fieldName: "Darkfire Airsoft",
+    title: "Open Play Christmas Game!",
+    date: "2026-12-19",
+    startTime: "9:00 AM",
+    endTime: "5:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    description: "Holiday-themed open play. Dress up for a chance to win a free game ticket; preregister to reserve rentals.",
+    sourceUrl: "https://www.darkfireairsoft.com/events/open-play-christmas-game-5",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
     id: "futureball-2026-09-19-armageddon",
     fieldId: "futureball",
     fieldName: "Futureball",
