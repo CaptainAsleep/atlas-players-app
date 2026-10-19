@@ -305,9 +305,11 @@ const fields = [
     city: "Bloomingdale, MI",
     address: "36444 CR388, Bloomingdale, MI",
     facebook: "https://www.facebook.com/profile.php?id=61551039470868",
+    website: "https://www.bapcombat.com/",
     indoorOutdoor: "outdoor",
-    status: "facebook_only",
-    dataSource: "sheet + address supplied directly by Michael (2026-10-19)",
+    imageUrl: "https://airsoftatlas.app/assets/bloomingdale-airsoft-paintball.png",
+    status: "active",
+    dataSource: "sheet + address supplied directly by Michael (2026-10-19); own website bapcombat.com confirmed live (2026-10-19) via the flyer image Michael supplied -- its Facebook link matches this field's own Facebook id (61551039470868), confirming it's the same business, so status upgraded from facebook_only to active. Hero image supplied directly by Michael (2026-10-19), hosted on the atlas-website GitHub Pages repo rather than Atlas's own Storage (no claimed-owner account exists yet to upload through fieldGallery, and seed-time Storage writes have no credentialed path).",
     lastScraped: "2026-10-19",
   },
   {
@@ -5848,7 +5850,7 @@ const events = [
     startTime: "7:30 AM",
     endTime: "5:30 PM",
     type: "MILSIM",
-    description: "Third-party scenario event hosted by Screaming Wombats. Discovery listing only -- Atlas does not process ticketing for this event; see the original listing for registration. (No externalTicketing/non-bookable flag exists in the app yet, so the normal Book Now button will still render here; price intentionally omitted rather than showing a live $0 checkout.)",
+    description: "Third-party scenario event hosted by Screaming Wombats. Registration and ticketing are handled directly by Screaming Wombats -- see the original listing to register.",
     sourceUrl: "https://app.pintuna.com/tickets/events/af4066bd-38f8-4676-bade-c2eedd49ee38",
   },
   {
