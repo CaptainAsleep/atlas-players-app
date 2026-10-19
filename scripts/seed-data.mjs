@@ -5839,6 +5839,25 @@ const events = [
     price: "$20",
     type: "OUTDOOR",
     description: "Standard open play day, all skill levels welcome.",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "bloomingdale-airsoft-paintball-2026-10-25-drug-wars",
@@ -5852,6 +5871,25 @@ const events = [
     imageUrl: "https://pintuna-assets.s3.us-east-2.amazonaws.com/76d6746c-d008-4974-9fb3-11709cf4e631_27052026211257.jpg",
     description: "Third-party scenario event hosted by Screaming Wombats. Registration and ticketing are handled directly by Screaming Wombats -- see the original listing to register.",
     sourceUrl: "https://app.pintuna.com/tickets/events/af4066bd-38f8-4676-bade-c2eedd49ee38",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "bloomingdale-airsoft-paintball-2026-11-01-open-play",
@@ -5864,6 +5902,25 @@ const events = [
     price: "$20",
     type: "OUTDOOR",
     description: "Standard open play day, all skill levels welcome.",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "bloomingdale-airsoft-paintball-2026-11-07-open-play",
@@ -5876,6 +5933,25 @@ const events = [
     price: "$20",
     type: "OUTDOOR",
     description: "Standard open play day, all skill levels welcome.",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "bloomingdale-airsoft-paintball-2026-11-08-open-play",
@@ -5888,6 +5964,25 @@ const events = [
     price: "$20",
     type: "OUTDOOR",
     description: "Standard open play day, all skill levels welcome.",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "bloomingdale-airsoft-paintball-2026-11-15-open-play",
@@ -5900,6 +5995,25 @@ const events = [
     price: "$20",
     type: "OUTDOOR",
     description: "Standard open play day, all skill levels welcome.",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "bloomingdale-airsoft-paintball-2026-11-22-open-play",
@@ -5912,6 +6026,25 @@ const events = [
     price: "$20",
     type: "OUTDOOR",
     description: "Standard open play day, all skill levels welcome.",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "bloomingdale-airsoft-paintball-2026-11-29-open-play",
@@ -5924,6 +6057,25 @@ const events = [
     price: "$20",
     type: "OUTDOOR",
     description: "Standard open play day, all skill levels welcome.",
+    waiver: {
+      version: "2026-10-19",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-19)
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+In consideration of participating in the sport of Airsoft or Paintball, and for other good and valuable consideration, I hereby agree to release and discharge from liability arising from negligence Bloomingdale's Airsoft and Paintball Field and its owners, directors, officers, employees, agents, volunteers, participants, and all other persons or entities acting for them (hereinafter collectively referred to as "Releasees"), on behalf of myself and my children, parents, heirs, assigns, personal representative and estate, and also agree as follows:
+
+I acknowledge that the sport of Airsoft/Paintball involves known and unanticipated risks which could result in physical or emotional injury, paralysis or permanent disability, death, and property damage. Risks include, but are not limited to, blindness, bruises or other injuries caused by markers; injuries caused by falls or collisions with objects, other participants, or uneven surfaces; medical conditions resulting from physical activity; and damaged clothing or other property. I understand such risks simply cannot be eliminated, despite the use of safety equipment, without jeopardizing the essential qualities of the activity.
+
+I expressly accept and assume all of the risks inherent in this activity or that might have been caused by the negligence of the Releasees. My participation in this activity is purely voluntary and I elect to participate despite the risks. In addition, if at any time I believe that event conditions are unsafe or that I am unable to participate due to physical or medical conditions, then I will immediately discontinue participation.
+
+I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Releasees from any and all claims, demands, or causes of action which are in any way connected with my participation in this activity, or my use of their equipment or facilities, arising from negligence. This release does not apply to claims arising from intentional conduct. Should Releasees or anyone acting on their behalf be required to incur attorney's fees and costs to enforce this agreement, I agree to indemnify and hold them harmless for all such fees and costs.
+
+I represent that I have adequate insurance to cover any injury or damage I may suffer or cause while participating in this activity, or else I agree to bear the costs of such injury or damage myself. I further represent that I have no medical or physical condition which could interfere with my safety in this activity, or else I am willing to assume -- and bear the costs of -- all risks that may be created, directly or indirectly, by any such condition. In the event that I file a lawsuit, I agree to do so solely in the state where Releasees' facility is located, and I further agree that the substantive law of that state shall apply.
+
+I agree that if any portion of this agreement is found to be void or unenforceable, the remaining portions shall remain in full force and effect. By signing this document, I agree that if I am hurt or my property is damaged during my participation in this activity, then I may be found by a court of law to have waived my right to maintain a lawsuit against the parties being released on the basis of any claim for Negligence.
+
+I have had sufficient time to read this entire document and, should I choose to do so, consult with legal counsel prior to signing. Also, I understand that this activity might not be made available to me or that the cost to engage in this activity would be significantly greater if I were to choose not to sign this release, and agree that the opportunity to participate at the stated cost in return for the execution of this release is a reasonable bargain.`,
+    },
   },
   {
     id: "cedar-airsoft-field-2026-08-22-tdm-day",
