@@ -57,10 +57,9 @@ const fields = [
     indoorOutdoor: "outdoor",
     about:
       "38-acre outdoor field running open plays and larger milsim-style operations; standard open-play schedule is gates at 9am, briefing 10am, games 10:30am-5pm.",
-    imageUrl:
-      "https://static.wixstatic.com/media/6282e125651246cf8362f57d8d5a9b67.jpg/v1/fill/w_1920,h_1280,al_c,q_90,enc_avif,quality_auto/6282e125651246cf8362f57d8d5a9b67.jpg",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     status: "active",
-    dataSource: "website",
+    dataSource: "website; hero image replaced 2026-10-19 with a gameplay action photo supplied directly by Michael (same image also used for this field's event banners), hosted on the atlas-website GitHub Pages repo",
     lastScraped: "2026-08-23",
   },
   {
@@ -5850,6 +5849,7 @@ const events = [
     startTime: "7:30 AM",
     endTime: "5:30 PM",
     type: "MILSIM",
+    imageUrl: "https://pintuna-assets.s3.us-east-2.amazonaws.com/76d6746c-d008-4974-9fb3-11709cf4e631_27052026211257.jpg",
     description: "Third-party scenario event hosted by Screaming Wombats. Registration and ticketing are handled directly by Screaming Wombats -- see the original listing to register.",
     sourceUrl: "https://app.pintuna.com/tickets/events/af4066bd-38f8-4676-bade-c2eedd49ee38",
   },
@@ -6261,6 +6261,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-08-22-summers-end-11",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Summers End 11 (Hosted by WASTE)",
     date: "2026-08-22",
@@ -6289,6 +6290,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-09-05-minisim-nato-vs-rusfor-v",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Minisim - NATO vs RUSFOR V (Hosted by VBH)",
     date: "2026-09-05",
@@ -6317,6 +6319,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-09-26-open-play",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Open Play",
     date: "2026-09-26",
@@ -6346,6 +6349,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-10-03-operation-cerberus-viii",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Operation Cerberus VIII",
     date: "2026-10-03",
@@ -6374,6 +6378,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-10-24-open-play",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Saturday Open Plays",
     date: "2026-10-24",
@@ -6403,6 +6408,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-10-25-skirmish-open-play",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Skirmish Open Play",
     date: "2026-10-25",
@@ -6432,6 +6438,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-10-31-build-day",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Build Day",
     date: "2026-10-31",
@@ -6459,6 +6466,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-10-31-halloween-night-game",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Open Play Halloween Night Game!",
     date: "2026-10-31",
@@ -6489,6 +6497,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-11-07-open-play",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Saturday Open Plays",
     date: "2026-11-07",
@@ -6518,6 +6527,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-11-08-skirmish-open-play",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Skirmish Open Play",
     date: "2026-11-08",
@@ -6547,6 +6557,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-11-14-open-play",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Saturday Open Plays",
     date: "2026-11-14",
@@ -6576,6 +6587,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-11-21-thanksgiving-game",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Open Play Thanksgiving Game",
     date: "2026-11-21",
@@ -6605,6 +6617,7 @@ This is placeholder demo text for showcase purposes and is not a legally binding
   {
     id: "darkfire-airsoft-2026-12-19-christmas-game",
     fieldId: "darkfire-airsoft",
+    imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
     fieldName: "Darkfire Airsoft",
     title: "Open Play Christmas Game!",
     date: "2026-12-19",

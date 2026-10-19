@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Resend } from "resend";
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import { SelectionError, resolveSelections, normalizeSelectionGroups, assertCapacity, snapshotSelections, selectionPairs } from "./selections.js";
 
 initializeApp();
 
@@ -232,20 +233,42 @@ export const checkPayoutsStatus = onCall(
 // choice, if any, was picked) and validates that choice. The only place
 // this logic lives, so the paid and free booking paths can never drift
 // out of sync with each other on what a given selection actually costs.
-function resolveEntryPrice(eventData, selectedChoiceId) {
-  const basePriceCents = Math.round(parseFloat(String(eventData.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
-  const priceOptions = eventData.priceOptions;
-  let selectedChoice = null;
-  if (priceOptions?.choices?.length) {
-    selectedChoice = priceOptions.choices.find((c) => c.id === selectedChoiceId) || null;
-    if (priceOptions.required && !selectedChoice) {
-      throw new HttpsError("invalid-argument", `Choose a valid ${priceOptions.label || "option"} before booking.`);
-    }
-    if (selectedChoiceId && !selectedChoice) {
-      throw new HttpsError("invalid-argument", "That option isn't available for this event anymore.");
-    }
+//
+// The logic itself lives in ./selections.js (pure + unit-tested). A legacy
+// event (single `priceOptions` group — every field-owner event) resolves
+// exactly as it always did; an organizer event with `selectionGroups`
+// resolves one choice per group from `selections` ({ groupId: choiceId }).
+// For grouped events `selectedChoice` is a compat object (labels joined,
+// prices summed) so callers written for the single choice keep working.
+function resolveEntryPrice(eventData, selectedChoiceId, selections) {
+  try {
+    const r = resolveSelections(eventData, { selectedChoiceId, selections });
+    return { entryPriceCents: r.entryPriceCents, selectedChoice: r.selectedChoice, selections: r.selections, resolved: r };
+  } catch (err) {
+    if (err instanceof SelectionError) throw new HttpsError(err.code, err.message);
+    throw err;
   }
-  return { entryPriceCents: basePriceCents + (selectedChoice?.priceCents || 0), selectedChoice };
+}
+
+// Hard per-choice cap (organizer events). Counts the heads already on
+// events/{id}/bookings that picked each capped choice — no counter field,
+// so nothing extra to keep in sync on cancel. Only reads when a picked
+// choice actually has a capacity. Pass `t` to read inside a transaction
+// (bookFreeEvent / bookEventWithVoucher); the paid webhook never calls this
+// — money has already been taken, so it can't reject.
+async function assertSelectionCapacity(eventRef, eventData, resolved, attendeeCount, t) {
+  if (!resolved?.grouped) return;
+  const groups = normalizeSelectionGroups(eventData);
+  const capped = resolved.selections.some((s) => typeof groups.find((g) => g.id === s.groupId)?.choices.find((c) => c.id === s.choiceId)?.capacity === "number");
+  if (!capped) return;
+  const col = eventRef.collection("bookings");
+  const snap = await (t ? t.get(col) : col.get());
+  try {
+    assertCapacity(eventData, resolved, snap.docs.map((d) => d.data()), attendeeCount);
+  } catch (err) {
+    if (err instanceof SelectionError) throw new HttpsError(err.code, err.message);
+    throw err;
+  }
 }
 
 // Shared validation for a player's rental-item picks, same trust model as
@@ -614,7 +637,11 @@ export const createBookingCheckout = onCall(
 
     const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, dependentIds: request.data?.attendeeDependentIds });
     const attendeeCount = attendees.attendeeCount;
-    const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
+    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections);
+    // Hard cap on team/role-style choices, checked before any Stripe call.
+    // (The paid webhook can't reject, so two near-simultaneous checkouts for
+    // the last seat can both land — a known, accepted 1–2 head overshoot.)
+    await assertSelectionCapacity(eventRef, eventData, resolved, attendeeCount);
     const { rentalsCents, selectedRentalDetails } = resolveRentalsTotal(fieldData, request.data?.selectedRentalIds);
     // Combined, not entry-only — this is what lets a free event become a
     // real checkout the moment a paid rental is added, and what makes
@@ -734,7 +761,10 @@ export const createBookingCheckout = onCall(
         // cancellation voucher (resolveVoucherAmountCents) never has to
         // reverse-engineer this out of amountPaidCents.
         entryPriceCents: String(entryPriceCents),
-        ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: String(selectedChoice.priceCents) } : {}),
+        ...(selectedChoice ? { selectedChoiceLabel: String(selectedChoice.label).slice(0, 450), selectedChoicePriceCents: String(selectedChoice.priceCents) } : {}),
+        // Organizer events: ids only ({g,c} pairs) — the webhook re-derives
+        // labels and prices from the event doc.
+        ...(selections.length > 0 ? { selections: JSON.stringify(selectionPairs(selections)) } : {}),
         // Stripe metadata values are strings only — "true"/absent, not a
         // real boolean.
         ...(walkOnNearField ? { walkOnNearField: "true" } : {}),
@@ -823,7 +853,7 @@ export const bookFreeEvent = onCall(
       }
     }
 
-    const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
+    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections);
     // The real backstop: if this event (plus whatever was picked) isn't
     // actually free, this is the wrong function to have called —
     // createBookingCheckout is. A well-behaved client never reaches this
@@ -843,7 +873,10 @@ export const bookFreeEvent = onCall(
 
     const profileSnap = await db.collection("users").doc(uid).get();
     const profileData = profileSnap.data() || {};
-    const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {};
+    const choiceFields = {
+      ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {}),
+      ...(selections.length > 0 ? { selections } : {}),
+    };
     const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds });
     const attendeeCount = attendees.attendeeCount;
 
@@ -875,9 +908,12 @@ export const bookFreeEvent = onCall(
       if (existingBooking.exists) {
         throw new HttpsError("already-exists", "Already booked for this event.");
       }
-      // Soft cap: no capacity check, bookings past maxCapacity are accepted
-      // and the owner is emailed (notifyOwnerOverCapacity).
+      // Soft cap: no event-level capacity check, bookings past maxCapacity
+      // are accepted and the owner is emailed (notifyOwnerOverCapacity).
+      // A capped team/role choice IS a hard cap, re-checked here against
+      // the current bookings (a read, so it sits before the writes below).
       const freshEventData = freshEventSnap.data();
+      await assertSelectionCapacity(eventRef, freshEventData, resolved, attendeeCount, t);
       // Re-confirmed inside the transaction rather than trusted from a
       // check earlier in the function — this is what actually stops two
       // simultaneous first bookings (two tabs, say) from both counting as
@@ -1253,14 +1289,17 @@ export const bookEventWithVoucher = onCall(
     // unlike createBookingCheckout, there's no fee lookup here at all —
     // no field/owner read, no computeStandardFee call — this is compared
     // and paid for in ticket-price terms only, start to finish.
-    const { entryPriceCents, selectedChoice } = resolveEntryPrice(eventData, request.data?.selectedChoiceId);
+    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections);
     if (!entryPriceCents || entryPriceCents <= 0) {
       throw new HttpsError("failed-precondition", "This event doesn't have a valid price set — book it as a free event instead.");
     }
 
     const profileSnap = await db.collection("users").doc(uid).get();
     const profileData = profileSnap.data() || {};
-    const choiceFields = selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: selectedChoice.priceCents } : {};
+    const choiceFields = {
+      ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: selectedChoice.priceCents } : {}),
+      ...(selections.length > 0 ? { selections } : {}),
+    };
     const { fieldData } = await resolveEventHost(db, eventData);
     const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds });
     const attendeeCount = attendees.attendeeCount;
@@ -1303,6 +1342,8 @@ export const bookEventWithVoucher = onCall(
       if (freshEventData.canceled) {
         throw new HttpsError("failed-precondition", "This event has been canceled.");
       }
+      // Hard cap on a capped team/role choice (a read — before the writes).
+      await assertSelectionCapacity(eventRef, freshEventData, resolved, attendeeCount, t);
       if (voucher.amountCents < neededCents) {
         throw new HttpsError(
           "failed-precondition",
@@ -1401,7 +1442,7 @@ export const stripeWebhook = onRequest(
           const session = event.data.object;
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta } = session.metadata;
             // Written by createBookingCheckout as a JSON string (Stripe
             // metadata values are strings only) — parsed back out here the
             // same defensive way selectedChoiceLabel/Cents are trusted:
@@ -1444,6 +1485,18 @@ export const stripeWebhook = onRequest(
               if (expectedTotal !== session.amount_total) {
                 console.error(`stripeWebhook: amount mismatch for session ${session.id} (uid ${uid}, event ${eventId}) — expected ${expectedTotal}, Stripe charged ${session.amount_total}. NO booking created; needs manual review.`);
                 break;
+              }
+            }
+            // Team/role-style picks (organizer events): ids only came through
+            // metadata; labels and prices are re-derived from the event doc
+            // inside the transaction below. Malformed -> none.
+            let selectionPairsMeta = [];
+            if (selectionsMeta) {
+              try {
+                const parsed = JSON.parse(selectionsMeta);
+                if (Array.isArray(parsed)) selectionPairsMeta = parsed;
+              } catch {
+                selectionPairsMeta = [];
               }
             }
             const dependentSnapshots = dependentIds.length ? await snapshotDependentsForWebhook(db, uid, eventId, dependentIds) : [];
@@ -1517,6 +1570,10 @@ export const stripeWebhook = onRequest(
                 // own Stripe line item), so no separate rentals-total
                 // field is needed for the money side of this.
                 selectedRentals: parsedRentals,
+                // Organizer events: the full team/role snapshot. Omitted
+                // (not []) when there are none, so a field-event booking doc
+                // keeps exactly the shape it always had.
+                ...(snapshotSelections(eventData, selectionPairsMeta).length > 0 ? { selections: snapshotSelections(eventData, selectionPairsMeta) } : {}),
                 ...walkOnFields,
                 ...attendeePublicFields(profileData, dependentSnapshots),
               });

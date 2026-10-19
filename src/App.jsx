@@ -22,7 +22,7 @@ import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCa
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
-import { useMyBooking, useEventBookings, useMyBookings, useBookingActions } from "./hooks/useBookings";
+import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { FONTS } from "./theme";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
@@ -737,7 +737,10 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
 // section independently uses real field-owner data when present (field.amenities/
 // rules/chrono) and only falls back to demo placeholder content — with an
 // explicit "DEMO DATA" tag — where a field hasn't provided that section yet.
-function FieldFacts({ field, rentalPick }) {
+// rentalsOnly: an organizer (Major) event has no field, so the amenities /
+// rules / chrono cards below (which fall back to DEMO placeholders) don't
+// apply — only its add-ons list is shown.
+function FieldFacts({ field, rentalPick, rentalsOnly = false }) {
   const { T, display, body, mono } = useTheme();
   const hasRealAmenities = Array.isArray(field?.amenities) && field.amenities.length > 0;
   const hasRealRules = Array.isArray(field?.rules) && field.rules.length > 0;
@@ -767,6 +770,8 @@ function FieldFacts({ field, rentalPick }) {
 
   return (
     <>
+      {!rentalsOnly && (
+      <>
       <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
         <div className="flex items-center justify-between mb-2">
           <Eyebrow>Amenities</Eyebrow>
@@ -829,12 +834,15 @@ function FieldFacts({ field, rentalPick }) {
         </div>
       </div>
 
+      </>
+      )}
+
       {Array.isArray(field?.rentals) && field.rentals.length > 0 && (() => {
         const pickable = new Set((rentalPick?.options || []).map((o) => o.id));
         const canPick = pickable.size > 0;
         return (
           <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <Eyebrow>{canPick ? "Rental Gear (optional)" : "Rental Gear"}</Eyebrow>
+            <Eyebrow>{rentalsOnly ? (canPick ? "Add-ons (optional)" : "Add-ons") : (canPick ? "Rental Gear (optional)" : "Rental Gear")}</Eyebrow>
             {canPick && (
               <p className="text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
                 Tap any item to add it to your reservation.
@@ -882,7 +890,7 @@ function FieldFacts({ field, rentalPick }) {
             </div>
             {canPick ? (
               <p className="text-[11px] mt-3" style={{ ...body, color: T.ashFaint }}>
-                Selected rentals are added to your total and paid together with your ticket at checkout.
+                Selected {rentalsOnly ? "add-ons" : "rentals"} are added to your total and paid together with your ticket at checkout.
               </p>
             ) : !rentalPick ? (
               <p className="text-[11px] mt-3" style={{ ...body, color: T.ashFaint }}>
@@ -1733,8 +1741,17 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const [selectedChoiceId, setSelectedChoiceId] = useState(null);
   const priceOptions = ev.priceOptions;
   const selectedChoice = priceOptions?.choices?.find((c) => c.id === selectedChoiceId) || null;
-  const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0);
-  const choiceMissing = !!priceOptions?.required && !selectedChoice;
+  // Selection groups (organizer events): team / role / attendee type etc.
+  // One pick per group applies to the whole party. Absent on every
+  // field-owner event, which keeps using the single Price Options group
+  // above untouched.
+  const selectionGroups = (Array.isArray(ev.selectionGroups) ? ev.selectionGroups : [])
+    .filter((g) => g && g.id && Array.isArray(g.choices) && g.choices.length > 0);
+  const [groupPicks, setGroupPicks] = useState({}); // { groupId: choiceId }
+  const groupPicksCents = selectionGroups.reduce((sum, g) => sum + (g.choices.find((c) => c.id === groupPicks[g.id])?.priceCents || 0), 0);
+  const missingGroup = selectionGroups.find((g) => g.required && !g.choices.some((c) => c.id === groupPicks[g.id])) || null;
+  const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0) + groupPicksCents;
+  const choiceMissing = (!!priceOptions?.required && !selectedChoice) || !!missingGroup;
   // Booking-bar price label. basePriceCents/entryPriceCents already treat
   // any non-numeric ev.price (blank, or owner text with no digits) as $0 —
   // but $0 is ambiguous on its own: it could mean "genuinely free" or "no
@@ -1764,7 +1781,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // priceCents (set by the owner app at save time) are selectable — an
   // item saved before this feature shipped, with no priceCents yet, isn't
   // offered here until its owner re-saves it.
-  const rentalOptions = (field?.rentals || []).filter((r) => typeof r.priceCents === "number" && r.priceCents > 0);
+  // Organizer (Major) events have no field, so their add-ons live on the
+  // event itself in the same shape.
+  const rentalCatalog = (ev.isMajor ? ev.rentals : field?.rentals) || [];
+  const rentalOptions = rentalCatalog.filter((r) => typeof r.priceCents === "number" && r.priceCents > 0);
   const [selectedRentalIds, setSelectedRentalIds] = useState([]);
   const toggleRental = (id) => setSelectedRentalIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   const rentalsCents = rentalOptions.filter((r) => selectedRentalIds.includes(r.id)).reduce((sum, r) => sum + r.priceCents, 0);
@@ -1814,6 +1834,46 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const selectedDependents = dependents.filter((d) => selectedDependentIds.includes(d.id) && !dependentBlockReason(d));
   const attendeeCount = 1 + selectedDependents.length;
   const attendeeDependentIds = selectedDependents.map((d) => d.id);
+  // Seats already taken per capped choice, read from the event's (publicly
+  // readable) bookings once. The server re-checks as the real gate; this
+  // only drives the "Full" display. Refreshed after a failed booking.
+  const hasCappedChoice = selectionGroups.some((g) => g.choices.some((c) => typeof c.capacity === "number"));
+  const [seatsTaken, setSeatsTaken] = useState({}); // { "groupId:choiceId": heads }
+  const [seatsRefresh, setSeatsRefresh] = useState(0);
+  useEffect(() => {
+    if (!hasCappedChoice) return;
+    let alive = true;
+    getEventBookingsOnce(ev.id).then((docs) => {
+      if (!alive) return;
+      const tally = {};
+      docs.forEach((b) => {
+        const heads = Math.max(1, Number(b.attendeeCount) || 1);
+        (Array.isArray(b.selections) ? b.selections : []).forEach((x) => {
+          const k = `${x.groupId}:${x.choiceId}`;
+          tally[k] = (tally[k] || 0) + heads;
+        });
+      });
+      setSeatsTaken(tally);
+    }).catch((err) => console.error("seat tally failed:", err.code || err.message || err));
+    return () => { alive = false; };
+  }, [ev.id, hasCappedChoice, seatsRefresh]);
+  // Seats left on a choice (Infinity when uncapped).
+  const seatsLeft = (g, c) => (typeof c.capacity === "number" ? Math.max(0, c.capacity - (seatsTaken[`${g.id}:${c.id}`] || 0)) : Infinity);
+  // A pick that stops fitting the party (a child profile was ticked, or
+  // someone else took the seats) is dropped so the player re-chooses
+  // rather than hitting a server rejection.
+  useEffect(() => {
+    setGroupPicks((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      selectionGroups.forEach((g) => {
+        const c = g.choices.find((x) => x.id === prev[g.id]);
+        if (c && seatsLeft(g, c) < attendeeCount) { delete next[g.id]; changed = true; }
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatsTaken, attendeeCount]);
   const fmtCents = (cents) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
   const toggleDependent = (id) =>
     setSelectedDependentIds((prev) =>
@@ -1864,7 +1924,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, groupPicks);
         // Two-tap checkout (2026-10-14). This used to pre-open a blank tab
         // at tap time and point it at Stripe once the URL came back. On
         // some phones, opening that tab backgrounded Atlas and paused it
@@ -1878,7 +1938,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
-        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds);
+        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds, groupPicks);
         setBookingBusy(false);
       }
     } catch (err) {
@@ -1895,6 +1955,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
       const errCode = String(err.code || "").replace(/^functions\//, "");
       const knownFriendlyCode = ["failed-precondition", "already-exists", "not-found", "invalid-argument", "unauthenticated"].includes(errCode);
       console.error("booking failed:", err.code || err.message || err);
+      if (hasCappedChoice) setSeatsRefresh((n) => n + 1); // a choice may have just filled up
       setBookingError(
         knownFriendlyCode && err.message
           ? err.message
@@ -1923,10 +1984,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     setBookingError("");
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
-      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds);
+      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds, groupPicks);
       setBookingBusy(false);
     } catch (err) {
       console.error("voucher redemption failed:", err.code || err.message || err);
+      if (hasCappedChoice) setSeatsRefresh((n) => n + 1);
       setBookingError(err.message || "Couldn't apply that voucher — try again, or book normally.");
       setBookingBusy(false);
     }
@@ -2180,6 +2242,38 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </button>
           )}
 
+          {selectionGroups.length > 0 && !myBooking && !isPast && !ev.canceled && selectionGroups.map((g) => (
+            <div key={g.id} className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: missingGroup?.id === g.id ? `1.5px solid ${T.accent}` : "none", outlineOffset: -1 }}>
+              <Eyebrow>{g.label}{g.required ? "" : " (optional)"}</Eyebrow>
+              <div className="flex flex-wrap gap-2">
+                {g.choices.map((c) => {
+                  const picked = groupPicks[g.id] === c.id;
+                  const left = seatsLeft(g, c);
+                  const unavailable = !picked && left < attendeeCount;
+                  const extra = c.priceCents > 0 ? ` +${fmtCents(c.priceCents)}` : "";
+                  return (
+                    <button
+                      key={c.id}
+                      disabled={unavailable}
+                      onClick={() => setGroupPicks((prev) => {
+                        const next = { ...prev };
+                        if (picked) { if (!g.required) delete next[g.id]; } else { next[g.id] = c.id; }
+                        return next;
+                      })}
+                      className="px-3 py-2 text-[12px] font-semibold"
+                      style={{ ...body, color: picked ? T.inverse : T.ashDim, background: picked ? T.cta : T.panelAlt, borderRadius: 999, opacity: unavailable ? 0.45 : 1 }}
+                    >
+                      {c.label}{extra}{unavailable ? (left === 0 ? " — Full" : ` — ${left} left`) : ""}
+                    </button>
+                  );
+                })}
+              </div>
+              {missingGroup?.id === g.id && (
+                <p className="text-[11px] mt-2" style={{ ...body, color: T.accent }}>Choose one to continue.</p>
+              )}
+            </div>
+          ))}
+
           {priceOptions?.choices?.length > 0 && !myBooking && !isPast && !ev.canceled && (
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: choiceMissing ? `1.5px solid ${T.accent}` : "none", outlineOffset: -1 }}>
               <Eyebrow>{priceOptions.label}{priceOptions.required ? "" : " (optional)"}</Eyebrow>
@@ -2347,7 +2441,8 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               Kept here for showcase purposes per explicit request; swap for
               real field-owner-entered data once that flow exists. */}
           <FieldFacts
-            field={field}
+            field={ev.isMajor ? { rentals: ev.rentals } : field}
+            rentalsOnly={!!ev.isMajor}
             rentalPick={{
               options: rentalOptions.length > 0 && !myBooking && !isPast && !ev.canceled && !usingVoucher ? rentalOptions : [],
               selectedIds: selectedRentalIds,
@@ -2471,7 +2566,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
             style={{ ...display, background: usingVoucher ? T.good : T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
           >
-            {bookingBusy ? "…" : choiceMissing ? `Choose ${priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : usingVoucher ? "Redeem Voucher" : "Reserve This Event"}
+            {bookingBusy ? "…" : choiceMissing ? `Choose ${missingGroup ? missingGroup.label : priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : usingVoucher ? "Redeem Voucher" : "Reserve This Event"}
           </button>
         )}
       </div>

@@ -101,12 +101,12 @@ export function useBookingActions() {
   // bookFreeEvent resolves the real price itself and only writes if it
   // actually comes out to $0 — profile lookup and all three writes now
   // happen server-side, in one transaction, so this is just the trigger.
-  async function bookEvent(uid, profile, event, selectedChoice, location, attendeeDependentIds) {
+  async function bookEvent(uid, profile, event, selectedChoice, location, attendeeDependentIds, selections) {
     const call = httpsCallable(functions, "bookFreeEvent");
     // location is a best-effort { lat, lng } reading (or null) the caller
     // already tried to grab — used server-side only to decide the
     // Walk-On Survivor patch, never required for booking to succeed.
-    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [] });
+    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [], selections: selections && Object.keys(selections).length > 0 ? selections : null });
   }
 
   async function cancelBooking(uid, eventId) {
@@ -133,7 +133,7 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, selections) {
     const call = httpsCallable(functions, "createBookingCheckout");
     // Same best-effort { lat, lng } (or null) as bookEvent — carried
     // through Checkout Session metadata since the webhook that actually
@@ -150,6 +150,8 @@ export function useBookingActions() {
       // Child profile ids only — the server re-reads each one (ownership, age at
       // event date, signature) and works out the real attendee count and total.
       attendeeDependentIds: attendeeDependentIds || [],
+      // Organizer events: { groupId: choiceId } for team/role-style groups.
+      selections: selections && Object.keys(selections).length > 0 ? selections : null,
     });
     return result.data.url;
   }
