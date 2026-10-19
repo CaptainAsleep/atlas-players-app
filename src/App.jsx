@@ -611,7 +611,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick }) {
       <div className="h-40 relative mb-2.5" style={{ ...heroStyle(ev.imageUrl || fallbackImageUrl, ev.id || ev.title), borderRadius: T.rMedia, overflow: "hidden" }}>
         <div className="absolute top-3 left-3 flex gap-2">
           {ev.type && <Tag>{ev.type}</Tag>}
-          {ev.isMajor && <Tag>MAJOR</Tag>}
+          {(ev.isMajor || ev.showMajorTag) && <Tag>MAJOR</Tag>}
           {isToday && <Tag tone="live">TODAY</Tag>}
         </div>
         <div
@@ -2120,7 +2120,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
           <div className="absolute bottom-4 left-5 right-5">
             <div className="flex gap-2 mb-2">
               {ev.type && <Tag>{ev.type}</Tag>}
-              {ev.isMajor && <Tag>MAJOR</Tag>}
+              {(ev.isMajor || ev.showMajorTag) && <Tag>MAJOR</Tag>}
               {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
             </div>
             <div
@@ -2206,7 +2206,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             )}
           </div>
 
-          {ev.isMajor && ev.hostName && (
+          {ev.hostName && (
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>Organizer</Eyebrow>
               <div className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{ev.hostName}</div>
