@@ -42,6 +42,7 @@ const verifyEmailSectionTemplate = readFileSync(path.join(templatesDir, "verify-
 const bookingConfirmationFirstTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-first.html"), "utf-8");
 const bookingConfirmationRepeatTemplate = readFileSync(path.join(templatesDir, "booking-confirmation-repeat.html"), "utf-8");
 const teamOfficerWelcomeTemplate = readFileSync(path.join(templatesDir, "team-officer-welcome.html"), "utf-8");
+const organizerWelcomeTemplate = readFileSync(path.join(templatesDir, "organizer-welcome.html"), "utf-8");
 // Field-claim emails (2026-10-13): branded on the same shell as the other
 // Atlas emails, replacing Firebase's default verification email and the
 // old bare-bones inline-HTML claim code.
@@ -312,6 +313,11 @@ async function resolveEventHost(db, eventData) {
       lat: typeof eventData.lat === "number" ? eventData.lat : undefined,
       lng: typeof eventData.lng === "number" ? eventData.lng : undefined,
       minimumAge: typeof eventData.minimumAge === "number" ? eventData.minimumAge : undefined,
+      // An organizer has no field to hold a rentals catalog, so their
+      // add-ons live on the event itself, in the same shape as
+      // field.rentals — resolveRentalsTotal and everything downstream of
+      // it then work unchanged.
+      rentals: Array.isArray(eventData.rentals) ? eventData.rentals : [],
     };
   }
   const ownerId = eventData.hostOwnerId || fieldData.ownerId || null;
@@ -2343,6 +2349,80 @@ export const sendTeamOfficerWelcomeEmail = onDocumentWritten(
       }
     } catch (err) {
       console.error(`sendTeamOfficerWelcomeEmail: failed for ${teamId}/${uid}:`, err);
+    }
+  }
+);
+
+// ── Event organizer welcome email ───────────────────────────────────────
+// Fires the first time an owners/{uid} doc has accountRoles.organizer ===
+// true — whether they picked "I organize events" in the one-time role picker
+// at signup or flipped it on later under Settings > Account Type. That role
+// is self-declared and UX-only (the server never uses it for permissions or
+// fees), so this is purely a "you just told us you run events" welcome, and
+// it deliberately says nothing about fees (the organizer fee offer and
+// terms are still open decisions).
+// Needed because sendFieldOwnerWelcomeEmail only fires when a field is
+// claimed, so an organizer with no field would otherwise get no welcome at
+// all. Sent once per person: a server-only emailSends doc is created
+// atomically (create() fails if it already exists), so toggling the role
+// off and on, or a redelivered trigger, can never send a second copy.
+// Transition-based on purpose: an account that already had the role set
+// before this function existed is never emailed retroactively.
+// Kill switch: set config/emailAutomation.organizerWelcome = false.
+export const sendOrganizerWelcomeEmail = onDocumentWritten(
+  { document: "owners/{uid}", secrets: [resendApiKey] },
+  async (event) => {
+    const { uid } = event.params;
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    if (!after || after.accountRoles?.organizer !== true || before?.accountRoles?.organizer === true) return;
+
+    const db = getFirestore();
+
+    const cfg = await db.collection("config").doc("emailAutomation").get();
+    if (cfg.exists && cfg.data()?.organizerWelcome === false) {
+      console.log(`sendOrganizerWelcomeEmail: disabled by config, skipping ${uid}.`);
+      return;
+    }
+
+    // Mark as sent before attempting the send — a failure costs one missed
+    // email, never a repeat one (same reasoning as the other welcome emails).
+    try {
+      await db.collection("emailSends").doc(`organizerWelcome_${uid}`).create({
+        type: "organizerWelcome",
+        uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      if (err?.code === 6) return; // ALREADY_EXISTS — this organizer was already emailed
+      console.error(`sendOrganizerWelcomeEmail: couldn't record send for ${uid}:`, err);
+      return;
+    }
+
+    const toEmail = after.email;
+    if (!toEmail) {
+      console.warn(`sendOrganizerWelcomeEmail: skipping ${uid} — no email on file.`);
+      return;
+    }
+
+    const html = fillTemplate(organizerWelcomeTemplate, {
+      "[NAME]": escapeHtml(after.name || "there"),
+      "[APP LINK]": OWNER_APP_URL,
+    });
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: ATLAS_EMAIL_FROM,
+        to: toEmail,
+        subject: "Welcome to Atlas — here's how to get your first event live",
+        html,
+      });
+      if (error) {
+        console.error(`sendOrganizerWelcomeEmail: Resend error for ${uid}:`, error);
+      }
+    } catch (err) {
+      console.error(`sendOrganizerWelcomeEmail: failed for ${uid}:`, err);
     }
   }
 );
