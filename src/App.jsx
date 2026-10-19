@@ -1102,6 +1102,11 @@ function HomeScreen({
     return distanceMiles(userLocation.lat, userLocation.lng, field.lat, field.lng);
   };
 
+  // Distance for an EVENT. A field event uses its field's coordinates; an Atlas
+  // Major carries its own lat/lng only when the organizer prefilled the venue
+  // from an Atlas field (otherwise null = distance unknown).
+  const eventDistance = (ev) => fieldDistance(ev.isMajor ? ev : fields.find((f) => f.id === ev.fieldId));
+
   const handleNearbyToggle = () => {
     if (nearbyOnly) {
       setNearbyOnly(false);
@@ -1168,11 +1173,11 @@ function HomeScreen({
     if (cat?.type && ev.type !== cat.type) return false;
     if (activeTodayOnly && !isLiveToday(ev)) return false;
     if (!eventPassesAdvanced(ev)) return false;
-    if (nearbyOnly && !ev.isMajor) {
-      // Majors are exempt: their distance is unknown in Phase 1 (no
-      // geocoding), and unknown must not mean filtered out.
-      const dist = fieldDistance(fields.find((f) => f.id === ev.fieldId));
-      if (dist === null || dist > radiusMiles) return false;
+    if (nearbyOnly) {
+      const dist = eventDistance(ev);
+      // A Major with no coordinates is exempt: unknown distance must not mean
+      // filtered out. With coordinates it's filtered like any other event.
+      if (!(ev.isMajor && dist === null) && (dist === null || dist > radiusMiles)) return false;
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -1188,8 +1193,7 @@ function HomeScreen({
 
   if (sortBy === "distance" && userLocation) {
     filteredEvents = [...filteredEvents].sort(
-      (a, b) => (fieldDistance(fields.find((f) => f.id === a.fieldId)) ?? Infinity) -
-                (fieldDistance(fields.find((f) => f.id === b.fieldId)) ?? Infinity)
+      (a, b) => (eventDistance(a) ?? Infinity) - (eventDistance(b) ?? Infinity)
     );
   } else if (sortBy === "price") {
     filteredEvents = [...filteredEvents].sort(
@@ -1199,8 +1203,7 @@ function HomeScreen({
     // No explicit sort chosen, but Nearby is on — nearest-first is still the
     // more useful default than insertion order.
     filteredEvents = [...filteredEvents].sort(
-      (a, b) => (fieldDistance(fields.find((f) => f.id === a.fieldId)) ?? Infinity) -
-                (fieldDistance(fields.find((f) => f.id === b.fieldId)) ?? Infinity)
+      (a, b) => (eventDistance(a) ?? Infinity) - (eventDistance(b) ?? Infinity)
     );
   } else {
     filteredEvents = [...filteredEvents].sort((a, b) => a.date.localeCompare(b.date));
@@ -1680,7 +1683,7 @@ function HomeScreen({
               key={ev.id}
               ev={ev}
               fallbackImageUrl={fields.find((f) => f.id === ev.fieldId)?.imageUrl}
-              distanceMi={nearbyOnly ? fieldDistance(fields.find((f) => f.id === ev.fieldId)) ?? undefined : undefined}
+              distanceMi={nearbyOnly ? eventDistance(ev) ?? undefined : undefined}
               claimed={!!fields.find((f) => f.id === ev.fieldId)?.ownerId}
               onClick={() => onOpenEvent(ev)}
             />
@@ -2143,11 +2146,13 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             label="Event Location"
             name={ev.venueName || field?.name}
             claimed={!ev.venueName && !!field?.ownerId}
-            // A Major's address is street-only on the event; append city/state so
-            // the directions link (which searches by this text when there are
-            // no coordinates) lands in the right town.
+            // A Major's address is usually street-only on the event; append city/
+            // state so the directions link (which searches by this text when
+            // there are no coordinates) lands in the right town. fullAddress
+            // skips the append when the address already names the city (e.g.
+            // an address copied from an Atlas field).
             address={ev.isMajor
-              ? [ev.address, ev.venueCity, ev.venueState].filter(Boolean).join(", ")
+              ? fullAddress({ address: ev.address, city: [ev.venueCity, ev.venueState].filter(Boolean).join(", ") })
               : (ev.address || fullAddress(field))}
             lat={typeof ev.lat === "number" ? ev.lat : field?.lat}
             lng={typeof ev.lng === "number" ? ev.lng : field?.lng}

@@ -148,7 +148,11 @@ service cloud.firestore {
       allow create: if request.auth != null && (
         (request.resource.data.get('isMajor', false) == true
           && request.resource.data.get('hostOwnerId', null) == request.auth.uid
-          && request.resource.data.get('fieldId', null) == null)
+          && request.resource.data.get('fieldId', null) == null
+          // Needs an owners/{uid} account (field owner or organizer), so a
+          // player-only account can't publish public events straight to
+          // Firestore. Payments would already fail without one.
+          && exists(/databases/$(database)/documents/owners/$(request.auth.uid)))
         ||
         (request.resource.data.get('isMajor', false) != true
           && request.resource.data.get('hostOwnerId', null) == null

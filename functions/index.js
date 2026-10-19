@@ -147,11 +147,7 @@ export const createConnectOnboardingLink = onCall(
 
     // Account Links expire quickly and are single-use by design — always
     // generate a fresh one rather than trying to cache or reuse one.
-    // Two apps onboard through here (field owners and event organizers).
-    // Exact-match allowlist only — never an arbitrary caller-supplied URL,
-    // which would be an open redirect on a payments flow.
-    const allowedAppOrigins = ["https://ownerapp.airsoftatlas.app", "https://organizers.airsoftatlas.app"];
-    const appOrigin = allowedAppOrigins.includes(request.data?.appOrigin) ? request.data.appOrigin : allowedAppOrigins[0];
+    const appOrigin = "https://ownerapp.airsoftatlas.app";
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${appOrigin}/?connect=refresh`,
