@@ -3862,9 +3862,9 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
                   <Shield size={18} color={T.ashDim} />
                 )}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{t.name}</div>
-                {t.description && <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{t.description}</div>}
+                {t.description && <div className="text-[11px] line-clamp-2 break-words" style={{ ...body, color: T.ashFaint }}>{t.description}</div>}
               </div>
               <ChevronRight size={16} color={T.ashFaint} />
             </button>
