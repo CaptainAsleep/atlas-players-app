@@ -151,6 +151,7 @@ export async function processEvent(db, { id: eventId, data: ev }, { dryRun = tru
   for (const b of bookings.docs) {
     const bd = b.data();
     if (b.id === FEEDBACK_ADMIN_UID) continue;
+    if (bd.isTest) continue; // internal QR check-in rehearsal, not a real attendee
     if (bd.checkedIn || treatAsCheckedIn) checkedIn.push({ uid: b.id, bd });
     else if (includeNotCheckedIn) report.notCheckedIn.push({ uid: b.id, callsign: bd.callsign || "" });
   }
