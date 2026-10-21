@@ -5,6 +5,8 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import * as feedback from "./feedback.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -2629,3 +2631,96 @@ export const getEmailInsights = onCall(
     };
   }
 );
+
+
+// ===========================================================================
+// Post-event feedback (2026-10-21). All logic lives in feedback.js so the
+// dry-run script (scripts/feedback-dry-run.mjs) runs the exact same code;
+// these are thin wrappers that supply Firestore + Resend.
+// ===========================================================================
+function feedbackSender() {
+  const resend = new Resend(resendApiKey.value());
+  return async ({ to, subject, html }) => {
+    const { error } = await resend.emails.send({
+      from: feedback.FEEDBACK_EMAIL_FROM,
+      replyTo: feedback.FEEDBACK_ALERT_TO,
+      to, subject, html,
+    });
+    if (error) throw new Error(error.message || String(error));
+  };
+}
+
+// The day after an event's last day, 6pm Detroit time (~24h after a
+// typical Saturday event ends): one email per checked-in booking, plus one
+// to the host owner. Idempotent per recipient via eventFeedbackRequests.
+export const sendEventFeedbackRequests = onSchedule(
+  { schedule: "0 18 * * *", timeZone: "America/Detroit", secrets: [resendApiKey], timeoutSeconds: 540 },
+  async () => {
+    const db = getFirestore();
+    const reports = await feedback.runFeedbackSends(db, { dryRun: false, sendEmail: feedbackSender() });
+    for (const r of reports) {
+      console.log(`feedback ${r.eventId}: ${r.skipped || r.recipients.map((x) => `${x.role}:${x.status}`).join(", ")}`);
+    }
+  }
+);
+
+// 9am Detroit: summary of events whose requests went out yesterday, plus a
+// weekly roll-up on Mondays. Sends nothing when there's nothing to report.
+export const sendFeedbackDigest = onSchedule(
+  { schedule: "0 9 * * *", timeZone: "America/Detroit", secrets: [resendApiKey] },
+  async () => {
+    const db = getFirestore();
+    const digest = await feedback.buildDigest(db);
+    if (!digest) return;
+    await feedbackSender()({ to: feedback.FEEDBACK_ALERT_TO, ...digest });
+  }
+);
+
+// Public (no sign-in): the feedback page trades its link token for the
+// event context. The token itself is the credential.
+export const getFeedbackContext = onCall({ invoker: "public" }, async (request) => {
+  const ctx = await feedback.getContextForToken(getFirestore(), request.data?.token);
+  if (!ctx) throw new HttpsError("not-found", "This feedback link isn't valid.");
+  return ctx;
+});
+
+export const submitEventFeedback = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    const db = getFirestore();
+    let result;
+    try {
+      result = await feedback.submitForToken(db, request.data?.token, request.data || {});
+    } catch (err) {
+      if (err.message === "bad-token") throw new HttpsError("not-found", "This feedback link isn't valid.");
+      if (err.message === "rating-required" || err.message === "rating-invalid") throw new HttpsError("invalid-argument", "Please pick a star rating.");
+      throw err;
+    }
+    if (result.lowAlert) {
+      try {
+        const d = result.doc;
+        const reqDoc = (await db.collection("eventFeedbackRequests").doc(d.eventId).get()).data() || {};
+        const meta = { fieldName: reqDoc.fieldName || "", eventTitle: reqDoc.eventTitle || d.eventId, eventDate: reqDoc.eventDate || "" };
+        const callsign = d.role === "player" ? (await db.collection("users").doc(d.uid).get()).data()?.callsign || "" : "";
+        await feedbackSender()({ to: feedback.FEEDBACK_ALERT_TO, ...feedback.renderLowRatingAlert({ doc: d, callsign, meta }) });
+        await result.ref.update({ lowAlertSentAt: new Date() });
+      } catch (err) {
+        console.error("submitEventFeedback: low-rating alert failed:", err);
+      }
+    }
+    return { ok: true };
+  }
+);
+
+// Owner app, Settings > Feedback: their fields' player ratings and field
+// comments, with no names or ids attached.
+export const getOwnerFeedback = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  return { events: await feedback.getOwnerFeedback(getFirestore(), request.auth.uid) };
+});
+
+// Admin portal #feedback: everything, with callsigns.
+export const getAdminFeedback = onCall(async (request) => {
+  if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Admin only.");
+  return { events: await feedback.getAdminFeedback(getFirestore()) };
+});
