@@ -54,6 +54,21 @@ export function useEventBookings(eventId) {
   return { bookings, bookingsLoading: loading };
 }
 
+// Child-only bookings (2026-10-21): a parent can book only their child
+// profile(s). Those bookings carry guardianPlaying:false — the parent holds
+// the booking (and its QR) but didn't play, so nothing that credits a
+// player for attending (patches, achievements, Year in Review, a friend's
+// view of their games) should count it. Absent = played, as before.
+export function isPlayedBooking(b) {
+  return b?.guardianPlaying !== false;
+}
+
+// True when a booking has child profiles on it (and so private
+// attendeeDetails). A 1-child child-only booking has attendeeCount 1.
+export function bookingHasChildren(b) {
+  return (b?.attendeeCount || 1) > 1 || b?.guardianPlaying === false;
+}
+
 // A one-time (non-live) read of an event's bookings — used by the
 // team-threshold patch check, which just needs a current count each time
 // it runs, not a live subscription per event.
@@ -101,12 +116,12 @@ export function useBookingActions() {
   // bookFreeEvent resolves the real price itself and only writes if it
   // actually comes out to $0 — profile lookup and all three writes now
   // happen server-side, in one transaction, so this is just the trigger.
-  async function bookEvent(uid, profile, event, selectedChoice, location, attendeeDependentIds, selections) {
+  async function bookEvent(uid, profile, event, selectedChoice, location, attendeeDependentIds, selections, guardianPlaying = true) {
     const call = httpsCallable(functions, "bookFreeEvent");
     // location is a best-effort { lat, lng } reading (or null) the caller
     // already tried to grab — used server-side only to decide the
     // Walk-On Survivor patch, never required for booking to succeed.
-    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [], selections: selections && Object.keys(selections).length > 0 ? selections : null });
+    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [], selections: selections && Object.keys(selections).length > 0 ? selections : null, guardianPlaying: guardianPlaying !== false });
   }
 
   async function cancelBooking(uid, eventId) {
@@ -117,7 +132,7 @@ export function useBookingActions() {
     // delete rules still refuse a paid one).
     const mirrorSnap = await getDoc(doc(db, "users", uid, "bookings", eventId));
     const attendeeCount = Math.max(1, mirrorSnap.data()?.attendeeCount || 1);
-    const detailsSnap = attendeeCount > 1
+    const detailsSnap = bookingHasChildren(mirrorSnap.data())
       ? await getDocs(collection(db, "events", eventId, "bookings", uid, "attendeeDetails"))
       : null;
     const batch = writeBatch(db);
@@ -133,7 +148,7 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, selections) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, selections, guardianPlaying = true) {
     const call = httpsCallable(functions, "createBookingCheckout");
     // Same best-effort { lat, lng } (or null) as bookEvent — carried
     // through Checkout Session metadata since the webhook that actually
@@ -152,6 +167,8 @@ export function useBookingActions() {
       attendeeDependentIds: attendeeDependentIds || [],
       // Organizer events: { groupId: choiceId } for team/role-style groups.
       selections: selections && Object.keys(selections).length > 0 ? selections : null,
+      // false = child-only booking (the parent isn't playing).
+      guardianPlaying: guardianPlaying !== false,
     });
     return result.data.url;
   }

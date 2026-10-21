@@ -64,18 +64,44 @@ export function formatLongDate(key) {
 const newToken = () => randomBytes(24).toString("base64url");
 const feedbackDocId = (eventId, role, uid) => (role === "owner" ? `${eventId}__owner` : `${eventId}__${uid}`);
 
-export function renderPlayerEmail({ callsign, fieldName, eventTitle, eventDate, token }) {
+// "Ghost", "Ghost and Viper", "Ghost, Viper and Bear".
+export function joinCallsigns(names) {
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+// "Ghost's day", "Ghost and Viper's day" (one possessive on the last name).
+export function childDayLabel(childCallsigns) {
+  return `${joinCallsigns(childCallsigns)}'s day`;
+}
+
+// childCallsigns: set only for a child-only booking (the parent didn't
+// play) — then the email is about the child's day, so parent and child can
+// talk it over. Otherwise the original "How was [field]?" copy.
+export function renderPlayerEmail({ callsign, fieldName, eventTitle, eventDate, token, childCallsigns = null }) {
   const link = `${FEEDBACK_PAGE_URL}?t=${encodeURIComponent(token)}`;
   const early = eventDate && eventDate <= EARLY_PLAYER_LINE_UNTIL
     ? ", and for being one of the first players to book through Atlas."
     : ".";
+  const dateStr = escapeHtml(formatLongDate(eventDate));
+  if (childCallsigns && childCallsigns.length) {
+    const day = childDayLabel(childCallsigns);
+    const kids = joinCallsigns(childCallsigns);
+    const html = fill(playerTemplate, {
+      "[TITLE]": `How was ${escapeHtml(day)} at ${escapeHtml(fieldName)}?`,
+      "[HEADING]": `How was ${escapeHtml(day)} at ${escapeHtml(fieldName)}?`,
+      "[INTRO_LINE]": `Hey ${escapeHtml(callsign)}, thanks for bringing ${escapeHtml(kids)} to ${escapeHtml(eventTitle)} on ${dateStr}.`,
+      "[ASK_LINE]": "Ask them how it went &mdash; then give us two quick ratings, one for the field and one for Atlas, plus anything they want us to hear. We read every one.",
+      "[FIELD NAME]": escapeHtml(fieldName),
+      "[FEEDBACK_LINK]": link,
+      "[BUTTON_LABEL]": `Rate ${escapeHtml(day)} &rarr;`,
+    });
+    return { subject: `How was ${day} at ${fieldName}?`, html };
+  }
   const html = fill(playerTemplate, {
     "[TITLE]": `How was ${escapeHtml(fieldName)}?`,
+    "[HEADING]": `How was ${escapeHtml(fieldName)}?`,
+    "[INTRO_LINE]": `Hey ${escapeHtml(callsign)}, thanks for attending ${escapeHtml(eventTitle)} on ${dateStr}${early}`,
+    "[ASK_LINE]": "Two quick ratings &mdash; one for the field, one for Atlas &mdash; plus anything you want to tell us.",
     "[FIELD NAME]": escapeHtml(fieldName),
-    "[CALLSIGN]": escapeHtml(callsign),
-    "[EVENT NAME]": escapeHtml(eventTitle),
-    "[EVENT DATE]": escapeHtml(formatLongDate(eventDate)),
-    "[EARLY_LINE]": early,
     "[FEEDBACK_LINK]": link,
     "[BUTTON_LABEL]": "Rate your day &rarr;",
   });
@@ -168,6 +194,11 @@ export async function processEvent(db, { id: eventId, data: ev }, { dryRun = tru
       key: uid, role: "player", uid, email: user.email || null,
       callsign: user.callsign || bd.callsign || "Player",
       attendees: bd.attendeeCount || 1,
+      // Child-only booking: the parent didn't play, so the email asks
+      // about the child's day instead.
+      childCallsigns: bd.guardianPlaying === false && Array.isArray(bd.attendees)
+        ? bd.attendees.filter((a) => a?.kind === "minor").map((a) => a.callsign || "Child")
+        : null,
       alreadySent: !!prior?.sentAt, token: prior?.token || null,
     });
   }
@@ -195,12 +226,12 @@ export async function processEvent(db, { id: eventId, data: ev }, { dryRun = tru
   }
 
   for (const r of plan) {
-    const row = { role: r.role, email: r.email, callsign: r.callsign || null, attendees: r.attendees || null };
+    const row = { role: r.role, email: r.email, callsign: r.callsign || null, attendees: r.attendees || null, ...(r.childCallsigns ? { childCallsigns: r.childCallsigns } : {}) };
     if (!r.email) { row.status = "skipped: no email on file"; report.recipients.push(row); continue; }
     if (r.alreadySent) { row.status = "skipped: already sent"; report.recipients.push(row); continue; }
     const token = r.token || newToken();
     const rendered = r.role === "player"
-      ? renderPlayerEmail({ callsign: r.callsign, fieldName, eventTitle, eventDate: ev.date, token })
+      ? renderPlayerEmail({ callsign: r.callsign, fieldName, eventTitle, eventDate: ev.date, token, childCallsigns: r.childCallsigns })
       : renderOwnerEmail({ fieldName, eventTitle, token, firstLine: ownerFirstLine });
     row.subject = rendered.subject;
     if (dryRun) { row.status = "would send"; row.html = rendered.html; report.recipients.push(row); continue; }
@@ -208,6 +239,7 @@ export async function processEvent(db, { id: eventId, data: ev }, { dryRun = tru
     await db.collection("feedbackTokens").doc(token).set({
       eventId, fieldId: ev.fieldId || null, ownerId: ownerId || null,
       role: r.role, uid: r.uid, createdAt: new Date(),
+      ...(r.childCallsigns ? { childCallsigns: r.childCallsigns } : {}),
     });
     try {
       await sendEmail({ to: r.email, subject: rendered.subject, html: rendered.html });
@@ -259,6 +291,8 @@ export async function getContextForToken(db, token) {
   return {
     role: t.role,
     fieldName,
+    // Child-only booking: the page asks about the child's day.
+    childCallsigns: Array.isArray(t.childCallsigns) && t.childCallsigns.length ? t.childCallsigns : null,
     eventTitle: ev.title || "",
     eventDate: formatLongDate(ev.date),
     existing: existing ? {

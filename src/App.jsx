@@ -22,7 +22,7 @@ import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCa
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
-import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce } from "./hooks/useBookings";
+import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { FONTS } from "./theme";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
@@ -217,7 +217,7 @@ function isReviewWindow() {
 function computePlayerYearStats(myBookings, patches, year) {
   const yearStr = String(year);
   const attended = (myBookings || []).filter(
-    (b) => b.checkedIn && (b.endDate || b.date || "").slice(0, 4) === yearStr
+    (b) => b.checkedIn && isPlayedBooking(b) && (b.endDate || b.date || "").slice(0, 4) === yearStr
   );
   const fieldCounts = {};
   attended.forEach((b) => {
@@ -1875,8 +1875,14 @@ function HomeScreen({
 // Michael's sign-off (and attorney review) — bump GUARDIAN_NOTICE_VERSION in
 // hooks/useWaiverSignature.js whenever this changes.
 const GUARDIAN_NOTICE_TEXT = "By signing, I am signing this waiver on behalf of each child selected above, as their parent or legal guardian. I understand that Atlas is a booking platform and is not responsible for any liability arising from their participation.";
+// DRAFT wording (Michael, 2026-10-21; needs attorney review), shown on top of
+// the notice above when the parent books only their child profile(s) and
+// isn't playing. Bump GUARDIAN_ABSENT_NOTICE_VERSION in
+// hooks/useWaiverSignature.js whenever this changes.
+const guardianAbsentNoticeText = (fieldName) =>
+  `You are not playing in this event. By booking, you confirm that you are the parent or legal guardian of each child listed, and you authorize them to take part whether or not you remain on site. You accept all risks and responsibilities described in this waiver on their behalf as if you were playing alongside them. You confirm the phone number on your account is correct and that you can be reached during the event, and you authorize ${fieldName || "the field"} to seek emergency medical treatment for your child if you cannot be reached.`;
 
-function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver, dependents = [], signedDependentIds = [],
+function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver, dependents = [], signedDependentIds = [], signedAbsentDependentIds = [],
   myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout,
   fieldVouchers, redeemVoucher }) {
   const { T, display, body, mono, theme } = useTheme();
@@ -1891,6 +1897,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // Which child profiles are coming. The guardian is always an attendee, so
   // this only tracks children; the server re-validates all of it.
   const [selectedDependentIds, setSelectedDependentIds] = useState([]);
+  // Child-only bookings: a parent with child profiles can untick themselves
+  // and book only the kids (drop-off, or watching without playing).
+  const [includeSelf, setIncludeSelf] = useState(true);
   // Best-effort location, used only for the Walk-On Survivor check
   // server-side — kicked off the moment this screen mounts rather than
   // when the player actually taps Book/Sign, so the up-to-4s GPS wait
@@ -1999,7 +2008,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     return null;
   };
   const selectedDependents = dependents.filter((d) => selectedDependentIds.includes(d.id) && !dependentBlockReason(d));
-  const attendeeCount = 1 + selectedDependents.length;
+  // Without child profiles there's no picker, so the player is always on.
+  const guardianPlaying = includeSelf || dependents.length === 0;
+  const nobodySelected = !guardianPlaying && selectedDependents.length === 0;
+  const attendeeCount = (guardianPlaying ? 1 : 0) + selectedDependents.length;
   const attendeeDependentIds = selectedDependents.map((d) => d.id);
   // Seats already taken per capped choice, read from the event's (publicly
   // readable) bookings once. The server re-checks as the real gate; this
@@ -2044,7 +2056,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const fmtCents = (cents) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
   const toggleDependent = (id) =>
     setSelectedDependentIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : 1 + prev.length < MAX_ATTENDEES_PER_BOOKING ? [...prev, id] : prev
+      prev.includes(id) ? prev.filter((x) => x !== id) : (guardianPlaying ? 1 : 0) + prev.length < MAX_ATTENDEES_PER_BOOKING ? [...prev, id] : prev
     );
   const bestFieldVoucher = fieldVouchers && fieldVouchers.length > 0
     ? [...fieldVouchers].sort((a, b) => b.amountCents - a.amountCents)[0]
@@ -2062,12 +2074,24 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const [paymentTabOpened, setPaymentTabOpened] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
+  // A parent's child-only booking shows the kids who are actually playing,
+  // not the parent who booked them.
+  const whosGoingEntries = (whosGoing || []).flatMap((b) =>
+    b.guardianPlaying === false && Array.isArray(b.attendees)
+      ? b.attendees.filter((a) => a?.kind === "minor").map((a, i) => ({ uid: `${b.uid}-child-${i}`, callsign: a.callsign || "Player", avatarUrl: null }))
+      : [b]
+  );
   const [shareState, setShareState] = useState(null); // "copied" briefly, to confirm the clipboard fallback
 
   // Soft cap: reservations never lock. Past the cap we just tell the player
   // up top that the field may still say yes — payment is always accepted.
   const capacityReached = !!ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking && !isPast && !ev.canceled;
-  const waiverBlocking = ev.waiver && (!signature || selectedDependents.some((d) => !signedDependentIds.includes(d.id)));
+  const waiverBlocking = ev.waiver && (
+    !signature
+    || selectedDependents.some((d) => !signedDependentIds.includes(d.id))
+    // Child-only: each child also needs the "parent not playing" acknowledgement.
+    || (!guardianPlaying && selectedDependents.some((d) => !signedAbsentDependentIds.includes(d.id)))
+  );
   // An unclaimed field has no owner on Atlas to see or honor a booking —
   // block new ones here regardless of price, the same way the backend
   // now does (bookFreeEvent/createBookingCheckout). Gated on fieldsLoading
@@ -2091,7 +2115,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, groupPicks);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, groupPicks, guardianPlaying);
         // Two-tap checkout (2026-10-14). This used to pre-open a blank tab
         // at tap time and point it at Stripe once the URL came back. On
         // some phones, opening that tab backgrounded Atlas and paused it
@@ -2105,7 +2129,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
-        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds, groupPicks);
+        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds, groupPicks, guardianPlaying);
         setBookingBusy(false);
       }
     } catch (err) {
@@ -2151,7 +2175,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     setBookingError("");
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
-      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds, groupPicks);
+      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds, groupPicks, guardianPlaying);
       setBookingBusy(false);
     } catch (err) {
       console.error("voucher redemption failed:", err.code || err.message || err);
@@ -2170,6 +2194,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // button of its own.
   const handlePrimaryAction = () => {
     if (choiceMissing) return; // button is already disabled for this case — just a defensive no-op
+    if (nobodySelected) {
+      setBookingError("Pick who's attending — tick yourself, a child, or both.");
+      return;
+    }
     if (selectedDependents.length > 0 && !hasGuardianPhone) {
       setBookingError("Add a 10-digit phone number (with area code) in My Account to book with a child — the field needs a number to reach you.");
       return;
@@ -2238,6 +2266,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         signedName: legalName.trim(),
         waiverVersion: ev.waiver.version,
         dependents: selectedDependents.map((d) => ({ id: d.id, fullName: d.fullName })),
+        guardianAbsent: !guardianPlaying,
       });
       setShowWaiver(false);
       // Signing is step one of booking now, not a standalone action —
@@ -2395,11 +2424,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             lng={typeof ev.lng === "number" ? ev.lng : field?.lng}
           />
 
-          {!whosGoingLoading && whosGoing.length > 0 && (
+          {!whosGoingLoading && whosGoingEntries.length > 0 && (
             <button onClick={() => setShowAttendees(true)} className="p-4 text-left w-full" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-              <Eyebrow>Who's Going ({whosGoing.length})</Eyebrow>
+              <Eyebrow>Who's Going ({whosGoingEntries.length})</Eyebrow>
               <div className="flex flex-wrap gap-2 mt-1">
-                {whosGoing.slice(0, 12).map((b) => (
+                {whosGoingEntries.slice(0, 12).map((b) => (
                   b.avatarUrl ? (
                     <div key={b.uid} title={b.callsign} className="w-9 h-9" style={{ backgroundImage: `url("${b.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
                   ) : (
@@ -2408,9 +2437,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                     </div>
                   )
                 ))}
-                {whosGoing.length > 12 && (
+                {whosGoingEntries.length > 12 && (
                   <div className="w-9 h-9 flex items-center justify-center text-[11px] font-semibold" style={{ ...body, background: T.panelAlt, borderRadius: 999, color: T.ashFaint }}>
-                    +{whosGoing.length - 12}
+                    +{whosGoingEntries.length - 12}
                   </div>
                 )}
               </div>
@@ -2478,13 +2507,29 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>Who's attending?</Eyebrow>
               <div className="flex flex-col gap-2 mt-1">
-                <div className="flex items-center gap-3 p-2" style={{ background: T.tintGood, borderRadius: 6 }}>
-                  <div className="w-5 h-5 flex items-center justify-center" style={{ borderRadius: 5, background: T.good }}>
-                    <Check size={13} color={T.inverse} strokeWidth={3} />
-                  </div>
-                  <div className="text-[13px] font-medium flex-1" style={{ ...body, color: T.ash }}>You</div>
-                  <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>always attending</div>
-                </div>
+                {(() => {
+                  // Unticking yourself = book only the kids (you're not playing).
+                  const selfAtMax = !includeSelf && selectedDependents.length >= MAX_ATTENDEES_PER_BOOKING;
+                  const selfDisabled = bookingBusy || selfAtMax;
+                  return (
+                    <button
+                      onClick={() => setIncludeSelf((v) => !v)}
+                      disabled={selfDisabled}
+                      className="flex items-center gap-3 p-2 text-left"
+                      style={{ background: includeSelf ? T.tintGood : T.panelAlt, borderRadius: 6, opacity: selfDisabled && !includeSelf ? 0.55 : 1 }}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center flex-shrink-0" style={{ borderRadius: 5, border: `1.5px solid ${includeSelf ? T.good : T.line}`, background: includeSelf ? T.good : "transparent" }}>
+                        {includeSelf && <Check size={13} color={T.inverse} strokeWidth={3} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-medium" style={{ ...body, color: T.ash }}>You</div>
+                        <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
+                          {selfAtMax ? `Max ${MAX_ATTENDEES_PER_BOOKING} per booking` : includeSelf ? "Playing" : "Not playing — booking only for your child"}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })()}
                 {dependents.map((d) => {
                   const reason = dependentBlockReason(d) || (!hasGuardianPhone ? "Add a 10-digit phone number in My Account first" : null);
                   const picked = selectedDependentIds.includes(d.id) && !reason;
@@ -2517,12 +2562,20 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                   {attendeeCount} tickets{entryPriceCents > 0 ? ` · ${fmtCents(entryPriceCents * attendeeCount)}` : ""}. Booking fees, if any, are added once at checkout. Children's tickets are the same price.
                 </p>
               )}
+              {!guardianPlaying && selectedDependents.length > 0 && (
+                <p className="text-[12px] mt-2" style={{ ...body, color: T.ashDim }}>
+                  No ticket for you. Check {selectedDependents.length === 1 ? (selectedDependents[0].callsign || "them") : "them"} in with your code before you leave, or the field can check them in by name. The field will have your phone number.
+                </p>
+              )}
+              {nobodySelected && (
+                <p className="text-[12px] mt-2" style={{ ...body, color: T.accent }}>Pick who's attending.</p>
+              )}
             </div>
           )}
 
-          {myBooking?.attendees?.length > 1 && (
+          {(myBooking?.attendees?.length > 1 || (myBooking?.guardianPlaying === false && myBooking?.attendees?.length > 0)) && (
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-              <Eyebrow>Your Party ({myBooking.attendees.length})</Eyebrow>
+              <Eyebrow>{myBooking.guardianPlaying === false ? `Booked For (${myBooking.attendees.length})` : `Your Party (${myBooking.attendees.length})`}</Eyebrow>
               <div className="flex flex-col gap-1 mt-1">
                 {myBooking.attendees.map((a, i) => (
                   <div key={i} className="text-[13px]" style={{ ...body, color: T.ash }}>
@@ -2530,7 +2583,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                   </div>
                 ))}
               </div>
-              <p className="text-[11px] mt-2" style={{ ...body, color: T.ashFaint }}>One check-in QR covers everyone.</p>
+              <p className="text-[11px] mt-2" style={{ ...body, color: T.ashFaint }}>
+                {myBooking.guardianPlaying === false
+                  ? "You're not playing. Your check-in QR covers them — scan it before you leave, or the field can check them in by name."
+                  : "One check-in QR covers everyone."}
+              </p>
             </div>
           )}
 
@@ -2737,11 +2794,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         ) : (
           <button
             onClick={handlePrimaryAction}
-            disabled={bookingBusy || choiceMissing}
+            disabled={bookingBusy || choiceMissing || nobodySelected}
             className="px-6 py-3 font-semibold text-[13px] transition-transform duration-100 active:scale-95"
-            style={{ ...display, background: usingVoucher ? T.good : T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing ? 0.6 : 1 }}
+            style={{ ...display, background: usingVoucher ? T.good : T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: bookingBusy || choiceMissing || nobodySelected ? 0.6 : 1 }}
           >
-            {bookingBusy ? "…" : choiceMissing ? `Choose ${missingGroup ? missingGroup.label : priceOptions.label}` : waiverBlocking ? "Sign Waiver to Reserve" : usingVoucher ? "Redeem Voucher" : "Reserve This Event"}
+            {bookingBusy ? "…" : choiceMissing ? `Choose ${missingGroup ? missingGroup.label : priceOptions.label}` : nobodySelected ? "Pick Who's Attending" : waiverBlocking ? "Sign Waiver to Reserve" : usingVoucher ? "Redeem Voucher" : "Reserve This Event"}
           </button>
         )}
       </div>
@@ -2809,11 +2866,17 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                         Signing for {selectedDependents.map((d) => d.callsign || d.fullName).join(", ")}
                       </div>
                       {GUARDIAN_NOTICE_TEXT}
+                      {!guardianPlaying && (
+                        <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${T.line}` }}>
+                          <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>You are not playing</div>
+                          {guardianAbsentNoticeText(ev.fieldName || field?.name)}
+                        </div>
+                      )}
                     </div>
                   )}
                   <label className="flex items-start gap-2 mb-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
                     <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
-                    {selectedDependents.length > 0 ? "I have read and agree to the terms above, and to the guardian notice." : "I have read and agree to the terms above."}
+                    {selectedDependents.length > 0 ? (guardianPlaying ? "I have read and agree to the terms above, and to the guardian notice." : "I have read and agree to the terms above, the guardian notice, and the not-playing section.") : "I have read and agree to the terms above."}
                   </label>
                   <div className="mb-3">
                     <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.04em" }}>Signing As</div>
@@ -2865,11 +2928,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                 <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
               ) : (
                 <>
-                  {whosGoing.length > 0 && (
+                  {whosGoingEntries.length > 0 && (
                     <>
-                      <Eyebrow>Reserved ({whosGoing.length})</Eyebrow>
+                      <Eyebrow>Reserved ({whosGoingEntries.length})</Eyebrow>
                       <div className="flex flex-col gap-2 mb-5 mt-1">
-                        {whosGoing.map((b) => (
+                        {whosGoingEntries.map((b) => (
                           <div key={b.uid} className="flex items-center gap-3">
                             {b.avatarUrl ? (
                               <div className="w-9 h-9 flex-shrink-0" style={{ backgroundImage: `url("${b.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
@@ -2903,7 +2966,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                       </div>
                     </>
                   )}
-                  {whosGoing.length === 0 && whosInterested.length === 0 && (
+                  {whosGoingEntries.length === 0 && whosInterested.length === 0 && (
                     <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>No one yet.</p>
                   )}
                 </>
@@ -3571,6 +3634,8 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
   // real physical-location information worth keeping away from strangers.
   const { bookings: theirBookings, bookingsLoading: theirBookingsLoading } = useMyBookings(isFriend || isSelf ? uid : null);
   const booked = theirBookings
+    // A parent's child-only bookings aren't games they're playing.
+    .filter((b) => isSelf || isPlayedBooking(b))
     .map((b) => events.find((e) => e.id === b.eventId))
     .filter(Boolean)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -7825,7 +7890,7 @@ function AppShell() {
   const goTab = (tab) => setStack([tab]);
 
   const activeEvent = events.find((e) => e.id === activeEventId) || null;
-  const { signature, signedDependentIds, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
+  const { signature, signedDependentIds, signedAbsentDependentIds, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
   const { booking: myBooking, bookingLoading: myBookingLoading } = useMyBooking(user?.uid, activeEvent?.id);
   const { bookings: whosGoing, bookingsLoading: whosGoingLoading } = useEventBookings(activeEvent?.id);
   const { interested: whosInterested, interestedLoading: whosInterestedLoading } = useEventInterested(activeEvent?.id);
@@ -7868,6 +7933,7 @@ function AppShell() {
 
     myBookings.forEach((booking) => {
       if (!booking.checkedIn) return;
+      if (!isPlayedBooking(booking)) return; // child-only booking — the parent didn't play
       const event = events.find((e) => e.id === booking.eventId);
       if (!event) return;
 
@@ -7889,7 +7955,8 @@ function AppShell() {
     const ownedPatchNames = new Set(patches.map((p) => p.name));
     evaluateAchievements({
       catalog: achievementCatalog,
-      myBookings,
+      // Child-only bookings (parent didn't play) earn the parent nothing.
+      myBookings: myBookings.filter(isPlayedBooking),
       events,
       fields,
       profile,
@@ -8067,6 +8134,7 @@ function AppShell() {
         signWaiver={signWaiver}
         dependents={dependents}
         signedDependentIds={signedDependentIds}
+        signedAbsentDependentIds={signedAbsentDependentIds}
         myBooking={myBooking}
         myBookingLoading={myBookingLoading}
         whosGoing={whosGoing}

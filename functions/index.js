@@ -356,6 +356,13 @@ async function resolveEventHost(db, eventData) {
 // src/hooks/useDependents.js — functions/ and src/ share no module.
 const MAX_DEPENDENTS_PER_BOOKING = 4;
 const ADULT_AGE = 18;
+// Child-only bookings (2026-10-21): a parent may book only their child
+// profile(s) without a ticket for themselves (drop-off, or watching without
+// playing). Then the whole booking can be children, up to this many — the
+// same 5-per-booking cap the player app enforces (MAX_ATTENDEES_PER_BOOKING).
+const MAX_ATTENDEES_PER_BOOKING = 5;
+// Booking docs written for a child-only booking carry guardianPlaying:false
+// (absent = the parent is playing, which is every booking before this).
 
 // Whole years old on a date, from plain YYYY-MM-DD strings (no Date
 // objects, so no timezone drift on a birthday). Mirrors ageOnDate() in
@@ -396,14 +403,20 @@ function hasValidPhone(raw) {
 // caller's own, still under 18 on the event's start date, old enough for
 // the field's minimum age, has a signed waiver doc, and the guardian has a
 // phone number on file. Returns the guardian + a snapshot of each child.
-async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds }) {
+async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds, guardianPlaying = true }) {
   const ids = Array.isArray(dependentIds) ? dependentIds : [];
-  if (ids.length === 0) return { attendeeCount: 1, dependents: [] };
+  if (!guardianPlaying && ids.length === 0) {
+    throw new HttpsError("invalid-argument", "Pick at least one person to book for.");
+  }
+  if (ids.length === 0) return { attendeeCount: 1, dependents: [], guardianPlaying: true };
   if (!ids.every((id) => typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id)) || new Set(ids).size !== ids.length) {
     throw new HttpsError("invalid-argument", "Invalid attendee list.");
   }
-  if (ids.length > MAX_DEPENDENTS_PER_BOOKING) {
+  if (guardianPlaying && ids.length > MAX_DEPENDENTS_PER_BOOKING) {
     throw new HttpsError("invalid-argument", `A booking can include you plus up to ${MAX_DEPENDENTS_PER_BOOKING} children.`);
+  }
+  if (!guardianPlaying && ids.length > MAX_ATTENDEES_PER_BOOKING) {
+    throw new HttpsError("invalid-argument", `A booking can include up to ${MAX_ATTENDEES_PER_BOOKING} children.`);
   }
   const profile = profileData || (await db.collection("users").doc(uid).get()).data() || {};
   if (!hasValidPhone(profile.phone)) {
@@ -412,9 +425,13 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
   const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
   const depRefs = ids.map((id) => db.collection("users").doc(uid).collection("dependents").doc(id));
   const sigRefs = ids.map((id) => db.collection("waiverSignatures").doc(`${uid}_${eventId}_${id}`));
-  const [depSnaps, sigSnaps] = await Promise.all([
+  // Child-only: the parent also acknowledged the "you are not playing"
+  // section of the guardian notice — one immutable doc per child.
+  const absentRefs = ids.map((id) => db.collection("waiverSignatures").doc(`${uid}_${eventId}_${id}_absent`));
+  const [depSnaps, sigSnaps, absentSnaps] = await Promise.all([
     Promise.all(depRefs.map((r) => r.get())),
     eventData.waiver ? Promise.all(sigRefs.map((r) => r.get())) : Promise.resolve(null),
+    eventData.waiver && !guardianPlaying ? Promise.all(absentRefs.map((r) => r.get())) : Promise.resolve(null),
   ]);
   const dependents = depSnaps.map((snap, i) => {
     if (!snap.exists) {
@@ -438,8 +455,16 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
       }
       sig = sigSnaps[i].data();
     }
+    let absentAckId = null;
+    if (absentSnaps) {
+      if (!absentSnaps[i].exists || absentSnaps[i].data()?.guardianAbsent !== true) {
+        throw new HttpsError("failed-precondition", "Please re-sign the waiver — it needs your acknowledgement that you're not playing.");
+      }
+      absentAckId = absentSnaps[i].id;
+    }
     return {
       id: ids[i],
+      guardianAbsentAckId: absentAckId,
       fullName: d.fullName,
       callsign: d.callsign,
       dob: d.dob,
@@ -449,23 +474,32 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
       guardianNoticeVersion: sig?.guardianNoticeVersion || null,
     };
   });
-  return { attendeeCount: 1 + dependents.length, dependents };
+  return { attendeeCount: (guardianPlaying ? 1 : 0) + dependents.length, dependents, guardianPlaying };
+}
+
+// Shared by all three booking callables: anything but an explicit false
+// means the parent is playing, so an older app build that never sends the
+// flag keeps today's behaviour.
+function readGuardianPlaying(data) {
+  return data?.guardianPlaying !== false;
 }
 
 // Same snapshot shape, for the webhook — payment has already happened by
 // then, so this is deliberately tolerant: a profile deleted between
 // checkout and payment degrades to the name recorded on the waiver doc
 // instead of failing a booking someone already paid for.
-async function snapshotDependentsForWebhook(db, uid, eventId, ids) {
+async function snapshotDependentsForWebhook(db, uid, eventId, ids, guardianPlaying = true) {
   return Promise.all(ids.map(async (id) => {
-    const [depSnap, sigSnap] = await Promise.all([
+    const [depSnap, sigSnap, absentSnap] = await Promise.all([
       db.collection("users").doc(uid).collection("dependents").doc(id).get(),
       db.collection("waiverSignatures").doc(`${uid}_${eventId}_${id}`).get(),
+      guardianPlaying ? Promise.resolve(null) : db.collection("waiverSignatures").doc(`${uid}_${eventId}_${id}_absent`).get(),
     ]);
     const d = depSnap.data() || {};
     const sig = sigSnap.data() || {};
     return {
       id,
+      guardianAbsentAckId: absentSnap?.exists ? absentSnap.id : null,
       fullName: d.fullName || sig.dependentName || "Child",
       callsign: d.callsign || "Child",
       dob: d.dob || null,
@@ -481,21 +515,25 @@ async function snapshotDependentsForWebhook(db, uid, eventId, ids) {
 // carries just a count and callsigns. Nothing for a solo booking, so
 // existing bookings and single-player bookings look exactly as before
 // (a missing attendeeCount always means 1).
-function attendeePublicFields(profileData, dependents) {
+// Child-only booking (guardianPlaying false): no adult entry, attendeeCount
+// is just the children, and guardianPlaying:false marks the booking so
+// nothing credits the parent with a game they didn't play.
+function attendeePublicFields(profileData, dependents, guardianPlaying = true) {
   if (!dependents.length) return {};
   return {
-    attendeeCount: 1 + dependents.length,
+    attendeeCount: (guardianPlaying ? 1 : 0) + dependents.length,
     attendees: [
-      { kind: "adult", callsign: profileData.callsign || "Player" },
+      ...(guardianPlaying ? [{ kind: "adult", callsign: profileData.callsign || "Player" }] : []),
       ...dependents.map((d) => ({ kind: "minor", callsign: d.callsign || "Child" })),
     ],
+    ...(guardianPlaying ? {} : { guardianPlaying: false }),
   };
 }
 
 // The real snapshots (legal name, DOB, guardian contact, waiver ref) live
 // in a private subcollection — readable only by the guardian and the field
 // owner (firestore.rules), never on the public booking doc.
-function writeAttendeeDetails(t, bookingRef, uid, profileData, dependents) {
+function writeAttendeeDetails(t, bookingRef, uid, profileData, dependents, guardianPlaying = true) {
   const guardianName = [profileData.firstName, profileData.lastName].filter(Boolean).join(" ") || profileData.callsign || "Guardian";
   for (const d of dependents) {
     t.set(bookingRef.collection("attendeeDetails").doc(d.id), {
@@ -511,6 +549,8 @@ function writeAttendeeDetails(t, bookingRef, uid, profileData, dependents) {
       waiverSignatureId: d.waiverSignatureId,
       waiverVersion: d.waiverVersion,
       guardianNoticeVersion: d.guardianNoticeVersion,
+      guardianPlaying,
+      guardianAbsentAckId: d.guardianAbsentAckId || null,
       createdAt: new Date(),
     });
   }
@@ -637,7 +677,7 @@ export const createBookingCheckout = onCall(
       throw new HttpsError("failed-precondition", "This field hasn't finished payment setup yet.");
     }
 
-    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, dependentIds: request.data?.attendeeDependentIds });
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
     const attendeeCount = attendees.attendeeCount;
     const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections);
     // Hard cap on team/role-style choices, checked before any Stripe call.
@@ -755,7 +795,10 @@ export const createBookingCheckout = onCall(
         // for a party (ids only — Stripe caps metadata values at 500
         // chars; the webhook re-reads each profile itself).
         passFeeToPlayer: passFeeToPlayer ? "true" : "false",
-        ...(attendeeCount > 1 ? { attendeeCount: String(attendeeCount), attendeeDependentIds: JSON.stringify(attendees.dependents.map((d) => d.id)) } : {}),
+        // Sent whenever children are on the booking (a 1-child child-only
+        // booking has attendeeCount 1 but still needs the id).
+        ...(attendees.dependents.length > 0 ? { attendeeCount: String(attendeeCount), attendeeDependentIds: JSON.stringify(attendees.dependents.map((d) => d.id)) } : {}),
+        ...(attendees.guardianPlaying ? {} : { guardianPlaying: "false" }),
         // The real, resolved ticket price (base + whichever Price Option
         // was picked) — deliberately excludes rentals and the platform
         // fee, same as resolveEntryPrice returns it. Read back by the
@@ -879,7 +922,7 @@ export const bookFreeEvent = onCall(
       ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {}),
       ...(selections.length > 0 ? { selections } : {}),
     };
-    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds });
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
     const attendeeCount = attendees.attendeeCount;
 
     // Walk-On Survivor: earned by creating an account and completing a
@@ -933,9 +976,9 @@ export const bookFreeEvent = onCall(
         bookedAt: now,
         ...choiceFields,
         ...walkOnFields,
-        ...attendeePublicFields(profileData, attendees.dependents),
+        ...attendeePublicFields(profileData, attendees.dependents, attendees.guardianPlaying),
       });
-      writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents);
+      writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents, attendees.guardianPlaying);
       t.set(userBookingRef, {
         eventId,
         fieldId: eventData.fieldId ?? null,
@@ -947,7 +990,7 @@ export const bookFreeEvent = onCall(
         bookedAt: now,
         ...choiceFields,
         ...walkOnFields,
-        ...attendeePublicFields(profileData, attendees.dependents),
+        ...attendeePublicFields(profileData, attendees.dependents, attendees.guardianPlaying),
       });
       t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + attendeeCount });
     });
@@ -1303,7 +1346,7 @@ export const bookEventWithVoucher = onCall(
       ...(selections.length > 0 ? { selections } : {}),
     };
     const { fieldData } = await resolveEventHost(db, eventData);
-    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds });
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
     const attendeeCount = attendees.attendeeCount;
     // Full-cover only, now for the whole party: the voucher has to cover
     // every attendee's ticket (a voucher from an N-person booking is worth
@@ -1368,9 +1411,9 @@ export const bookEventWithVoucher = onCall(
         voucherRedeemedId: voucherId,
         voucherAppliedCents: neededCents,
         ...choiceFields,
-        ...attendeePublicFields(profileData, attendees.dependents),
+        ...attendeePublicFields(profileData, attendees.dependents, attendees.guardianPlaying),
       });
-      writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents);
+      writeAttendeeDetails(t, bookingRef, uid, profileData, attendees.dependents, attendees.guardianPlaying);
       t.set(userBookingRef, {
         eventId,
         fieldId: eventData.fieldId ?? null,
@@ -1384,7 +1427,7 @@ export const bookEventWithVoucher = onCall(
         paidByVoucher: true,
         voucherRedeemedId: voucherId,
         selectedChoiceLabel: selectedChoice?.label || null,
-        ...attendeePublicFields(profileData, attendees.dependents),
+        ...attendeePublicFields(profileData, attendees.dependents, attendees.guardianPlaying),
       });
       t.update(eventRef, { bookedCount: (freshEventData.bookedCount || 0) + attendeeCount });
       t.update(voucherRef, {
@@ -1444,7 +1487,7 @@ export const stripeWebhook = onRequest(
           const session = event.data.object;
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta, guardianPlaying: guardianPlayingMeta } = session.metadata;
             // Written by createBookingCheckout as a JSON string (Stripe
             // metadata values are strings only) — parsed back out here the
             // same defensive way selectedChoiceLabel/Cents are trusted:
@@ -1472,7 +1515,10 @@ export const stripeWebhook = onRequest(
                 dependentIds = [];
               }
             }
-            const bookedAttendeeCount = 1 + dependentIds.length;
+            // Child-only booking: the parent holds no ticket of their own.
+            // Only honoured when there are children to book for.
+            const webhookGuardianPlaying = !(guardianPlayingMeta === "false" && dependentIds.length > 0);
+            const bookedAttendeeCount = (webhookGuardianPlaying ? 1 : 0) + dependentIds.length;
             // Payment data is untrusted until proven consistent: recompute
             // what this session SHOULD have charged from the tickets,
             // rentals and fee model recorded in its own metadata, and refuse
@@ -1501,7 +1547,7 @@ export const stripeWebhook = onRequest(
                 selectionPairsMeta = [];
               }
             }
-            const dependentSnapshots = dependentIds.length ? await snapshotDependentsForWebhook(db, uid, eventId, dependentIds) : [];
+            const dependentSnapshots = dependentIds.length ? await snapshotDependentsForWebhook(db, uid, eventId, dependentIds, webhookGuardianPlaying) : [];
             const eventRef = db.collection("events").doc(eventId);
             const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
             const bookingRef = eventRef.collection("bookings").doc(uid);
@@ -1577,9 +1623,9 @@ export const stripeWebhook = onRequest(
                 // keeps exactly the shape it always had.
                 ...(snapshotSelections(eventData, selectionPairsMeta).length > 0 ? { selections: snapshotSelections(eventData, selectionPairsMeta) } : {}),
                 ...walkOnFields,
-                ...attendeePublicFields(profileData, dependentSnapshots),
+                ...attendeePublicFields(profileData, dependentSnapshots, webhookGuardianPlaying),
               });
-              writeAttendeeDetails(t, bookingRef, uid, profileData, dependentSnapshots);
+              writeAttendeeDetails(t, bookingRef, uid, profileData, dependentSnapshots, webhookGuardianPlaying);
               t.set(userBookingRef, {
                 eventId,
                 fieldId: fieldId || null,
@@ -1592,7 +1638,7 @@ export const stripeWebhook = onRequest(
                 paid: true,
                 selectedChoiceLabel: selectedChoiceLabel || null,
                 ...walkOnFields,
-                ...attendeePublicFields(profileData, dependentSnapshots),
+                ...attendeePublicFields(profileData, dependentSnapshots, webhookGuardianPlaying),
               });
               t.update(eventRef, { bookedCount: (eventData?.bookedCount || 0) + bookedAttendeeCount });
             });

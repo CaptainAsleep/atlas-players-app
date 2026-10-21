@@ -5,6 +5,9 @@ import { db } from "../lib/firebase";
 // Bumped whenever the guardian-notice wording in App.jsx changes, so a
 // child's signature doc records exactly which notice text was shown.
 export const GUARDIAN_NOTICE_VERSION = "2026-10-draft-1";
+// Bumped whenever the "you are not playing" section (child-only bookings,
+// GUARDIAN_ABSENT_NOTICE_TEXT in App.jsx) changes.
+export const GUARDIAN_ABSENT_NOTICE_VERSION = "2026-10-draft-1";
 
 // Signatures live at deterministic ids so nothing can be duplicated by
 // construction: the guardian's own doc is uid_eventId (unchanged from
@@ -16,12 +19,16 @@ export const GUARDIAN_NOTICE_VERSION = "2026-10-draft-1";
 export function useWaiverSignature(uid, eventId) {
   const [signature, setSignature] = useState(null);
   const [signedDependentIds, setSignedDependentIds] = useState([]);
+  // Children whose "parent not playing" acknowledgement doc exists
+  // (uid_eventId_dependentId_absent, guardianAbsent: true).
+  const [signedAbsentDependentIds, setSignedAbsentDependentIds] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!uid || !eventId) {
       setSignature(null);
       setSignedDependentIds([]);
+      setSignedAbsentDependentIds([]);
       setLoading(false);
       return;
     }
@@ -30,7 +37,8 @@ export function useWaiverSignature(uid, eventId) {
       (snap) => {
         const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setSignature(docs.find((d) => !d.dependentId) || null);
-        setSignedDependentIds(docs.filter((d) => d.dependentId).map((d) => d.dependentId));
+        setSignedDependentIds(docs.filter((d) => d.dependentId && !d.guardianAbsent).map((d) => d.dependentId));
+        setSignedAbsentDependentIds(docs.filter((d) => d.dependentId && d.guardianAbsent === true).map((d) => d.dependentId));
         setLoading(false);
       },
       (err) => {
@@ -46,7 +54,9 @@ export function useWaiverSignature(uid, eventId) {
   // per child that doesn't have one — all in a single batch, so it either
   // fully lands or not at all. waiverVersion is a permanent record of
   // exactly which wording was agreed to, in case the owner edits it later.
-  async function signWaiver({ uid, eventId, fieldId = null, hostOwnerId = null, signedName, waiverVersion, dependents = [] }) {
+  // guardianAbsent (child-only booking): also writes one acknowledgement doc
+  // per child for the "you are not playing" section.
+  async function signWaiver({ uid, eventId, fieldId = null, hostOwnerId = null, signedName, waiverVersion, dependents = [], guardianAbsent = false }) {
     const batch = writeBatch(db);
     if (!signature) {
       batch.set(doc(db, "waiverSignatures", `${uid}_${eventId}`), {
@@ -78,8 +88,27 @@ export function useWaiverSignature(uid, eventId) {
         signedAt: serverTimestamp(),
       });
     }
+    if (guardianAbsent) {
+      for (const dep of dependents) {
+        if (signedAbsentDependentIds.includes(dep.id)) continue;
+        batch.set(doc(db, "waiverSignatures", `${uid}_${eventId}_${dep.id}_absent`), {
+          uid,
+          eventId,
+          fieldId: fieldId ?? null,
+          ...(hostOwnerId ? { hostOwnerId } : {}),
+          dependentId: dep.id,
+          dependentName: dep.fullName,
+          guardianAbsent: true,
+          signedName,
+          waiverVersion,
+          guardianNoticeVersion: GUARDIAN_NOTICE_VERSION,
+          guardianAbsentNoticeVersion: GUARDIAN_ABSENT_NOTICE_VERSION,
+          signedAt: serverTimestamp(),
+        });
+      }
+    }
     await batch.commit();
   }
 
-  return { signature, signedDependentIds, signatureLoading: loading, signWaiver };
+  return { signature, signedDependentIds, signedAbsentDependentIds, signatureLoading: loading, signWaiver };
 }

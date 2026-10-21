@@ -629,11 +629,31 @@ service cloud.firestore {
       // users/{uid}/dependents — so a guardian can't sign for a child
       // profile that isn't theirs. The booking Cloud Functions re-verify
       // that every attendee has a signature doc before charging anything.
+      //
+      // Child-only bookings (2026-10-21): when the parent isn't playing, one
+      // more immutable doc per child, id uid_eventId_dependentId_absent with
+      // guardianAbsent: true, records that they agreed to the "you are not
+      // playing" section of the guardian notice. Same ownership check.
+      //
+      // The guardian's own doc (no dependentId) must sit at exactly
+      // uid_eventId — before 2026-10-21 any id was accepted, which would have
+      // let someone create victimUid_eventId (with their own uid inside) and
+      // satisfy the booking functions' exists() check for another player.
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
         && (
-          !('dependentId' in request.resource.data)
+          (
+            !('dependentId' in request.resource.data)
+            && !('guardianAbsent' in request.resource.data)
+            && sigId == request.resource.data.uid + '_' + request.resource.data.eventId
+          )
           || (
-            sigId == request.resource.data.uid + '_' + request.resource.data.eventId + '_' + request.resource.data.dependentId
+            !('guardianAbsent' in request.resource.data)
+            && sigId == request.resource.data.uid + '_' + request.resource.data.eventId + '_' + request.resource.data.dependentId
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid)/dependents/$(request.resource.data.dependentId))
+          )
+          || (
+            request.resource.data.guardianAbsent == true
+            && sigId == request.resource.data.uid + '_' + request.resource.data.eventId + '_' + request.resource.data.dependentId + '_absent'
             && exists(/databases/$(database)/documents/users/$(request.auth.uid)/dependents/$(request.resource.data.dependentId))
           )
         );

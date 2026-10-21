@@ -224,7 +224,9 @@ export async function evaluateAchievements({ catalog, myBookings, events, fields
         if (profile?.teamId) {
           for (const x of checkedIn) {
             const eventBookings = await getEventBookingsOnce(x.event.id);
-            const teammatesCheckedIn = eventBookings.filter((b) => b.checkedIn && b.teamId === profile.teamId).length;
+            // guardianPlaying:false = a parent's child-only booking; the
+            // parent (and their team) didn't actually play.
+            const teammatesCheckedIn = eventBookings.filter((b) => b.checkedIn && b.teamId === profile.teamId && b.guardianPlaying !== false).length;
             if (teammatesCheckedIn >= trigger.count) {
               qualifies = true;
               break;
