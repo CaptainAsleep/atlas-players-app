@@ -12,6 +12,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { renderCheckInCodeBlock } from "./bookingCode.js";
 
 const template = readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "templates", "booking-confirmation-party.html"),
@@ -28,13 +29,15 @@ export function isPartyBooking(booking) {
   return Array.isArray(booking?.attendees) && booking.attendees.some((a) => a?.kind === "minor");
 }
 
-export function renderPartyBookingEmail({ guardianCallsign, attendees, fieldName, eventTitle, eventDateTime, isPaid, amountPaidCents }) {
+// checkInCode: the booking's check-in code (bookingCode.js), or null for a
+// booking made before codes existed.
+export function renderPartyBookingEmail({ guardianCallsign, attendees, fieldName, eventTitle, eventDateTime, isPaid, amountPaidCents, checkInCode = null }) {
   const adult = attendees.find((a) => a.kind === "adult");
   const minors = attendees.filter((a) => a.kind === "minor");
   const you = guardianCallsign || adult?.callsign || "Player";
   const childNames = minors.map((m) => m.callsign || "Child");
   if (!adult) {
-    return renderChildOnly({ you, childNames, fieldName, eventTitle, eventDateTime, isPaid, amountPaidCents });
+    return renderChildOnly({ you, childNames, fieldName, eventTitle, eventDateTime, isPaid, amountPaidCents, checkInCode });
   }
   const total = 1 + minors.length;
   const countLabel = `Party of ${total}`;
@@ -82,6 +85,7 @@ export function renderPartyBookingEmail({ guardianCallsign, attendees, fieldName
     "[AMOUNT_ROW]": amountRow,
     "[STRIPE_NOTE]": stripeNote,
     "[GATE_LINE]": "Open Atlas &rarr; Home tab &rarr; tap <b>Check In</b> from <b>your</b> account. One code checks in the whole group &mdash; your child profiles don&rsquo;t need their own phones or logins.",
+    "[CHECKIN_CODE_BLOCK]": renderCheckInCodeBlock({ code: checkInCode, mode: "party" }),
   });
   return { html, subject };
 }
@@ -94,7 +98,7 @@ const nameRow = (name, tagHtml) => `<tr>
             </tr>`;
 
 // Parent booked their child profile(s) only — they aren't playing.
-function renderChildOnly({ you, childNames, fieldName, eventTitle, eventDateTime, isPaid, amountPaidCents }) {
+function renderChildOnly({ you, childNames, fieldName, eventTitle, eventDateTime, isPaid, amountPaidCents, checkInCode = null }) {
   const n = childNames.length;
   const names = joinNames(childNames);
   const countLabel = n === 1 ? "1 player" : `${n} players`;
@@ -114,7 +118,9 @@ function renderChildOnly({ you, childNames, fieldName, eventTitle, eventDateTime
         A separate receipt comes from Stripe, our payment processor &mdash; this email is your Atlas booking confirmation.
       </p>`
     : "";
-  const gateLine = `Check ${n === 1 ? esc(names) : "them"} in before you head out: open Atlas &rarr; Home tab &rarr; tap <b>Check In</b> from <b>your</b> account and show the code at the gate. Not staying? The field can also check them in by name.`;
+  const gateLine = checkInCode
+    ? `Staying for check-in? Open Atlas &rarr; Home tab &rarr; tap <b>Check In</b> from <b>your</b> account and show the QR at the gate. Dropping ${n === 1 ? esc(names) : "them"} off? Give them the check-in code below &mdash; they can give it at the gate without you.`
+    : `Check ${n === 1 ? esc(names) : "them"} in before you head out: open Atlas &rarr; Home tab &rarr; tap <b>Check In</b> from <b>your</b> account and show the code at the gate. Not staying? The field can also check them in by name.`;
   const html = fill(template, {
     "[PARTY_COUNT_LABEL]": countLabel,
     "[HEADLINE]": headline,
@@ -126,6 +132,7 @@ function renderChildOnly({ you, childNames, fieldName, eventTitle, eventDateTime
     "[AMOUNT_ROW]": amountRow,
     "[STRIPE_NOTE]": stripeNote,
     "[GATE_LINE]": gateLine,
+    "[CHECKIN_CODE_BLOCK]": renderCheckInCodeBlock({ code: checkInCode, mode: "child-only", childCallsigns: childNames }),
   });
   return { html, subject };
 }

@@ -21,6 +21,7 @@ import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./leg
 import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
 import { evaluateAchievements } from "./achievementEngine";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
+import { useBookingCode, formatBookingCode } from "./hooks/useBookingCode";
 import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
@@ -1243,6 +1244,8 @@ function HomeScreen({
   // now), so a real-time listener catches the change the instant it
   // happens — no push notifications needed, no reload, nothing to poll.
   const { booking: nextGameBooking } = useMyBooking(user?.uid, nextGame?.id);
+  // Backup for when the QR won't scan (bookingCodes, own-only read).
+  const nextGameCode = useBookingCode(nextGameBooking ? user?.uid : null, nextGame?.id);
 
   const handleCheckIn = async () => {
     if (!nextGame || !user) return;
@@ -1546,6 +1549,13 @@ function HomeScreen({
               <div className="flex flex-col items-center pt-1">
                 {qrDataUrl && <img src={qrDataUrl} alt="Check-in QR code" className="mb-2" style={{ width: 160, height: 160, borderRadius: 4 }} />}
                 <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Show this to field staff to check in.</p>
+                {nextGameCode && (
+                  <div className="text-center mb-2">
+                    <div className="text-[9px] font-semibold uppercase" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.08em" }}>Check-in code</div>
+                    <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash, letterSpacing: "0.1em" }}>{formatBookingCode(nextGameCode)}</div>
+                    <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>QR won't scan? Give staff this code.</div>
+                  </div>
+                )}
                 <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
                   Hide
                 </button>
@@ -2074,6 +2084,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const [paymentTabOpened, setPaymentTabOpened] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
+  const myBookingCode = useBookingCode(myBooking ? user?.uid : null, ev.id);
   // A parent's child-only booking shows the kids who are actually playing,
   // not the parent who booked them.
   const whosGoingEntries = (whosGoing || []).flatMap((b) =>
@@ -2573,6 +2584,20 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </div>
           )}
 
+          {myBooking && myBookingCode && !isPast && !ev.canceled && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+              <Eyebrow>Check-in Code</Eyebrow>
+              <div className="text-[22px] font-semibold mt-1" style={{ ...mono, color: T.ash, letterSpacing: "0.1em" }}>{formatBookingCode(myBookingCode)}</div>
+              <p className="text-[11px] mt-1" style={{ ...body, color: T.ashFaint }}>
+                {myBooking.guardianPlaying === false
+                  ? `Give this code to ${(myBooking.attendees || []).filter((a) => a.kind === "minor").map((a) => a.callsign).join(" and ") || "your child"} — they can give it at check-in without you there. It checks in everyone on this booking.`
+                  : (myBooking.attendees?.length || 0) > 1
+                  ? "If your QR won't scan, give this code at check-in. It checks in your whole party — your child can use it too."
+                  : "If your QR won't scan, give this code at check-in."}
+              </p>
+            </div>
+          )}
+
           {(myBooking?.attendees?.length > 1 || (myBooking?.guardianPlaying === false && myBooking?.attendees?.length > 0)) && (
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>{myBooking.guardianPlaying === false ? `Booked For (${myBooking.attendees.length})` : `Your Party (${myBooking.attendees.length})`}</Eyebrow>
@@ -2585,7 +2610,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               </div>
               <p className="text-[11px] mt-2" style={{ ...body, color: T.ashFaint }}>
                 {myBooking.guardianPlaying === false
-                  ? "You're not playing. Your check-in QR covers them — scan it before you leave, or the field can check them in by name."
+                  ? "You're not playing. Your check-in QR or the check-in code covers them — scan before you leave, or give them the code."
                   : "One check-in QR covers everyone."}
               </p>
             </div>

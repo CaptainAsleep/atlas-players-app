@@ -264,7 +264,10 @@ service cloud.firestore {
           && (resource.data.get('hostOwnerId', null) == request.auth.uid
             || (resource.data.get('hostOwnerId', null) == null
               && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid))
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt"]);
+          // checkInMethod ("qr" | "name") added 2026-10-22; "code" check-ins
+          // are written server-side by checkInByCode.
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt", "checkInMethod"])
+          && (!("checkInMethod" in request.resource.data) || request.resource.data.checkInMethod in ["qr", "name"]);
 
         // Private per-attendee details for a booking (legal name, DOB,
         // guardian name/phone snapshots). The booking doc itself is
@@ -431,7 +434,10 @@ service cloud.firestore {
           && (resource.data.get('hostOwnerId', null) == request.auth.uid
             || (resource.data.get('hostOwnerId', null) == null
               && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid))
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt"]);
+          // checkInMethod ("qr" | "name") added 2026-10-22; "code" check-ins
+          // are written server-side by checkInByCode.
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["checkedIn", "checkedInAt", "checkInMethod"])
+          && (!("checkInMethod" in request.resource.data) || request.resource.data.checkInMethod in ["qr", "name"]);
 
         // Real bookings are a real commitment ("I will physically be at
         // this place, on this date") — a meaningfully stronger signal
@@ -612,6 +618,18 @@ service cloud.firestore {
     // owner can also read signatures tied to their own field's events —
     // that's the whole point of the waiver existing, so they can actually
     // see who's signed before letting them play.
+    // Booking check-in codes (2026-10-22). Never on the booking doc (public)
+    // or the player's mirror (friends can read it). Only the player and the
+    // admin can read a code; Cloud Functions write them (Admin SDK).
+    match /bookingCodes/{codeId} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.uid || isAdmin());
+      allow write: if false;
+    }
+    // Code -> booking lookup, used only by the checkInByCode function.
+    match /bookingCodeIndex/{indexId} {
+      allow read, write: if false;
+    }
+
     match /waiverSignatures/{sigId} {
       allow read: if request.auth != null && (
         request.auth.uid == resource.data.uid

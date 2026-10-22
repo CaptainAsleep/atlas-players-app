@@ -52,6 +52,7 @@ const organizerWelcomeTemplate = readFileSync(path.join(templatesDir, "organizer
 const ownerClaimVerifyTemplate = readFileSync(path.join(templatesDir, "owner-claim-verify.html"), "utf-8");
 const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim-code.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
+import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
 
 // Plain [token] -> value substitution, same style already proven in
 // atlas-email-sender/send.mjs (html.split(token).join(value)) — no
@@ -965,7 +966,11 @@ export const bookFreeEvent = onCall(
       // "first."
       const isFirstEverBooking = walkOnEligible && priorBookingsSnap.empty;
       const walkOnFields = isFirstEverBooking ? { walkOnEligible: true } : {};
+      // Check-in code (bookingCode.js) — reserved here, in the read phase,
+      // written below with the booking itself.
+      const checkInCode = await reserveBookingCode(t, db, eventId);
       const now = new Date();
+      writeBookingCode(t, db, { code: checkInCode, eventId, uid, fieldId: eventData.fieldId ?? null, hostOwnerId: eventData.hostOwnerId || null, now });
       t.set(bookingRef, {
         uid,
         fieldId: eventData.fieldId ?? null,
@@ -1396,7 +1401,10 @@ export const bookEventWithVoucher = onCall(
         );
       }
 
+      // Check-in code — a read, so it sits before the writes below.
+      const checkInCode = await reserveBookingCode(t, db, eventId);
       const now = new Date();
+      writeBookingCode(t, db, { code: checkInCode, eventId, uid, fieldId: eventData.fieldId ?? null, hostOwnerId: eventData.hostOwnerId || null, now });
       const remainingCents = voucher.amountCents - neededCents;
       t.set(bookingRef, {
         uid,
@@ -1576,6 +1584,10 @@ export const stripeWebhook = onRequest(
               // carried in from checkout creation, which could be minutes
               // stale by the time payment actually completes.
               const walkOnFields = (walkOnNear && priorBookingsSnap.empty) ? { walkOnEligible: true } : {};
+              // Check-in code: only created here, once payment is confirmed
+              // (booking data isn't trusted before the webhook). Read phase.
+              const checkInCode = await reserveBookingCode(t, db, eventId);
+              writeBookingCode(t, db, { code: checkInCode, eventId, uid, fieldId: fieldId || null, hostOwnerId: eventData?.hostOwnerId || null, now });
 
               t.set(bookingRef, {
                 uid,
@@ -2215,7 +2227,15 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
       formatTimeStrForEmail(eventData.startTime),
     ].filter(Boolean).join(", ");
 
+    // Written in the same transaction as this mirror doc, so it's here by
+    // the time this trigger runs. Missing only for a booking created some
+    // other way (e.g. a test booking) — then the email just has no code.
+    const codeSnap = await db.collection("bookingCodes").doc(bookingCodeDocId(eventId, userId)).get();
+    const checkInCode = codeSnap.exists ? codeSnap.data().code : null;
+    const soloCodeBlock = renderCheckInCodeBlock({ code: checkInCode, mode: "solo" });
+
     const commonReplacements = {
+      "[CHECKIN_CODE_BLOCK]": soloCodeBlock,
       "[PLAYER CALLSIGN]": callsign,
       "[FIELD NAME]": fieldName,
       "[EVENT NAME]": eventTitle,
@@ -2237,6 +2257,7 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
         eventDateTime,
         isPaid,
         amountPaidCents,
+        checkInCode,
       }));
     } else if (isFirstBooking) {
       html = fillTemplate(bookingConfirmationFirstTemplate, commonReplacements);
@@ -2769,4 +2790,74 @@ export const getOwnerFeedback = onCall(async (request) => {
 export const getAdminFeedback = onCall(async (request) => {
   if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Admin only.");
   return { events: await feedback.getAdminFeedback(getFirestore()) };
+});
+
+// --- Check-in by code (owner app, Manual Check-In) ----------------------------
+// The field owner types the code a player (or a dropped-off child) gives at
+// the gate. confirm:false only looks it up and returns the party so the owner
+// can see who it is; confirm:true checks the booking in (method "code").
+// Only the event's own owner (Major host, or the field's owner) can call this,
+// and only for their event, so codes can't be guessed at scale.
+export const checkInByCode = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const callerUid = request.auth.uid;
+  const eventId = request.data?.eventId;
+  if (typeof eventId !== "string" || !eventId) throw new HttpsError("invalid-argument", "Missing eventId.");
+  const code = normalizeBookingCode(request.data?.code);
+  if (!code) return { ok: false, reason: "bad-format" };
+
+  const db = getFirestore();
+  const eventRef = db.collection("events").doc(eventId);
+  const eventSnap = await eventRef.get();
+  if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+  const eventData = eventSnap.data();
+  const { ownerId } = await resolveEventHost(db, eventData);
+  if (!ownerId || ownerId !== callerUid) throw new HttpsError("permission-denied", "You don't run this event.");
+
+  const indexSnap = await db.collection("bookingCodeIndex").doc(bookingCodeIndexId(eventId, code)).get();
+  if (!indexSnap.exists) return { ok: false, reason: "no-match" };
+  const uid = indexSnap.data().uid;
+  // The current code for this player's booking — an old code left behind by
+  // a cancel + rebook no longer matches and is rejected.
+  const [codeSnap, bookingSnap] = await Promise.all([
+    db.collection("bookingCodes").doc(bookingCodeDocId(eventId, uid)).get(),
+    eventRef.collection("bookings").doc(uid).get(),
+  ]);
+  if (!codeSnap.exists || codeSnap.data().code !== code || !bookingSnap.exists) return { ok: false, reason: "no-match" };
+  const b = bookingSnap.data();
+  const hasChildren = (b.attendeeCount || 1) > 1 || b.guardianPlaying === false;
+  const [detailsSnap, sigSnap] = await Promise.all([
+    hasChildren ? bookingSnap.ref.collection("attendeeDetails").get() : Promise.resolve(null),
+    db.collection("waiverSignatures").doc(`${uid}_${eventId}`).get(),
+  ]);
+  const attendees = detailsSnap ? detailsSnap.docs.map((d) => {
+    const a = d.data();
+    return {
+      id: d.id, fullName: a.fullName || "", callsign: a.callsign || "", waiverSignatureId: a.waiverSignatureId || null,
+      guardianName: a.guardianName || "", guardianPhone: a.guardianPhone || "", guardianPlaying: a.guardianPlaying !== false,
+    };
+  }) : [];
+  const result = {
+    uid,
+    callsign: b.callsign || "Player",
+    signedName: sigSnap.exists ? sigSnap.data().signedName || "" : "",
+    waiverSigned: eventData.waiver ? sigSnap.exists : null,
+    paid: b.paid === true,
+    attendees,
+    guardianPlaying: b.guardianPlaying !== false,
+  };
+  if (b.checkedIn) return { ...result, ok: false, reason: "already-checked-in" };
+  if (request.data?.confirm !== true) return { ...result, ok: true, preview: true };
+
+  const now = new Date();
+  const fields = { checkedIn: true, checkedInAt: now, checkInMethod: "code" };
+  // update, never set/merge on the mirror: creating a missing mirror doc
+  // would fire sendBookingConfirmationEmail.
+  const mirrorRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
+  const mirrorSnap = await mirrorRef.get();
+  const batch = db.batch();
+  batch.update(bookingSnap.ref, fields);
+  if (mirrorSnap.exists) batch.update(mirrorRef, fields);
+  await batch.commit();
+  return { ...result, ok: true, preview: false };
 });
