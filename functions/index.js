@@ -51,6 +51,7 @@ const organizerWelcomeTemplate = readFileSync(path.join(templatesDir, "organizer
 // old bare-bones inline-HTML claim code.
 const ownerClaimVerifyTemplate = readFileSync(path.join(templatesDir, "owner-claim-verify.html"), "utf-8");
 const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim-code.html"), "utf-8");
+const playerVerifyEmailTemplate = readFileSync(path.join(templatesDir, "player-verify-email.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
 
@@ -1924,6 +1925,85 @@ export const requestFieldEmailClaim = onCall(
     }
 
     return { eligible: true, sentTo: callerEmail };
+  }
+);
+
+// ===========================================================================
+// Player "Verify Email" resend from the Profile page (2026-10-23)
+// ===========================================================================
+// The only other place a player gets a verification link is the one-time
+// welcome email (sendPlayerWelcomeEmail). If they lose it or the link
+// expires, this is how they get a fresh one for the verified badge. Same
+// shape as sendOwnerClaimVerification below: live Auth record check,
+// one send per minute per account (server-only emailSends doc), Resend
+// branded template, cooldown released if the send fails. Sends only to the
+// caller's own Auth email, so it can't be pointed at anyone else.
+const PLAYER_VERIFY_COOLDOWN_MS = 60 * 1000;
+const PLAYER_VERIFY_CONTINUE_URL = "https://airsoftatlas.app/verify-email.html";
+
+export const sendPlayerVerificationEmail = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    const authUser = await getAuth().getUser(uid);
+    if (authUser.emailVerified) {
+      return { alreadyVerified: true };
+    }
+    const email = String(authUser.email || "").trim();
+    if (!email) {
+      throw new HttpsError("failed-precondition", "This account has no email address on file.");
+    }
+
+    const db = getFirestore();
+    const sendRef = db.collection("emailSends").doc(`playerVerify_${uid}`);
+    const now = Date.now();
+    const allowed = await db.runTransaction(async (t) => {
+      const s = await t.get(sendRef);
+      const last = s.data()?.sentAtMs;
+      if (typeof last === "number" && now - last < PLAYER_VERIFY_COOLDOWN_MS) return false;
+      t.set(sendRef, { uid, sentAtMs: now, sendCount: FieldValue.increment(1) }, { merge: true });
+      return true;
+    });
+    if (!allowed) {
+      return { sent: false, throttled: true, sentTo: email };
+    }
+    const releaseCooldown = () => sendRef.update({ sentAtMs: FieldValue.delete() }).catch(() => {});
+
+    let verifyLink;
+    try {
+      verifyLink = await getAuth().generateEmailVerificationLink(email, { url: PLAYER_VERIFY_CONTINUE_URL });
+    } catch (err) {
+      console.error(`sendPlayerVerificationEmail: couldn't generate link for ${uid}:`, err);
+      await releaseCooldown();
+      throw new HttpsError("unavailable", "Couldn't send the verification email — try again in a moment.");
+    }
+
+    const userSnap = await db.collection("users").doc(uid).get();
+    const callsign = userSnap.data()?.callsign || email.split("@")[0];
+    const html = fillTemplate(playerVerifyEmailTemplate, {
+      "[VERIFY_LINK]": escapeHtml(verifyLink),
+      "[PLAYER CALLSIGN]": escapeHtml(callsign),
+    });
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: ATLAS_EMAIL_FROM,
+        to: email,
+        subject: "Verify your email on Atlas",
+        html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+    } catch (err) {
+      console.error(`sendPlayerVerificationEmail: Resend failed for ${uid}:`, err);
+      await releaseCooldown();
+      throw new HttpsError("unavailable", "Couldn't send the verification email — try again in a moment.");
+    }
+
+    return { sent: true, sentTo: email };
   }
 );
 

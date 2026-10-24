@@ -6582,7 +6582,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
   const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
@@ -6648,6 +6648,48 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // "Verify Email" menu item — only shown while profile.verified isn't true.
+  // The welcome email is the only other place a player gets a link, so this
+  // is the way back in if they lost it or it expired.
+  const [showVerifyPanel, setShowVerifyPanel] = useState(false);
+  const [verifyBusy, setVerifyBusy] = useState(""); // "", "send", "check"
+  const [verifyMsg, setVerifyMsg] = useState(null); // { tone: "good" | "alert" | "dim", text }
+
+  const handleSendVerification = async () => {
+    setVerifyBusy("send");
+    setVerifyMsg(null);
+    try {
+      const res = await sendVerificationEmail();
+      if (res.alreadyVerified) {
+        await syncEmailVerification();
+        setVerifyMsg({ tone: "good", text: "You're already verified — badge unlocked." });
+      } else if (res.throttled) {
+        setVerifyMsg({ tone: "dim", text: `A link just went to ${res.sentTo || "your email"}. Give it a minute before asking for another.` });
+      } else {
+        setVerifyMsg({ tone: "good", text: `Link sent to ${res.sentTo || user?.email}. Check spam if it's not there in a few minutes.` });
+      }
+    } catch {
+      setVerifyMsg({ tone: "alert", text: "Couldn't send the link — try again in a moment." });
+    } finally {
+      setVerifyBusy("");
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    setVerifyBusy("check");
+    setVerifyMsg(null);
+    try {
+      const ok = await syncEmailVerification();
+      setVerifyMsg(ok
+        ? { tone: "good", text: "Verified — badge unlocked." }
+        : { tone: "dim", text: "Not verified yet. Tap the link in the email, then check again." });
+    } catch {
+      setVerifyMsg({ tone: "alert", text: "Couldn't check right now — try again in a moment." });
+    } finally {
+      setVerifyBusy("");
+    }
+  };
 
   const friendlyPasswordError = (code) => {
     if (code === "auth/invalid-credential" || code === "auth/wrong-password") return "Current password is incorrect.";
@@ -6801,6 +6843,52 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
         <Eyebrow>Account Settings</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <ProfileRow label="Email" value={user?.email} static />
+          {profile && profile.verified !== true && (
+            <div>
+              <button
+                onClick={() => { setShowVerifyPanel(!showVerifyPanel); setVerifyMsg(null); }}
+                className="w-full flex items-center justify-between py-3.5 border-t"
+                style={{ borderColor: T.line }}
+              >
+                <span className="text-[14px] font-medium inline-flex items-center gap-1.5" style={{ ...body, color: T.ash }}>
+                  <BadgeCheck size={15} color={T.accent} />
+                  Verify Email
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>Not verified</span>
+                  <ChevronRight size={15} color={T.ashFaint} style={{ transform: showVerifyPanel ? "rotate(90deg)" : "none" }} />
+                </div>
+              </button>
+              {showVerifyPanel && (
+                <div className="pb-4 flex flex-col gap-2.5">
+                  <p className="text-[12.5px] leading-relaxed" style={{ ...body, color: T.ashDim }}>
+                    Confirm {user?.email} is really yours to get the verified badge next to your callsign.
+                  </p>
+                  <button
+                    onClick={handleSendVerification}
+                    disabled={!!verifyBusy}
+                    className="w-full py-2.5 text-[13px] font-semibold"
+                    style={{ ...body, background: T.cta, color: T.inverse, borderRadius: 999, opacity: verifyBusy ? 0.6 : 1 }}
+                  >
+                    {verifyBusy === "send" ? "Sending…" : "Send Verification Link"}
+                  </button>
+                  <button
+                    onClick={handleCheckVerification}
+                    disabled={!!verifyBusy}
+                    className="w-full py-2.5 text-[13px] font-semibold"
+                    style={{ ...body, background: "transparent", color: T.ash, border: `1px solid ${T.line}`, borderRadius: 999, opacity: verifyBusy ? 0.6 : 1 }}
+                  >
+                    {verifyBusy === "check" ? "Checking…" : "I've Verified — Check Again"}
+                  </button>
+                  {verifyMsg && (
+                    <p className="text-[12px]" style={{ ...body, color: verifyMsg.tone === "good" ? T.good : verifyMsg.tone === "alert" ? T.alert : T.ashDim }}>
+                      {verifyMsg.text}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <button onClick={onOpenAccount} className="w-full flex items-center justify-between py-3.5">
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>My Account</span>
             <div className="flex items-center gap-2">
@@ -7817,7 +7905,7 @@ function AppShell() {
   const { fields, loading: fieldsLoading } = useFields();
   const claimedFieldIds = useMemo(() => new Set(fields.filter((f) => f.ownerId).map((f) => f.id)), [fields]);
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signInWithGoogle, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signInWithGoogle, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { dependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
@@ -8309,6 +8397,8 @@ function AppShell() {
         events={events}
         patches={patches}
         vouchers={myVouchers}
+        sendVerificationEmail={sendVerificationEmail}
+        syncEmailVerification={syncEmailVerification}
       />
     );
   } else if (screen === "account") {

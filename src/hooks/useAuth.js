@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -14,7 +15,8 @@ import {
 } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { auth, db, storage } from "../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { auth, db, functions, storage } from "../lib/firebase";
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -101,19 +103,50 @@ export function useAuth() {
   // profile doc doesn't exist yet, so without this, a player's own profile
   // could say verified while their public one (what teammates see) stayed
   // stuck on the stale signup-time value.
+  //
+  // Also exported as syncEmailVerification so the Profile page's "Verify
+  // Email" item can re-check on demand ("I've verified — check again")
+  // instead of making the player reload the app. Resolves true once the
+  // account is verified and Firestore has been caught up.
+  async function syncEmailVerification() {
+    const u = auth.currentUser;
+    if (!u) return false;
+    await u.reload();
+    await auth.currentUser?.getIdToken(true); // force a fresh ID token so its email_verified claim matches reality for the rules check
+    if (!auth.currentUser?.emailVerified) return false;
+    const batch = writeBatch(db);
+    batch.set(doc(db, "users", u.uid), { verified: true }, { merge: true });
+    batch.set(doc(db, "publicProfiles", u.uid), { verified: true }, { merge: true });
+    await batch.commit();
+    return true;
+  }
+
   useEffect(() => {
     if (!user || !profile || profile.verified === true) return;
-    user.reload()
-      .then(() => auth.currentUser?.getIdToken(true)) // force a fresh ID token so its
-      .then(() => {                                    // email_verified claim matches
-        if (!auth.currentUser?.emailVerified) return;   // reality for the rules check
-        const batch = writeBatch(db);
-        batch.set(doc(db, "users", user.uid), { verified: true }, { merge: true });
-        batch.set(doc(db, "publicProfiles", user.uid), { verified: true }, { merge: true });
-        return batch.commit();
-      })
-      .catch((err) => console.error("email-verification sync failed:", err));
+    syncEmailVerification().catch((err) => console.error("email-verification sync failed:", err));
   }, [user, profile?.verified]);
+
+  // Profile page "Verify Email" -> "Send verification link". Atlas-branded
+  // via the sendPlayerVerificationEmail Cloud Function (Resend); if that's
+  // unreachable, falls back to Firebase's own default email so the player
+  // still gets a link. Returns { sent, throttled, alreadyVerified, sentTo }.
+  async function sendVerificationEmail() {
+    const u = auth.currentUser;
+    if (!u) throw new Error("Not signed in.");
+    try {
+      const res = await httpsCallable(functions, "sendPlayerVerificationEmail")();
+      return res.data || {};
+    } catch (err) {
+      console.warn("sendPlayerVerificationEmail failed, using Firebase's default email:", err?.code || err);
+      try {
+        await sendEmailVerification(u, { url: "https://airsoftatlas.app/verify-email.html" });
+      } catch (err2) {
+        if (err2?.code === "auth/too-many-requests") return { sent: false, throttled: true, sentTo: u.email };
+        throw err2;
+      }
+      return { sent: true, sentTo: u.email };
+    }
+  }
 
   // Shared by email/password signUp and any social sign-in provider: creates
   // the Firestore users/{uid} doc plus its publicProfiles/{uid} mirror for a
@@ -323,5 +356,7 @@ export function useAuth() {
     deleteAccount,
     acceptTerms,
     completeOnboarding,
+    syncEmailVerification,
+    sendVerificationEmail,
   };
 }
