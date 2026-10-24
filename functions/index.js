@@ -54,6 +54,7 @@ const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim
 const playerVerifyEmailTemplate = readFileSync(path.join(templatesDir, "player-verify-email.html"), "utf-8");
 const passwordResetTemplate = readFileSync(path.join(templatesDir, "password-reset.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
+import { isEventClosed, stateFromCity } from "./eventClose.js";
 import { RENTAL_HOLD_MS, stockOf, maxPerPersonOf, qtyOf, normalizeRentalPicks, countBookedRentals, countHeldRentals, assertRentalStock, samePicks } from "./rentalInventory.js";
 import { GIFT_MONTHLY_CAP, monthStartUtc, capResetLabel, parseExpiresAtMs, cleanGiftNote, callsignVariants, restoredFreeEntryExpiry } from "./voucherGift.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
@@ -293,6 +294,17 @@ async function assertSelectionCapacity(eventRef, eventData, resolved, attendeeCo
 // capped at its maxPerPerson x the booking's attendee count. Stock (the
 // item's per-event `quantity`) is checked separately, in
 // createBookingCheckout's hold transaction.
+// Bookings close when the event's end passes (2026-10-24) — see eventClose.js
+// for the rule. The same check runs in the player app; this is the real gate
+// for all three booking paths. (The webhook never checks: payment already
+// happened by then.)
+function assertEventStillOpen(eventData, fieldData) {
+  const state = eventData.venueState || stateFromCity(fieldData?.city);
+  if (isEventClosed(eventData, state, Date.now())) {
+    throw new HttpsError("failed-precondition", "This event has already ended — bookings are closed.");
+  }
+}
+
 function resolveRentalsTotal(fieldData, picks, attendeeCount = 1) {
   if (!Array.isArray(picks) || picks.length === 0) return { rentalsCents: 0, selectedRentalDetails: [] };
   const catalog = Array.isArray(fieldData.rentals) ? fieldData.rentals : [];
@@ -681,6 +693,7 @@ export const createBookingCheckout = onCall(
     }
 
     const { fieldData, ownerId, isMajor } = await hostPromise; // had a head start since eventData became known
+    assertEventStillOpen(eventData, fieldData);
     if (!ownerId) {
       throw new HttpsError("failed-precondition", isMajor ? "This event isn't set up to accept payments yet." : "This field isn't set up to accept payments yet.");
     }
@@ -1006,6 +1019,7 @@ export const bookFreeEvent = onCall(
     // so it doesn't matter that this particular event happens to be free —
     // block it here too rather than only when money's involved.
     const { fieldData, ownerId } = await resolveEventHost(db, eventData);
+    assertEventStillOpen(eventData, fieldData);
     if (!ownerId) {
       throw new HttpsError("failed-precondition", "This field hasn't been claimed by an owner yet, so bookings aren't available.");
     }
@@ -1707,6 +1721,7 @@ export const bookEventWithVoucher = onCall(
       ...(selections.length > 0 ? { selections } : {}),
     };
     const { fieldData } = await resolveEventHost(db, eventData);
+    assertEventStillOpen(eventData, fieldData);
     const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
     const attendeeCount = attendees.attendeeCount;
     // Full-cover only, now for the whole party: the voucher has to cover

@@ -25,6 +25,7 @@ import { useBookingCode, formatBookingCode } from "./hooks/useBookingCode";
 import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
+import { eventCloseMs, stateFromCity } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 
@@ -2000,7 +2001,21 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   fieldVouchers, redeemVoucher }) {
   const { T, display, body, mono, theme } = useTheme();
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
+  // isPast (calendar date) still decides how long a booked player's check-in
+  // code shows (until midnight, so late check-ins work). Taking NEW bookings
+  // stops earlier: at the event's end time, or start + 8h when there's no end
+  // time (2026-10-24 — see lib/eventClose.js; the server enforces the same).
   const isPast = (ev.endDate || ev.date) < localDateStr();
+  const closeAtMs = eventCloseMs(ev, ev.isMajor ? ev.venueState : stateFromCity(field?.city));
+  const [closeTick, setCloseTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (closeAtMs == null) return undefined;
+    const wait = closeAtMs - Date.now();
+    if (wait <= 0 || wait > 86400000) return undefined;
+    const timer = setTimeout(() => setCloseTick(Date.now()), wait + 500);
+    return () => clearTimeout(timer);
+  }, [closeAtMs]);
+  const bookingClosed = isPast || (closeAtMs != null && closeTick >= closeAtMs);
   // Still needed to determine whether this is a paid event at all (for
   // routing to the right booking flow) — the fee/total display itself
   // was removed from the button, so only this piece survives.
@@ -2251,7 +2266,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
 
   // Soft cap: reservations never lock. Past the cap we just tell the player
   // up top that the field may still say yes — payment is always accepted.
-  const capacityReached = !!ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking && !isPast && !ev.canceled;
+  const capacityReached = !!ev.maxCapacity && (ev.bookedCount || 0) >= ev.maxCapacity && !myBooking && !bookingClosed && !ev.canceled;
   const waiverBlocking = ev.waiver && (
     !signature
     || selectedDependents.some((d) => !signedDependentIds.includes(d.id))
@@ -2612,7 +2627,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </button>
           )}
 
-          {selectionGroups.length > 0 && !myBooking && !isPast && !ev.canceled && selectionGroups.map((g) => (
+          {selectionGroups.length > 0 && !myBooking && !bookingClosed && !ev.canceled && selectionGroups.map((g) => (
             <div key={g.id} className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: missingGroup?.id === g.id ? `1.5px solid ${T.accent}` : "none", outlineOffset: -1 }}>
               <Eyebrow>{g.label}{g.required ? "" : " (optional)"}</Eyebrow>
               <div className="flex flex-wrap gap-2">
@@ -2644,7 +2659,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </div>
           ))}
 
-          {priceOptions?.choices?.length > 0 && !myBooking && !isPast && !ev.canceled && (
+          {priceOptions?.choices?.length > 0 && !myBooking && !bookingClosed && !ev.canceled && (
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: choiceMissing ? `1.5px solid ${T.accent}` : "none", outlineOffset: -1 }}>
               <Eyebrow>{priceOptions.label}{priceOptions.required ? "" : " (optional)"}</Eyebrow>
               <div className="flex flex-wrap gap-2">
@@ -2669,7 +2684,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </div>
           )}
 
-          {dependents.length > 0 && !myBooking && !isPast && !ev.canceled && !fieldUnclaimed && (
+          {dependents.length > 0 && !myBooking && !bookingClosed && !ev.canceled && !fieldUnclaimed && (
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
               <Eyebrow>Who's attending?</Eyebrow>
               <div className="flex flex-col gap-2 mt-1">
@@ -2771,7 +2786,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </div>
           )}
 
-          {bestFieldVoucher && !myBooking && !isPast && !ev.canceled && (entryPriceCents > 0 || choiceMissing) && (
+          {bestFieldVoucher && !myBooking && !bookingClosed && !ev.canceled && (entryPriceCents > 0 || choiceMissing) && (
             voucherCoversCost ? (
               // A toggle, not a second action button — applying the
               // voucher is now a single step inside the one Reserve/
@@ -2820,7 +2835,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                 <Check size={15} color={T.good} />
                 <div className="text-[12px] font-medium" style={{ ...body, color: T.ash }}>Waiver signed as {signature.signedName}</div>
               </div>
-            ) : !isPast && (
+            ) : !bookingClosed && (
               <div className="p-3 flex items-center gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                 <FileSignature size={15} color={T.ashDim} />
                 <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>This event requires a signed waiver — you'll sign it when you reserve.</div>
@@ -2862,7 +2877,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             field={ev.isMajor ? { rentals: ev.rentals } : field}
             rentalsOnly={!!ev.isMajor}
             rentalPick={{
-              options: rentalOptions.length > 0 && !myBooking && !isPast && !ev.canceled && !usingVoucher ? rentalOptions : [],
+              options: rentalOptions.length > 0 && !myBooking && !bookingClosed && !ev.canceled && !usingVoucher ? rentalOptions : [],
               quantities: rentalQty,
               caps: rentalCaps,
               onSetQty: setRentalCount,
@@ -2910,7 +2925,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.alert, border: `1px solid ${T.alert}`, borderRadius: T.rPill }}>
             Event Canceled
           </span>
-        ) : isPast ? (
+        ) : bookingClosed ? (
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
             Event Ended
           </span>
