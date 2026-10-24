@@ -1061,8 +1061,15 @@ function FieldFacts({ field, rentalPick, rentalsOnly = false }) {
             )}
             <div className="flex flex-col gap-3 mt-2">
               {field.rentals.map((r) => {
-                const selectable = !!r.id && pickable.has(r.id);
-                const picked = selectable && rentalPick.selectedIds.includes(r.id);
+                const offered = !!r.id && pickable.has(r.id);
+                const qty = offered ? rentalPick.quantities?.[r.id] || 0 : 0;
+                const capInfo = offered ? rentalPick.caps?.[r.id] : null;
+                const cap = capInfo ? capInfo.cap : 1;
+                const left = capInfo ? capInfo.left : null;
+                const soldOut = offered && left === 0 && qty === 0;
+                const selectable = offered && !soldOut;
+                const picked = qty > 0;
+                const stockTotal = Number.isInteger(r.quantity) && r.quantity >= 0 ? r.quantity : null;
                 const info = (
                   <>
                     <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{r.name}</div>
@@ -1070,6 +1077,13 @@ function FieldFacts({ field, rentalPick, rentalsOnly = false }) {
                     {r.availability && (
                       <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>{r.availability}</div>
                     )}
+                    {offered && left != null ? (
+                      <div className="text-[11px] font-semibold mt-0.5" style={{ ...mono, color: left === 0 ? T.alert : left <= 3 ? T.alert : T.good }}>
+                        {left === 0 ? "Sold out" : `${left} left`}
+                      </div>
+                    ) : !offered && stockTotal != null ? (
+                      <div className="text-[11px] mt-0.5" style={{ ...mono, color: T.ashFaint }}>{stockTotal} per event</div>
+                    ) : null}
                   </>
                 );
                 const price = (
@@ -1083,10 +1097,47 @@ function FieldFacts({ field, rentalPick, rentalsOnly = false }) {
                     </div>
                   );
                 }
+                if (cap > 1) {
+                  // Quantity stepper — more than one allowed for this booking.
+                  const stepBtn = { width: 30, height: 30, borderRadius: 999, border: `1.5px solid ${T.line}`, color: T.ash, background: T.panel };
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-start gap-3 p-3 w-full"
+                      style={{ background: picked ? T.tintGood : "transparent", borderRadius: T.rCard, border: `1.5px ${picked ? "solid" : "dashed"} ${picked ? T.good : T.line}` }}
+                    >
+                      <div className="flex-1">{info}</div>
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                        {price}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => rentalPick.onSetQty(r.id, Math.max(0, qty - 1))}
+                            disabled={qty === 0}
+                            aria-label={`Fewer ${r.name}`}
+                            className="flex items-center justify-center text-[16px] font-semibold"
+                            style={{ ...stepBtn, opacity: qty === 0 ? 0.35 : 1 }}
+                          >
+                            −
+                          </button>
+                          <span className="text-[14px] font-semibold text-center" style={{ ...mono, color: T.ash, minWidth: 18 }}>{qty}</span>
+                          <button
+                            onClick={() => rentalPick.onSetQty(r.id, Math.min(cap, qty + 1))}
+                            disabled={qty >= cap}
+                            aria-label={`More ${r.name}`}
+                            className="flex items-center justify-center text-[16px] font-semibold"
+                            style={{ ...stepBtn, opacity: qty >= cap ? 0.35 : 1 }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <button
                     key={r.id}
-                    onClick={() => rentalPick.onToggle(r.id)}
+                    onClick={() => rentalPick.onSetQty(r.id, picked ? 0 : 1)}
                     className="flex items-start gap-3 p-3 text-left w-full"
                     style={{ background: picked ? T.tintGood : "transparent", borderRadius: T.rCard, border: `1.5px ${picked ? "solid" : "dashed"} ${picked ? T.good : T.line}` }}
                   >
@@ -2023,9 +2074,18 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // event itself in the same shape.
   const rentalCatalog = (ev.isMajor ? ev.rentals : field?.rentals) || [];
   const rentalOptions = rentalCatalog.filter((r) => typeof r.priceCents === "number" && r.priceCents > 0);
-  const [selectedRentalIds, setSelectedRentalIds] = useState([]);
-  const toggleRental = (id) => setSelectedRentalIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  const rentalsCents = rentalOptions.filter((r) => selectedRentalIds.includes(r.id)).reduce((sum, r) => sum + r.priceCents, 0);
+  // 2026-10-24: quantities + per-event stock. { rentalId: qty }; an item's
+  // `quantity` is its stock per event (missing = unlimited) and
+  // `maxPerPerson` (default 1) x attendees caps one booking. The server
+  // re-checks both (createBookingCheckout's hold transaction).
+  const [rentalQty, setRentalQty] = useState({});
+  const setRentalCount = (id, qty) => setRentalQty((prev) => {
+    const next = { ...prev };
+    if (qty > 0) next[id] = qty; else delete next[id];
+    return next;
+  });
+  const rentalsCents = rentalOptions.reduce((sum, r) => sum + r.priceCents * (rentalQty[r.id] || 0), 0);
+  const selectedRentalPicks = rentalOptions.filter((r) => (rentalQty[r.id] || 0) > 0).map((r) => ({ id: r.id, qty: rentalQty[r.id] }));
   // Lifted up from inside proceedToBook so the click handlers below can
   // read it synchronously, before any awaits — needed to decide whether
   // to pre-open a blank tab for Stripe Checkout at click time (see
@@ -2075,6 +2135,38 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const nobodySelected = !guardianPlaying && selectedDependents.length === 0;
   const attendeeCount = (guardianPlaying ? 1 : 0) + selectedDependents.length;
   const attendeeDependentIds = selectedDependents.map((d) => d.id);
+  // Stock left per rental, from this event's live (publicly readable)
+  // bookings. Doesn't see other players' 30-min checkout holds, so it can
+  // read slightly high; the server's check is the real gate.
+  const rentalCaps = useMemo(() => {
+    const booked = {};
+    (whosGoing || []).forEach((b) => (b.selectedRentals || []).forEach((r) => {
+      if (r?.id) booked[r.id] = (booked[r.id] || 0) + (Number.isInteger(r.qty) && r.qty > 0 ? r.qty : 1);
+    }));
+    const caps = {};
+    rentalOptions.forEach((r) => {
+      const stock = Number.isInteger(r.quantity) && r.quantity >= 0 ? r.quantity : null;
+      const left = stock == null ? null : Math.max(0, stock - (booked[r.id] || 0));
+      const perPerson = Number.isInteger(r.maxPerPerson) && r.maxPerPerson >= 1 ? r.maxPerPerson : 1;
+      const perBooking = perPerson * Math.max(1, attendeeCount);
+      caps[r.id] = { left, cap: left == null ? perBooking : Math.min(perBooking, left) };
+    });
+    return caps;
+  }, [whosGoing, rentalOptions.map((r) => `${r.id}:${r.quantity}:${r.maxPerPerson}`).join("|"), attendeeCount]);
+  // Party got smaller or stock ran out: pull picks down to what's allowed.
+  useEffect(() => {
+    setRentalQty((prev) => {
+      let changed = false;
+      const next = {};
+      for (const [id, q] of Object.entries(prev)) {
+        const cap = rentalCaps[id]?.cap ?? 0;
+        const v = Math.min(q, cap);
+        if (v !== q) changed = true;
+        if (v > 0) next[id] = v;
+      }
+      return changed ? next : prev;
+    });
+  }, [rentalCaps]);
   // Seats already taken per capped choice, read from the event's (publicly
   // readable) bookings once. The server re-checks as the real gate; this
   // only drives the "Full" display. Refreshed after a failed booking.
@@ -2189,7 +2281,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, groupPicks, guardianPlaying);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalPicks, attendeeDependentIds, groupPicks, guardianPlaying);
         // Two-tap checkout (2026-10-14). This used to pre-open a blank tab
         // at tap time and point it at Stripe once the URL came back. On
         // some phones, opening that tab backgrounded Atlas and paused it
@@ -2771,8 +2863,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             rentalsOnly={!!ev.isMajor}
             rentalPick={{
               options: rentalOptions.length > 0 && !myBooking && !isPast && !ev.canceled && !usingVoucher ? rentalOptions : [],
-              selectedIds: selectedRentalIds,
-              onToggle: toggleRental,
+              quantities: rentalQty,
+              caps: rentalCaps,
+              onSetQty: setRentalCount,
             }}
           />
 

@@ -148,20 +148,20 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentalIds, attendeeDependentIds, selections, guardianPlaying = true) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentals, attendeeDependentIds, selections, guardianPlaying = true) {
     const call = httpsCallable(functions, "createBookingCheckout");
     // Same best-effort { lat, lng } (or null) as bookEvent — carried
     // through Checkout Session metadata since the webhook that actually
     // creates the booking runs with no browser present at all.
-    // selectedRentalIds is just a list of rental item ids the player
-    // toggled on — the server looks up each one's real price itself
-    // (resolveRentalsTotal in functions/index.js), never trusting a price
-    // from here.
+    // selectedRentals is [{ id, qty }] (2026-10-24) — ids and quantities
+    // only. The server looks up each item's real price, per-person cap and
+    // stock itself (resolveRentalsTotal / the hold transaction in
+    // functions/index.js), never trusting a price from here.
     const result = await call({
       eventId,
       selectedChoiceId: selectedChoiceId || null,
       location: location || null,
-      selectedRentalIds: selectedRentalIds && selectedRentalIds.length > 0 ? selectedRentalIds : null,
+      selectedRentals: selectedRentals && selectedRentals.length > 0 ? selectedRentals : null,
       // Child profile ids only — the server re-reads each one (ownership, age at
       // event date, signature) and works out the real attendee count and total.
       attendeeDependentIds: attendeeDependentIds || [],

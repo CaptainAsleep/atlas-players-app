@@ -54,6 +54,7 @@ const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim
 const playerVerifyEmailTemplate = readFileSync(path.join(templatesDir, "player-verify-email.html"), "utf-8");
 const passwordResetTemplate = readFileSync(path.join(templatesDir, "password-reset.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
+import { RENTAL_HOLD_MS, stockOf, maxPerPersonOf, qtyOf, normalizeRentalPicks, countBookedRentals, countHeldRentals, assertRentalStock, samePicks } from "./rentalInventory.js";
 import { GIFT_MONTHLY_CAP, monthStartUtc, capResetLabel, parseExpiresAtMs, cleanGiftNote, callsignVariants, restoredFreeEntryExpiry } from "./voucherGift.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
 
@@ -287,18 +288,26 @@ async function assertSelectionCapacity(eventRef, eventData, resolved, attendeeCo
 // ever trusting a client-supplied number. Only createBookingCheckout calls
 // this — bookFreeEvent never reaches it, since a free event with a rental
 // selected has a nonzero total and routes to checkout instead.
-function resolveRentalsTotal(fieldData, selectedRentalIds) {
-  const ids = Array.isArray(selectedRentalIds) ? selectedRentalIds : [];
-  if (ids.length === 0) return { rentalsCents: 0, selectedRentalDetails: [] };
+// 2026-10-24: picks carry a quantity ([{id, qty}], see rentalInventory.js);
+// an older client's plain id list arrives as qty 1 each. Each item's qty is
+// capped at its maxPerPerson x the booking's attendee count. Stock (the
+// item's per-event `quantity`) is checked separately, in
+// createBookingCheckout's hold transaction.
+function resolveRentalsTotal(fieldData, picks, attendeeCount = 1) {
+  if (!Array.isArray(picks) || picks.length === 0) return { rentalsCents: 0, selectedRentalDetails: [] };
   const catalog = Array.isArray(fieldData.rentals) ? fieldData.rentals : [];
-  const selectedRentalDetails = ids.map((id) => {
+  const selectedRentalDetails = picks.map(({ id, qty }) => {
     const rental = catalog.find((r) => r.id === id && typeof r.priceCents === "number" && r.priceCents > 0);
     if (!rental) {
       throw new HttpsError("invalid-argument", "One of the selected rental items isn't available for this field anymore.");
     }
-    return { id: rental.id, name: rental.name, priceCents: rental.priceCents };
+    const cap = maxPerPersonOf(rental) * Math.max(1, attendeeCount);
+    if (qty > cap) {
+      throw new HttpsError("invalid-argument", `You can rent at most ${cap} ${rental.name} for this booking.`);
+    }
+    return { id: rental.id, name: rental.name, priceCents: rental.priceCents, qty };
   });
-  const rentalsCents = selectedRentalDetails.reduce((sum, r) => sum + r.priceCents, 0);
+  const rentalsCents = selectedRentalDetails.reduce((sum, r) => sum + r.priceCents * r.qty, 0);
   return { rentalsCents, selectedRentalDetails };
 }
 
@@ -575,7 +584,7 @@ function resolveVoucherAmountCents(booking, passFeeToPlayer) {
   if (typeof booking.entryPriceCents === "number") return booking.entryPriceCents * Math.max(1, booking.attendeeCount || 1);
   const feeCents = typeof booking.bookingFeeCents === "number" ? booking.bookingFeeCents : 0;
   const rentalsCents = (booking.selectedRentals || []).reduce(
-    (sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents : 0), 0
+    (sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents * qtyOf(r) : 0), 0
   );
   const deduction = rentalsCents + (passFeeToPlayer ? feeCents : 0);
   return Math.max(0, (booking.amountPaidCents || 0) - deduction);
@@ -688,7 +697,13 @@ export const createBookingCheckout = onCall(
     // (The paid webhook can't reject, so two near-simultaneous checkouts for
     // the last seat can both land — a known, accepted 1–2 head overshoot.)
     await assertSelectionCapacity(eventRef, eventData, resolved, attendeeCount);
-    const { rentalsCents, selectedRentalDetails } = resolveRentalsTotal(fieldData, request.data?.selectedRentalIds);
+    let rentalPicks;
+    try {
+      rentalPicks = normalizeRentalPicks(request.data?.selectedRentals, request.data?.selectedRentalIds);
+    } catch (err) {
+      throw new HttpsError("invalid-argument", err.message);
+    }
+    const { rentalsCents, selectedRentalDetails } = resolveRentalsTotal(fieldData, rentalPicks, attendeeCount);
     // Combined, not entry-only — this is what lets a free event become a
     // real checkout the moment a paid rental is added, and what makes
     // Atlas's platform fee below grow with rentals the same way it
@@ -780,7 +795,7 @@ export const createBookingCheckout = onCall(
             product_data: { name: `Rental: ${r.name}` },
             unit_amount: r.priceCents,
           },
-          quantity: 1,
+          quantity: r.qty,
         })),
       ],
       payment_intent_data: {
@@ -839,14 +854,89 @@ export const createBookingCheckout = onCall(
     // by retrying exactly once under a fresh key. A genuinely simultaneous
     // identical retry never reaches this catch at all, so the original
     // double-charge protection is untouched.
-    const idempotencyKey = `booking-checkout:${eventId}:${uid}`;
+    let idempotencyKey = `booking-checkout:${eventId}:${uid}`;
+
+    // Rental inventory hold (2026-10-24). Only when a picked item has a
+    // per-event stock count — every other checkout skips this block and is
+    // byte-for-byte the same request as before. Inside one transaction:
+    // count confirmed bookings + other players' live holds, refuse if the
+    // picks don't fit, then write/refresh this player's hold. The Stripe
+    // session expires with the hold, so it can't be paid after the hold lapses.
+    const catalog = Array.isArray(fieldData.rentals) ? fieldData.rentals : [];
+    const trackedPicks = rentalPicks.filter((p) => stockOf(catalog.find((r) => r.id === p.id)) != null);
+    const holdRef = eventRef.collection("rentalHolds").doc(uid);
+    let holdIsNew = false;
+    let previousSessionId = null;
+    if (trackedPicks.length > 0) {
+      const nowMs = Date.now();
+      const hold = await db.runTransaction(async (t) => {
+        const [bookingsSnap, holdsSnap] = await Promise.all([
+          t.get(eventRef.collection("bookings")),
+          t.get(eventRef.collection("rentalHolds")),
+        ]);
+        const holds = holdsSnap.docs.map((d) => ({ ...d.data(), uid: d.id, expiresAtMs: d.data().expiresAt?.toMillis?.() ?? 0 }));
+        try {
+          assertRentalStock(catalog, rentalPicks, countBookedRentals(bookingsSnap.docs.map((d) => d.data())), countHeldRentals(holds, nowMs, uid));
+        } catch (err) {
+          throw new HttpsError("failed-precondition", err.message);
+        }
+        const mine = holds.find((h) => h.uid === uid);
+        // Same picks, still-live hold = a re-tap/relaunch: keep it (and its
+        // session) instead of starting a second one.
+        if (mine && mine.expiresAtMs > nowMs && samePicks(mine.items, rentalPicks)) {
+          return { expiresAtMs: mine.expiresAtMs, existingSessionId: mine.sessionId || null, isNew: false, previousSessionId: null };
+        }
+        const expiresAtMs = nowMs + RENTAL_HOLD_MS;
+        t.set(holdRef, { uid, items: rentalPicks, expiresAt: new Date(expiresAtMs), createdAt: new Date(nowMs), sessionId: null });
+        return { expiresAtMs, existingSessionId: null, isNew: true, previousSessionId: mine?.sessionId || null };
+      });
+      holdIsNew = hold.isNew;
+      previousSessionId = hold.previousSessionId;
+      if (hold.existingSessionId) {
+        try {
+          const existing = await stripe.checkout.sessions.retrieve(hold.existingSessionId);
+          if (existing.status === "open" && existing.url) return { url: existing.url };
+          if (existing.status === "complete") {
+            // Paid — the webhook is just a moment behind. Keep the hold so the
+            // stock stays counted until the booking lands.
+            throw new HttpsError("already-exists", "You're already booked — it can take a moment to show up.");
+          }
+        } catch (err) {
+          if (err instanceof HttpsError) throw err;
+          console.warn(`createBookingCheckout: couldn't reuse session ${hold.existingSessionId}:`, err?.message || err);
+        }
+        // Not reusable (paid, expired, or unreadable): start over with a fresh hold.
+        await holdRef.delete().catch(() => {});
+        throw new HttpsError("aborted", "Your checkout timed out — tap again to start a new one.");
+      }
+      sessionParams.expires_at = Math.floor(hold.expiresAtMs / 1000);
+      sessionParams.metadata.rentalHold = "true";
+      // Tied to this hold, so a re-tap with the same picks reuses the same
+      // Stripe request, and new picks never collide with an old one.
+      idempotencyKey = `${idempotencyKey}:rentals:${hold.expiresAtMs}`;
+    }
+
     let session;
     try {
-      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+      try {
+        session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+      } catch (err) {
+        if (err.type !== "StripeIdempotencyError") throw err;
+        console.warn(`createBookingCheckout: idempotency key mismatch for ${uid}/${eventId}, retrying with a fresh key`);
+        session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: `${idempotencyKey}:retry:${Date.now()}` });
+      }
     } catch (err) {
-      if (err.type !== "StripeIdempotencyError") throw err;
-      console.warn(`createBookingCheckout: idempotency key mismatch for ${uid}/${eventId}, retrying with a fresh key`);
-      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: `${idempotencyKey}:retry:${Date.now()}` });
+      if (holdIsNew) await holdRef.delete().catch(() => {});
+      throw err;
+    }
+
+    if (trackedPicks.length > 0) {
+      await holdRef.update({ sessionId: session.id }).catch((err) => console.warn("createBookingCheckout: couldn't record hold session:", err?.message || err));
+      // The player changed their picks: close the old tab's session so it
+      // can't be paid with items no longer held for it.
+      if (previousSessionId && previousSessionId !== session.id) {
+        stripe.checkout.sessions.expire(previousSessionId).catch(() => {});
+      }
     }
 
     return { url: session.url };
@@ -1818,7 +1908,7 @@ export const stripeWebhook = onRequest(
             if (passFeeMeta != null) {
               const expectedTotal =
                 bookedAttendeeCount * Number(entryPriceCents || 0) +
-                parsedRentals.reduce((sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents : 0), 0) +
+                parsedRentals.reduce((sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents * qtyOf(r) : 0), 0) +
                 (passFeeMeta === "true" ? Number(bookingFeeCents || 0) : 0);
               if (expectedTotal !== session.amount_total) {
                 console.error(`stripeWebhook: amount mismatch for session ${session.id} (uid ${uid}, event ${eventId}) — expected ${expectedTotal}, Stripe charged ${session.amount_total}. NO booking created; needs manual review.`);
@@ -1935,6 +2025,8 @@ export const stripeWebhook = onRequest(
                 ...attendeePublicFields(profileData, dependentSnapshots, webhookGuardianPlaying),
               });
               t.update(eventRef, { bookedCount: (eventData?.bookedCount || 0) + bookedAttendeeCount });
+              // Their rental hold becomes real booked stock now — release it.
+              if (session.metadata?.rentalHold === "true") t.delete(eventRef.collection("rentalHolds").doc(uid));
             });
           }
           break;
