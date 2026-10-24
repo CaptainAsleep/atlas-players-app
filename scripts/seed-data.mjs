@@ -3459,6 +3459,22 @@ const fields = [
     lastScraped: "2026-09-11",
   },
   {
+    id: "rush-airsoft",
+    name: "Rush Airsoft Field and RC Tracks",
+    city: "Surry, VA",
+    address: "194 Sandy Hill Ln, Surry, VA 23883",
+    website: "https://rushairsoft.com",
+    facebook: "https://www.facebook.com/RushAirsoft/",
+    youtube: "https://www.youtube.com/@RushAirsoftWarfare",
+    indoorOutdoor: "outdoor",
+    about:
+      "Outdoor airsoft field in Surry County running planned-scenario games (Check Point, Capture the Flag, etc.) with equipment rental and an on-site field store, alongside separate RC car tracks (dirt oval and paperclip layouts) on the same property. Named by United Richmond Airsoft's own site as one of the fields they travel to.",
+    status: "facebook_only",
+    dataSource:
+      "own domain (rushairsoft.com, including a dedicated /location page) found via search but blocked by robots.txt for direct fetch; corroborated by a 2021 field-review article/video from United Richmond Airsoft on popularairsoft.com, a Yelp business listing (title updated June 2025), and YouTube channel @RushAirsoftWarfare",
+    lastScraped: "2026-10-24",
+  },
+  {
     id: "pevs-paintball-airsoft",
     name: "Pev's Paintball & Airsoft Park",
     city: "Aldie, VA",
