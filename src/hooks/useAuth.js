@@ -7,6 +7,7 @@ import {
   onAuthStateChanged,
   reauthenticateWithCredential,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -229,6 +230,31 @@ export function useAuth() {
     return cred.user;
   }
 
+  // "Forgot password?" on the login screen. Signed-out by design. Atlas-
+  // branded via the sendPasswordReset Cloud Function (Resend, link to
+  // airsoftatlas.app/reset-password.html); if the function is unreachable,
+  // falls back to Firebase's own default reset email so the person still
+  // gets a link. Never reveals whether an account exists — resolves the
+  // same way for unknown emails; only a malformed address throws.
+  async function sendPasswordReset(email) {
+    try {
+      await httpsCallable(functions, "sendPasswordReset")({ email, app: "player" });
+    } catch (err) {
+      if (err?.code === "functions/invalid-argument") {
+        const e = new Error(err.message);
+        e.code = "auth/invalid-email";
+        throw e;
+      }
+      console.warn("sendPasswordReset failed, using Firebase's default email:", err?.code || err);
+      try {
+        await sendPasswordResetEmail(auth, email, { url: "https://playerapp.airsoftatlas.app/" });
+      } catch (err2) {
+        if (err2?.code === "auth/user-not-found" || err2?.code === "auth/too-many-requests") return;
+        throw err2;
+      }
+    }
+  }
+
   async function signOut() {
     await firebaseSignOut(auth);
   }
@@ -346,6 +372,7 @@ export function useAuth() {
     authLoading,
     signUp,
     signIn,
+    sendPasswordReset,
     signInWithGoogle,
     signOut,
     updateCallsign,

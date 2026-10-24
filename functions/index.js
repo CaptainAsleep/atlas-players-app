@@ -52,6 +52,7 @@ const organizerWelcomeTemplate = readFileSync(path.join(templatesDir, "organizer
 const ownerClaimVerifyTemplate = readFileSync(path.join(templatesDir, "owner-claim-verify.html"), "utf-8");
 const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim-code.html"), "utf-8");
 const playerVerifyEmailTemplate = readFileSync(path.join(templatesDir, "player-verify-email.html"), "utf-8");
+const passwordResetTemplate = readFileSync(path.join(templatesDir, "password-reset.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
 
@@ -2004,6 +2005,124 @@ export const sendPlayerVerificationEmail = onCall(
     }
 
     return { sent: true, sentTo: email };
+  }
+);
+
+// ===========================================================================
+// Forgot Password (2026-10-24)
+// ===========================================================================
+// Called from the "Forgot password?" link on the player AND owner app login
+// screens — both apps share one Firebase Auth project, so one account, one
+// password. Signed-OUT callable by design (the whole point is the person
+// can't sign in), so it has to be safe to call with any email:
+//  - Never reveals whether an account exists. Unknown email, disabled
+//    account, throttled, or sent — the client gets the same { ok: true } and
+//    shows the same "if an account exists, a link is on its way" message.
+//  - Throttled per email (server-only emailSends doc keyed by a SHA-256 of
+//    the address, never the raw email): one send per minute, at most
+//    PW_RESET_DAILY_CAP per rolling 24h, so it can't be used to flood
+//    someone's inbox. Cooldown released if the send fails.
+//  - Only ever emails the address on the matched Auth account.
+// The link goes to Atlas's own page (airsoftatlas.app/reset-password.html)
+// rather than Firebase's default handler: we take the oobCode out of
+// generatePasswordResetLink's URL and build our own link, so this doesn't
+// depend on the Firebase Console "custom action URL" setting at all.
+// Google-only accounts get the same link (it adds a password to the
+// account, which is what an owner-app user with a Google-made account
+// needs anyway — the owner app has no Google button) plus a line saying
+// "Continue with Google" still works.
+const PW_RESET_COOLDOWN_MS = 60 * 1000;
+const PW_RESET_WINDOW_MS = 24 * 60 * 60 * 1000;
+const PW_RESET_DAILY_CAP = 5;
+const PW_RESET_PAGE = "https://airsoftatlas.app/reset-password.html";
+const PW_RESET_CONTINUE = {
+  player: "https://playerapp.airsoftatlas.app/",
+  owner: "https://ownerapp.airsoftatlas.app/",
+};
+
+export const sendPasswordReset = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    const email = String(request.data?.email || "").trim().toLowerCase();
+    const app = request.data?.app === "owner" ? "owner" : "player";
+    if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "That doesn't look like a valid email address.");
+    }
+    const generic = { ok: true };
+
+    let authUser;
+    try {
+      authUser = await getAuth().getUserByEmail(email);
+    } catch (err) {
+      if (err?.code === "auth/user-not-found") return generic;
+      console.error("sendPasswordReset: getUserByEmail failed:", err);
+      throw new HttpsError("unavailable", "Couldn't send the reset email — try again in a moment.");
+    }
+    if (authUser.disabled) return generic;
+    const toEmail = String(authUser.email || email).trim();
+
+    const db = getFirestore();
+    const emailHash = createHash("sha256").update(email).digest("hex");
+    const sendRef = db.collection("emailSends").doc(`pwReset_${emailHash}`);
+    const now = Date.now();
+    const allowed = await db.runTransaction(async (t) => {
+      const s = (await t.get(sendRef)).data() || {};
+      if (typeof s.sentAtMs === "number" && now - s.sentAtMs < PW_RESET_COOLDOWN_MS) return false;
+      const windowStart = typeof s.windowStartMs === "number" && now - s.windowStartMs < PW_RESET_WINDOW_MS ? s.windowStartMs : now;
+      const windowCount = windowStart === s.windowStartMs ? (s.windowCount || 0) : 0;
+      if (windowCount >= PW_RESET_DAILY_CAP) return false;
+      t.set(sendRef, { uid: authUser.uid, sentAtMs: now, windowStartMs: windowStart, windowCount: windowCount + 1, sendCount: FieldValue.increment(1) }, { merge: true });
+      return true;
+    });
+    if (!allowed) return generic;
+    const releaseCooldown = () =>
+      sendRef.update({ sentAtMs: FieldValue.delete(), windowCount: FieldValue.increment(-1) }).catch(() => {});
+
+    let resetLink;
+    try {
+      const firebaseLink = await getAuth().generatePasswordResetLink(toEmail, { url: PW_RESET_CONTINUE[app] });
+      const oobCode = new URL(firebaseLink).searchParams.get("oobCode");
+      if (!oobCode) throw new Error("no oobCode in generated link");
+      const u = new URL(PW_RESET_PAGE);
+      u.searchParams.set("mode", "resetPassword");
+      u.searchParams.set("oobCode", oobCode);
+      u.searchParams.set("continueUrl", PW_RESET_CONTINUE[app]);
+      resetLink = u.toString();
+    } catch (err) {
+      console.error(`sendPasswordReset: couldn't generate link for ${authUser.uid}:`, err);
+      await releaseCooldown();
+      throw new HttpsError("unavailable", "Couldn't send the reset email — try again in a moment.");
+    }
+
+    const providers = (authUser.providerData || []).map((p) => p.providerId);
+    const googleOnly = providers.includes("google.com") && !providers.includes("password");
+    const profileSnap = await db.collection(app === "owner" ? "owners" : "users").doc(authUser.uid).get().catch(() => null);
+    const profile = profileSnap?.exists ? profileSnap.data() : {};
+    const name = (app === "owner" ? profile.name : profile.callsign) || authUser.displayName || toEmail.split("@")[0];
+    const html = fillTemplate(passwordResetTemplate, {
+      "[RESET_LINK]": escapeHtml(resetLink),
+      "[NAME]": escapeHtml(name),
+      "[APP_LABEL]": app === "owner" ? "Atlas for Hosts" : "Atlas",
+      "[GOOGLE_NOTE]": googleOnly
+        ? `<p style="margin:16px 0 0; font-size:15px; line-height:1.65; color:#2A2E33;">Heads up: this account was created with Google. You can keep using <strong>Continue with Google</strong> in the player app &mdash; this link just adds a password too, so you can also sign in with your email.</p>`
+        : "",
+    });
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: ATLAS_EMAIL_FROM,
+        to: toEmail,
+        subject: "Reset your Atlas password",
+        html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+    } catch (err) {
+      console.error(`sendPasswordReset: Resend failed for ${authUser.uid}:`, err);
+      await releaseCooldown();
+      throw new HttpsError("unavailable", "Couldn't send the reset email — try again in a moment.");
+    }
+    return generic;
   }
 );
 

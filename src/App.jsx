@@ -449,14 +449,17 @@ function BottomNav({ active, onNavigate }) {
 }
 
 /* ---------- screens ---------- */
-function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
+function LoginScreen({ signIn, signUp, signInWithGoogle, sendPasswordReset, referralCode }) {
   const { T, display, body, mono } = useTheme();
-  const [mode, setMode] = useState("signin"); // "signin" | "signup"
+  const [mode, setMode] = useState("signin"); // "signin" | "signup" | "reset"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [callsign, setCallsign] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Forgot-password: the address a reset link was just requested for (shows
+  // the "check your email" panel instead of the form).
+  const [resetSentTo, setResetSentTo] = useState("");
 
   const friendlyError = (code) => {
     if (code === "auth/email-already-in-use") return "That email already has an account — try signing in instead.";
@@ -470,6 +473,22 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    if (mode === "reset") {
+      const addr = email.trim();
+      if (!addr) { setError("Enter the email you use for Atlas."); return; }
+      setBusy(true);
+      try {
+        // Same message whether or not an account exists — the server never
+        // says, so nobody can use this to check who's on Atlas.
+        await sendPasswordReset(addr);
+        setResetSentTo(addr);
+      } catch (err) {
+        setError(friendlyError(err.code));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -512,12 +531,30 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
       </div>
 
       <h1 className="text-[23px] font-semibold mb-2" style={{ ...display, color: T.ash, letterSpacing: "-0.01em" }}>
-        {mode === "signup" ? "Create your account" : "Welcome back"}
+        {mode === "signup" ? "Create your account" : mode === "reset" ? "Reset your password" : "Welcome back"}
       </h1>
       <p className="text-[14px] leading-relaxed mb-6" style={{ ...body, color: T.ashDim }}>
-        Discover local fields, RSVP to upcoming rec games or milsim events, and track your gameplay roster profile.
+        {mode === "reset"
+          ? "Enter the email you use for Atlas and we'll send you a link to choose a new password."
+          : "Discover local fields, RSVP to upcoming rec games or milsim events, and track your gameplay roster profile."}
       </p>
 
+      {mode === "reset" && resetSentTo ? (
+        <div className="p-4 flex flex-col gap-2" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 8 }}>
+          <p className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>Check your email</p>
+          <p className="text-[13px] leading-relaxed" style={{ ...body, color: T.ashDim }}>
+            If an Atlas account exists for <span style={{ color: T.ash, fontWeight: 600 }}>{resetSentTo}</span>, a link to reset your password is on its way. It expires in one hour. Check your spam folder if it doesn't show up in a minute or two.
+          </p>
+          <button
+            type="button"
+            onClick={() => setResetSentTo("")}
+            className="self-start text-[12px] font-medium mt-1"
+            style={{ ...body, color: T.accent }}
+          >
+            Didn't get it? Send again
+          </button>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
         {mode === "signup" && (
           <input
@@ -537,15 +574,27 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
           className="px-4 py-3.5 text-[15px] bg-transparent outline-none"
           style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
         />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          type="password"
-          autoComplete={mode === "signup" ? "new-password" : "current-password"}
-          placeholder="Password"
-          className="px-4 py-3.5 text-[15px] bg-transparent outline-none"
-          style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-        />
+        {mode !== "reset" && (
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            placeholder="Password"
+            className="px-4 py-3.5 text-[15px] bg-transparent outline-none"
+            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+          />
+        )}
+        {mode === "signin" && (
+          <button
+            type="button"
+            onClick={() => { setMode("reset"); setError(""); setResetSentTo(""); }}
+            className="self-end text-[12px] font-medium"
+            style={{ ...body, color: T.accent }}
+          >
+            Forgot password?
+          </button>
+        )}
 
         {error && (
           <p className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</p>
@@ -557,18 +606,20 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
           className="w-full py-3.5 font-semibold text-[14px] flex items-center justify-center gap-2 mt-2 transition-transform duration-100 active:scale-[0.98]"
           style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: busy ? 0.6 : 1 }}
         >
-          {busy ? "Please wait…" : mode === "signup" ? "Create Account" : "Sign In"} <ArrowRight size={16} />
+          {busy ? "Please wait…" : mode === "signup" ? "Create Account" : mode === "reset" ? "Send Reset Link" : "Sign In"} <ArrowRight size={16} />
         </button>
       </form>
+      )}
 
       <button
-        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(""); }}
+        onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); setResetSentTo(""); }}
         className="text-center text-[13px] font-medium mt-4"
         style={{ ...body, color: T.accent }}
       >
-        {mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
+        {mode === "reset" ? "Back to sign in" : mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
       </button>
 
+      {mode !== "reset" && (<>
       <div className="flex items-center gap-3 my-5">
         <div className="flex-1 h-px" style={{ background: T.line }} />
         <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>or</span>
@@ -596,6 +647,7 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, referralCode }) {
           </button>
         ))}
       </div>
+      </>)}
     </div>
   );
 }
@@ -7905,7 +7957,7 @@ function AppShell() {
   const { fields, loading: fieldsLoading } = useFields();
   const claimedFieldIds = useMemo(() => new Set(fields.filter((f) => f.ownerId).map((f) => f.id)), [fields]);
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signInWithGoogle, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signInWithGoogle, sendPasswordReset, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { dependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
@@ -8184,7 +8236,7 @@ function AppShell() {
   } else if (authLoading) {
     content = <LoadingScreen />;
   } else if (!user) {
-    content = <LoginScreen signIn={signIn} signUp={signUp} signInWithGoogle={signInWithGoogle} referralCode={referralCode} />;
+    content = <LoginScreen signIn={signIn} signUp={signUp} signInWithGoogle={signInWithGoogle} sendPasswordReset={sendPasswordReset} referralCode={referralCode} />;
   } else if (!profile) {
     content = <LoadingScreen />;
   } else if (profile.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
