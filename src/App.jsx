@@ -434,7 +434,7 @@ function BottomNav({ active, onNavigate }) {
           const isActive = active === t.key;
           return (
             <button key={t.key} onClick={() => onNavigate(t.key)} className="flex flex-col items-center gap-1 flex-1 transition-transform duration-100 active:scale-90">
-              <div className="flex items-center justify-center" style={{ width: 38, height: 26, borderRadius: T.rPill, background: isActive ? "rgba(0,44,72,0.08)" : "transparent" }}>
+              <div className="flex items-center justify-center" style={{ width: 38, height: 26, borderRadius: T.rPill, background: isActive ? T.navActive : "transparent" }}>
                 <Icon size={18} strokeWidth={isActive ? 2.1 : 1.6} color={isActive ? T.ash : T.ashFaint} />
               </div>
               <span className="text-[9px] font-medium" style={{ ...body, color: isActive ? T.ash : T.ashFaint }}>
@@ -1679,7 +1679,7 @@ function HomeScreen({
                   // box (same fix as the owner app's event editor). That
                   // native appearance also enforces a touch-friendly
                   // minimum height, so an explicit height compensates.
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: theme === "dark" ? "dark" : "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
                 />
               </div>
               <div>
@@ -1689,7 +1689,7 @@ function HomeScreen({
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: theme === "dark" ? "dark" : "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
                 />
               </div>
             </div>
@@ -1854,7 +1854,7 @@ function HomeScreen({
             value={selectedState || ""}
             onChange={(e) => setSelectedState(e.target.value)}
             className="text-[12px] font-medium px-2 py-1 outline-none"
-            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: "light" }}
+            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: theme === "dark" ? "dark" : "light" }}
           >
             {!selectedState && <option value="">Detecting…</option>}
             {Object.values(US_STATES)
@@ -2363,14 +2363,14 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </svg>
           )}
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
-            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
             <div className="flex gap-2">
-              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
               </button>
-              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 {shareState === "copied" ? <Check size={17} color={T.good} /> : <Share2 size={16} color={T.ash} />}
               </button>
             </div>
@@ -3121,14 +3121,14 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
-            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
               <ChevronLeft color={T.ash} size={19} />
             </button>
             <div className="flex gap-2">
-              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+              <button onClick={onToggleFavorite} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 <Heart size={17} color={favorited ? T.alert : T.ash} fill={favorited ? T.alert : "none"} />
               </button>
-              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: "rgba(255,255,255,0.92)", borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+              <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center transition-transform duration-100 active:scale-90" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
                 {shareState === "copied" ? <Check size={17} color={T.good} /> : <Share2 size={16} color={T.ash} />}
               </button>
             </div>
@@ -7389,7 +7389,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
                   </div>
                 )}
                 {avatarUploading && (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.7)", borderRadius: 999 }}>
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: T.scrim, borderRadius: 999 }}>
                     <span className="text-[10px]" style={{ ...body, color: T.ashDim }}>Uploading…</span>
                   </div>
                 )}
@@ -7666,7 +7666,7 @@ function WelcomeSplashScreen({ onContinue }) {
   return (
     <div
       className="fixed inset-0 flex flex-col items-center justify-center px-8"
-      style={{ background: "rgba(0,44,72,0.97)", zIndex: 3000, animation: "patchOverlayIn 0.3s ease-out" }}
+      style={{ background: T.overlayFill, zIndex: 3000, animation: "patchOverlayIn 0.3s ease-out" }}
     >
       <style>{PATCH_UNLOCK_KEYFRAMES}</style>
 
@@ -7688,7 +7688,7 @@ function WelcomeSplashScreen({ onContinue }) {
       <button
         onClick={onContinue}
         className="px-9 py-3.5 font-semibold text-[14px] transition-transform duration-100 active:scale-95"
-        style={{ ...display, background: "#FFFFFF", color: T.ash, borderRadius: 999 }}
+        style={{ ...display, background: T.overlayBtnFill, color: T.overlayBtnText, borderRadius: 999 }}
       >
         Let's get started
       </button>
@@ -7838,7 +7838,7 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
   return (
     <div
       className="fixed inset-0 flex flex-col items-center justify-center px-8"
-      style={{ background: "rgba(0,44,72,0.97)", zIndex: 3000, animation: "patchOverlayIn 0.3s ease-out" }}
+      style={{ background: T.overlayFill, zIndex: 3000, animation: "patchOverlayIn 0.3s ease-out" }}
     >
       <style>{PATCH_UNLOCK_KEYFRAMES}</style>
 
@@ -7869,7 +7869,7 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
         onClick={handleNext}
         disabled={advancing}
         className="px-9 py-3.5 font-semibold text-[14px] transition-transform duration-100 active:scale-95"
-        style={{ ...display, background: "#FFFFFF", color: T.ash, borderRadius: 999, opacity: advancing ? 0.7 : 1 }}
+        style={{ ...display, background: T.overlayBtnFill, color: T.overlayBtnText, borderRadius: 999, opacity: advancing ? 0.7 : 1 }}
       >
         {advancing ? "…" : isLast ? "Awesome!" : "Next →"}
       </button>

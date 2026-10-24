@@ -28,6 +28,15 @@ export function ThemeProvider({ children }) {
     // Keep the PWA's OS status-bar tint in sync with the active theme.
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", theme === "dark" ? "#0A0C0F" : "#F2F2ED");
+    // index.css hardcodes the light page color on html/body; anything not
+    // covered by a screen (iOS overscroll bounce, safe-area edges, the gap
+    // during a screen transition) flashed light in dark mode. color-scheme
+    // makes native controls (date pickers, selects, scrollbars, autofill)
+    // render dark too.
+    const bg = theme === "dark" ? "#0A0C0F" : "#F2F2ED";
+    document.documentElement.style.backgroundColor = bg;
+    document.body.style.backgroundColor = bg;
+    document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "light";
   }, [theme]);
 
   const value = useMemo(() => {

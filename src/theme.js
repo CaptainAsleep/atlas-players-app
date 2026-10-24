@@ -57,6 +57,19 @@ export const LIGHT_T = {
   // Soft tint washes for icon badges
   tint: "#EEF2F8",
   tintGood: "#EAF5EF",
+
+  // Dark-mode fix pass, 2026-10-24. Surfaces that used to be hardcoded
+  // light values while their text/icons used ash (which flips to
+  // off-white in dark) — white-on-white in Night Ops. Light values below
+  // are exactly the old hardcoded ones, so light mode is unchanged.
+  onImageFill: "rgba(255,255,255,0.92)", // round back/favorite/share buttons over hero photos
+  onImageBorder: "none",
+  onImageBlur: "none",
+  overlayFill: "rgba(0,44,72,0.97)", // full-screen celebration overlays (Welcome, Patch Unlocked)
+  overlayBtnFill: "#FFFFFF", // the single action button on those overlays
+  overlayBtnText: "#002C48",
+  scrim: "rgba(255,255,255,0.7)", // "Uploading…" wash over an avatar
+  navActive: "rgba(0,44,72,0.08)", // active-tab pill in the bottom nav
 };
 
 export const DARK_T = {
@@ -96,6 +109,15 @@ export const DARK_T = {
 
   tint: "rgba(182,255,61,0.14)",
   tintGood: "rgba(47,191,113,0.16)",
+
+  onImageFill: "rgba(10,12,15,0.62)", // dark glass chip — reads on bright AND dark photos
+  onImageBorder: "1px solid rgba(255,255,255,0.18)",
+  onImageBlur: "blur(12px)",
+  overlayFill: "rgba(10,12,15,0.97)",
+  overlayBtnFill: "#B6FF3D", // = cta
+  overlayBtnText: "#0A0C0F", // = inverse
+  scrim: "rgba(10,12,15,0.7)",
+  navActive: "rgba(255,255,255,0.10)",
 };
 
 export const LIGHT_FONTS = {
