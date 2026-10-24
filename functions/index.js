@@ -54,6 +54,7 @@ const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim
 const playerVerifyEmailTemplate = readFileSync(path.join(templatesDir, "player-verify-email.html"), "utf-8");
 const passwordResetTemplate = readFileSync(path.join(templatesDir, "password-reset.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
+import { GIFT_MONTHLY_CAP, monthStartUtc, capResetLabel, parseExpiresAtMs, cleanGiftNote, callsignVariants, restoredFreeEntryExpiry } from "./voucherGift.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
 
 // Plain [token] -> value substitution, same style already proven in
@@ -1080,9 +1081,26 @@ export const cancelEventWithVouchers = onCall(
     // stays comfortably under Firestore's 500-writes-per-batch cap even
     // for an all-paid roster. The event's own canceled flag rides along
     // in the first chunk (or its own chunk, if there are zero bookings).
-    const CHUNK_SIZE = 100;
+    // 80 (was 100): a voucher-paid free-entry booking can now touch 5 docs
+    // (voucher, both booking stamps, notice, gift ledger) — 80 x 5 = 400,
+    // still under the 500-writes-per-batch cap.
+    const CHUNK_SIZE = 80;
     let vouchersIssued = 0;
     const docs = bookingsSnap.docs;
+    // Bookings that were themselves paid WITH a voucher (no amountPaidCents)
+    // used to get nothing back here — the player's credit just vanished.
+    // Fixed 2026-10-24: read the voucher each one used, so it can be
+    // restored below (a free entry comes back as a free entry, a dollar
+    // voucher as the amount that was applied).
+    const usedVoucherSnaps = new Map();
+    const voucherPaid = docs.filter((d) => {
+      const b = d.data();
+      return !(b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0) && b.paidByVoucher === true && b.voucherRedeemedId;
+    });
+    if (voucherPaid.length > 0) {
+      const snaps = await db.getAll(...voucherPaid.map((d) => db.collection("users").doc(d.id).collection("vouchers").doc(d.data().voucherRedeemedId)));
+      voucherPaid.forEach((d, i) => usedVoucherSnaps.set(d.id, snaps[i]));
+    }
     for (let i = 0; i === 0 || i < docs.length; i += CHUNK_SIZE) {
       const batch = db.batch();
       if (i === 0) {
@@ -1097,6 +1115,7 @@ export const cancelEventWithVouchers = onCall(
 
         let voucherId = null;
         let voucherAmountCents = null;
+        let voucherKind = null;
         if (b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0) {
           const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
           voucherId = voucherRef.id;
@@ -1126,6 +1145,64 @@ export const cancelEventWithVouchers = onCall(
           batch.update(bookingDoc.ref, { voucherIssuedId: voucherId });
           batch.update(userBookingRef, { voucherIssuedId: voucherId });
           vouchersIssued += 1;
+        } else if (b.paidByVoucher === true && b.voucherRedeemedId) {
+          const used = usedVoucherSnaps.get(playerUid);
+          const usedData = used?.exists ? used.data() : {};
+          const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
+          voucherId = voucherRef.id;
+          if (b.freeEntry === true || usedData.kind === "freeEntry") {
+            voucherKind = "freeEntry";
+            batch.set(voucherRef, {
+              kind: "freeEntry",
+              fieldId: usedData.fieldId ?? eventData.fieldId ?? null,
+              fieldName: usedData.fieldName || eventData.fieldName || fieldData.name || null,
+              amountCents: 0,
+              originalAmountCents: 0,
+              status: "active",
+              sourceEventId: eventId,
+              sourceEventTitle: eventData.title || null,
+              issuedAt: now,
+              expiresAt: restoredFreeEntryExpiry(usedData.expiresAt?.toDate ? usedData.expiresAt.toDate() : null, now),
+              grantedManually: true,
+              restoredFromVoucherId: b.voucherRedeemedId,
+              ...(usedData.giftedByOwnerId ? { giftedByOwnerId: usedData.giftedByOwnerId } : {}),
+              ...(usedData.giftLedgerId ? { giftLedgerId: usedData.giftLedgerId } : {}),
+              note: usedData.note || null,
+              redeemedAt: null,
+              redeemedEventId: null,
+              redeemedEventTitle: null,
+            });
+            // Ledger goes back to "not used yet" — same gift, not a new one,
+            // so it doesn't count against this month's cap.
+            if (usedData.giftLedgerId && usedData.fieldId) {
+              batch.set(
+                db.collection("fields").doc(usedData.fieldId).collection("voucherGifts").doc(usedData.giftLedgerId),
+                { redeemedAt: null, redeemedEventId: null, redeemedEventTitle: null },
+                { merge: true }
+              );
+            }
+          } else {
+            voucherAmountCents = typeof b.voucherAppliedCents === "number" ? b.voucherAppliedCents : 0;
+            batch.set(voucherRef, {
+              fieldId: eventData.fieldId ?? null,
+              ...(isMajor ? { hostOwnerId: ownerId } : {}),
+              fieldName: eventData.fieldName || fieldData.name || null,
+              amountCents: voucherAmountCents,
+              originalAmountCents: voucherAmountCents,
+              status: "active",
+              sourceEventId: eventId,
+              sourceEventTitle: eventData.title || null,
+              issuedAt: now,
+              expiresAt,
+              restoredFromVoucherId: b.voucherRedeemedId,
+              redeemedAt: null,
+              redeemedEventId: null,
+              redeemedEventTitle: null,
+            });
+          }
+          batch.update(bookingDoc.ref, { voucherIssuedId: voucherId });
+          batch.update(userBookingRef, { voucherIssuedId: voucherId });
+          vouchersIssued += 1;
         }
 
         batch.set(noticeRef, {
@@ -1137,6 +1214,7 @@ export const cancelEventWithVouchers = onCall(
           fieldName: eventData.fieldName || fieldData.name || null,
           voucherId,
           voucherAmountCents,
+          ...(voucherKind ? { voucherKind } : {}),
           createdAt: now,
           acknowledged: false,
         });
@@ -1201,6 +1279,14 @@ export const grantVoucherToPlayer = onCall(
     const expirationDays = Number.isInteger(savedExpirationDays) && savedExpirationDays >= 1 && savedExpirationDays <= 3650
       ? savedExpirationDays
       : 365;
+    // Owner-picked date from the Roster modal (2026-10-24). Optional, so an
+    // older owner-app build that doesn't send it keeps the saved-days default.
+    let pickedExpiresAt = null;
+    try {
+      pickedExpiresAt = parseExpiresAtMs(request.data?.expiresAtMs, Date.now());
+    } catch (err) {
+      throw new HttpsError("invalid-argument", err.message);
+    }
 
     const bookingRef = eventRef.collection("bookings").doc(playerUid);
     const userBookingRef = db.collection("users").doc(playerUid).collection("bookings").doc(eventId);
@@ -1231,7 +1317,7 @@ export const grantVoucherToPlayer = onCall(
       voucherAmountCents = resolveVoucherAmountCents(b, passFeeToPlayer);
 
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + expirationDays * 86400000);
+      const expiresAt = pickedExpiresAt || new Date(now.getTime() + expirationDays * 86400000);
 
       // Frees the spot exactly like the player's own cancelBooking does
       // (useBookings.js), just performed on their behalf with the Admin
@@ -1277,6 +1363,184 @@ export const grantVoucherToPlayer = onCall(
     });
 
     return { granted: true, voucherId: voucherRef.id, amountCents: voucherAmountCents };
+  }
+);
+
+// ===========================================================================
+// Gifted "free entry" vouchers (2026-10-24)
+// ===========================================================================
+// A field owner can give any Atlas player one free entry to any one event at
+// their field (any price tier, one person), with an expiration date the owner
+// picks. Unlike every other voucher, nobody paid for it, so Atlas collects no
+// fee on redemption. The monthly cap (GIFT_MONTHLY_CAP per field per UTC
+// calendar month) keeps that small, and it's counted server-side against a
+// ledger owners can read but never write (fields/{fieldId}/voucherGifts),
+// so it can't be reset from the owner app.
+// Voucher doc: same users/{uid}/vouchers collection, kind: "freeEntry",
+// amountCents: 0 (keeps every existing amount-based display/sort path
+// safe). Vouchers with no `kind` are the original dollar vouchers.
+
+async function assertOwnsClaimedField(db, fieldId, uid) {
+  if (!fieldId || typeof fieldId !== "string") {
+    throw new HttpsError("invalid-argument", "Missing fieldId.");
+  }
+  const fieldSnap = await db.collection("fields").doc(fieldId).get();
+  if (!fieldSnap.exists) throw new HttpsError("not-found", "Field not found.");
+  const field = fieldSnap.data();
+  if (!field.ownerId || field.ownerId !== uid) {
+    throw new HttpsError("permission-denied", "You don't own this field.");
+  }
+  return field;
+}
+
+// Owner-side player lookup for the gift modal. Exact email (contains "@") or
+// callsign prefix. Returns public-profile fields only, never an email.
+export const searchPlayersForGift = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const ownerUid = request.auth.uid;
+    const db = getFirestore();
+    await assertOwnsClaimedField(db, request.data?.fieldId, ownerUid);
+    const q = String(request.data?.query || "").trim();
+    if (q.length < 2) return { results: [] };
+
+    const uids = new Set();
+    if (q.includes("@")) {
+      try {
+        const u = await getAuth().getUserByEmail(q.toLowerCase());
+        uids.add(u.uid);
+      } catch (err) {
+        if (err?.code !== "auth/user-not-found" && err?.code !== "auth/invalid-email") {
+          console.error("searchPlayersForGift: getUserByEmail failed:", err);
+        }
+      }
+    } else {
+      const snaps = await Promise.all(
+        callsignVariants(q.slice(0, 40)).map((v) =>
+          db.collection("publicProfiles").where("callsign", ">=", v).where("callsign", "<", v + "").limit(10).get()
+        )
+      );
+      for (const s of snaps) s.docs.forEach((d) => uids.add(d.id));
+    }
+    uids.delete(ownerUid); // an owner can't gift themselves
+
+    const ids = [...uids].slice(0, 10);
+    if (ids.length === 0) return { results: [] };
+    // Must be a real player account (users doc), not just an Auth user from
+    // the owner app.
+    const [userSnaps, profileSnaps] = await Promise.all([
+      db.getAll(...ids.map((id) => db.collection("users").doc(id))),
+      db.getAll(...ids.map((id) => db.collection("publicProfiles").doc(id))),
+    ]);
+    const results = [];
+    ids.forEach((id, i) => {
+      if (!userSnaps[i].exists) return;
+      const p = profileSnaps[i].exists ? profileSnaps[i].data() : {};
+      results.push({
+        uid: id,
+        callsign: p.callsign || userSnaps[i].data().callsign || "Player",
+        avatarUrl: p.avatarUrl || null,
+        teamName: p.teamName || null,
+      });
+    });
+    results.sort((a, b) => a.callsign.localeCompare(b.callsign));
+    return { results };
+  }
+);
+
+export const giftFreeEntryVoucher = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const ownerUid = request.auth.uid;
+    const fieldId = request.data?.fieldId;
+    const playerUid = request.data?.uid;
+    if (!playerUid || typeof playerUid !== "string") {
+      throw new HttpsError("invalid-argument", "Pick a player to gift.");
+    }
+    if (playerUid === ownerUid) {
+      throw new HttpsError("failed-precondition", "You can't gift a free entry to yourself.");
+    }
+    const db = getFirestore();
+    const field = await assertOwnsClaimedField(db, fieldId, ownerUid);
+
+    const nowMs = Date.now();
+    let expiresAt;
+    try {
+      expiresAt = parseExpiresAtMs(request.data?.expiresAtMs, nowMs);
+    } catch (err) {
+      throw new HttpsError("invalid-argument", err.message);
+    }
+    if (!expiresAt) throw new HttpsError("invalid-argument", "Pick an expiration date.");
+    const note = cleanGiftNote(request.data?.note);
+
+    const playerSnap = await db.collection("users").doc(playerUid).get();
+    if (!playerSnap.exists) throw new HttpsError("not-found", "That player doesn't have an Atlas account.");
+    const callsign = playerSnap.data().callsign || "Player";
+
+    const now = new Date(nowMs);
+    const ledgerCol = db.collection("fields").doc(fieldId).collection("voucherGifts");
+    const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
+    const ledgerRef = ledgerCol.doc(voucherRef.id);
+    const noticeRef = db.collection("users").doc(playerUid).collection("cancellationNotices").doc();
+    let usedThisMonth = 0;
+
+    await db.runTransaction(async (t) => {
+      const monthSnap = await t.get(ledgerCol.where("giftedAt", ">=", monthStartUtc(now)));
+      usedThisMonth = monthSnap.size;
+      if (usedThisMonth >= GIFT_MONTHLY_CAP) {
+        throw new HttpsError(
+          "resource-exhausted",
+          `You've given ${GIFT_MONTHLY_CAP} free entries this month — that's the monthly limit. It resets ${capResetLabel(now)}.`
+        );
+      }
+      t.set(voucherRef, {
+        kind: "freeEntry",
+        fieldId,
+        fieldName: field.name || null,
+        amountCents: 0,
+        originalAmountCents: 0,
+        status: "active",
+        sourceEventId: null,
+        sourceEventTitle: null,
+        issuedAt: now,
+        expiresAt,
+        grantedManually: true,
+        giftedByOwnerId: ownerUid,
+        giftLedgerId: voucherRef.id,
+        note,
+        redeemedAt: null,
+        redeemedEventId: null,
+        redeemedEventTitle: null,
+      });
+      t.set(ledgerRef, {
+        uid: playerUid,
+        callsign,
+        voucherId: voucherRef.id,
+        giftedAt: now,
+        giftedByOwnerId: ownerUid,
+        expiresAt,
+        note,
+        redeemedAt: null,
+        redeemedEventId: null,
+        redeemedEventTitle: null,
+      });
+      t.set(noticeRef, {
+        type: "voucher_gifted",
+        fieldId,
+        fieldName: field.name || null,
+        voucherId: voucherRef.id,
+        voucherKind: "freeEntry",
+        voucherAmountCents: null,
+        expiresAt,
+        note,
+        createdAt: now,
+        acknowledged: false,
+      });
+    });
+
+    return { gifted: true, voucherId: voucherRef.id, remainingThisMonth: GIFT_MONTHLY_CAP - usedThisMonth - 1 };
   }
 );
 
@@ -1396,7 +1660,13 @@ export const bookEventWithVoucher = onCall(
       }
       // Hard cap on a capped team/role choice (a read — before the writes).
       await assertSelectionCapacity(eventRef, freshEventData, resolved, attendeeCount, t);
-      if (voucher.amountCents < neededCents) {
+      // Gifted free entry (2026-10-24): one person, any price tier. It has
+      // no dollar balance, so it skips the amount check and is used up.
+      const isFreeEntry = voucher.kind === "freeEntry";
+      if (isFreeEntry && attendeeCount !== 1) {
+        throw new HttpsError("failed-precondition", "A free entry covers one person — book just one attendee to use it.");
+      }
+      if (!isFreeEntry && voucher.amountCents < neededCents) {
         throw new HttpsError(
           "failed-precondition",
           `This voucher ($${(voucher.amountCents / 100).toFixed(2)}) doesn't cover ${attendeeCount > 1 ? `${attendeeCount} tickets` : "this event's ticket price"} ($${(neededCents / 100).toFixed(2)}) — book with a card instead.`
@@ -1407,7 +1677,7 @@ export const bookEventWithVoucher = onCall(
       const checkInCode = await reserveBookingCode(t, db, eventId);
       const now = new Date();
       writeBookingCode(t, db, { code: checkInCode, eventId, uid, fieldId: eventData.fieldId ?? null, hostOwnerId: eventData.hostOwnerId || null, now });
-      const remainingCents = voucher.amountCents - neededCents;
+      const remainingCents = isFreeEntry ? 0 : voucher.amountCents - neededCents;
       t.set(bookingRef, {
         uid,
         fieldId: eventData.fieldId ?? null,
@@ -1420,6 +1690,7 @@ export const bookEventWithVoucher = onCall(
         paidByVoucher: true,
         voucherRedeemedId: voucherId,
         voucherAppliedCents: neededCents,
+        ...(isFreeEntry ? { freeEntry: true } : {}),
         ...choiceFields,
         ...attendeePublicFields(profileData, attendees.dependents, attendees.guardianPlaying),
       });
@@ -1436,6 +1707,7 @@ export const bookEventWithVoucher = onCall(
         paid: true,
         paidByVoucher: true,
         voucherRedeemedId: voucherId,
+        ...(isFreeEntry ? { freeEntry: true } : {}),
         selectedChoiceLabel: selectedChoice?.label || null,
         ...attendeePublicFields(profileData, attendees.dependents, attendees.guardianPlaying),
       });
@@ -1447,6 +1719,14 @@ export const bookEventWithVoucher = onCall(
         redeemedEventId: eventId,
         redeemedEventTitle: eventData.title || null,
       });
+      // Owner's gift ledger shows it as used.
+      if (isFreeEntry && voucher.giftLedgerId && voucher.fieldId) {
+        t.set(
+          db.collection("fields").doc(voucher.fieldId).collection("voucherGifts").doc(voucher.giftLedgerId),
+          { redeemedAt: now, redeemedEventId: eventId, redeemedEventTitle: eventData.title || null },
+          { merge: true }
+        );
+      }
     });
 
     return { booked: true };

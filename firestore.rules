@@ -111,6 +111,17 @@ service cloud.firestore {
       // read/write their own field's doc here; isAdmin() gets read (to
       // actually ship the package) and write (so Michael can fix a typo
       // without having to ask the owner to redo it).
+      // Gifted free-entry ledger (2026-10-24) — giftFreeEntryVoucher counts
+      // this for the monthly cap, so owners can read it but never write it
+      // (deleting entries would reset the cap). Cloud Functions only.
+      match /voucherGifts/{giftId} {
+        allow read: if request.auth != null && (
+          get(/databases/$(database)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid
+          || isAdmin()
+        );
+        allow write: if false;
+      }
+
       match /private/{docId} {
         allow read: if request.auth != null && (
           get(/databases/$(database)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid

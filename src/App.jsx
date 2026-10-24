@@ -2120,10 +2120,21 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     setSelectedDependentIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : (guardianPlaying ? 1 : 0) + prev.length < MAX_ATTENDEES_PER_BOOKING ? [...prev, id] : prev
     );
-  const bestFieldVoucher = fieldVouchers && fieldVouchers.length > 0
-    ? [...fieldVouchers].sort((a, b) => b.amountCents - a.amountCents)[0]
-    : null;
-  const voucherCoversCost = !!bestFieldVoucher && entryPriceCents > 0 && bestFieldVoucher.amountCents >= entryPriceCents * attendeeCount;
+  // 2026-10-24: vouchers come in two kinds now — dollar balances (no
+  // `kind`) and gifted free entries (kind "freeEntry": one person, any
+  // price). Of the ones that cover this booking, use the one expiring
+  // soonest; if none covers, show the biggest one with a "why not" note.
+  const voucherCovers = (v) =>
+    v.kind === "freeEntry"
+      ? attendeeCount === 1 && entryPriceCents > 0
+      : entryPriceCents > 0 && v.amountCents >= entryPriceCents * attendeeCount;
+  const voucherExpiryMs = (v) => (v.expiresAt?.toDate ? v.expiresAt.toDate().getTime() : Infinity);
+  const coveringVouchers = (fieldVouchers || []).filter(voucherCovers).sort((a, b) => voucherExpiryMs(a) - voucherExpiryMs(b));
+  const bestFieldVoucher = coveringVouchers[0] || (fieldVouchers && fieldVouchers.length > 0
+    ? [...fieldVouchers].sort((a, b) => (b.kind === "freeEntry" ? 1 : 0) - (a.kind === "freeEntry" ? 1 : 0) || b.amountCents - a.amountCents)[0]
+    : null);
+  const voucherCoversCost = !!bestFieldVoucher && voucherCovers(bestFieldVoucher);
+  const bestVoucherIsFreeEntry = bestFieldVoucher?.kind === "freeEntry";
   const usingVoucher = applyVoucher && voucherCoversCost;
   const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
   // The Stripe Checkout URL, once the waiver is saved and the session is
@@ -2668,7 +2679,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </div>
           )}
 
-          {bestFieldVoucher && !myBooking && !isPast && !ev.canceled && (
+          {bestFieldVoucher && !myBooking && !isPast && !ev.canceled && (entryPriceCents > 0 || choiceMissing) && (
             voucherCoversCost ? (
               // A toggle, not a second action button — applying the
               // voucher is now a single step inside the one Reserve/
@@ -2686,7 +2697,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                 </div>
                 <Ticket size={16} color={T.good} className="flex-shrink-0" />
                 <div className="text-[12px] font-medium flex-1 min-w-0" style={{ ...body, color: T.ash }}>
-                  Apply my {bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher for this field — covers this event in full, no fee
+                  {bestVoucherIsFreeEntry
+                    ? "Apply my free entry for this field — covers this event in full, no fee"
+                    : `Apply my ${bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher for this field — covers this event in full, no fee`}
                 </div>
               </button>
             ) : (
@@ -2699,7 +2712,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               <div className="p-3 flex items-center gap-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                 <Ticket size={14} color={T.ashFaint} className="flex-shrink-0" />
                 <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
-                  You have a {bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher for this field, but it doesn't cover this event's price — it's still saved for a future event here.
+                  {bestVoucherIsFreeEntry
+                    ? (attendeeCount > 1
+                        ? "You have a free entry for this field. It covers one person, so it can't be used when booking more than one attendee — it's still saved for later."
+                        : "You have a free entry for this field — pick an option above and it'll cover it.")
+                    : `You have a ${bestFieldVoucher.amountCents % 100 === 0 ? `$${bestFieldVoucher.amountCents / 100}` : `$${(bestFieldVoucher.amountCents / 100).toFixed(2)}`} voucher for this field, but it doesn't cover this event's price — it's still saved for a future event here.`}
                 </p>
               </div>
             )
@@ -6879,11 +6896,14 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>From "{v.sourceEventTitle || "a canceled event"}"</div>
+                      <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>
+                        {v.kind === "freeEntry" && !v.sourceEventId ? "Gift from the field" : `From "${v.sourceEventTitle || "a canceled event"}"`}
+                        {v.expiresAt?.toDate ? ` · ${isExpired ? "expired" : "expires"} ${v.expiresAt.toDate().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}` : ""}
+                      </div>
                     </div>
                   </div>
                   <div className="text-[14px] font-semibold flex-shrink-0" style={{ ...mono, color: isExpired ? T.ashFaint : T.good }}>
-                    {v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
+                    {v.kind === "freeEntry" ? "FREE ENTRY" : v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
                   </div>
                 </div>
                 );
@@ -7769,6 +7789,12 @@ function CancellationNoticeModal({ notice, onDismiss }) {
   // and deliberately nothing about why it can't be redeemed on the same
   // event it came from.
   const isGrant = notice.type === "voucher_granted";
+  // Owner gave a free entry to someone not booked at all (2026-10-24).
+  const isGift = notice.type === "voucher_gifted";
+  const isFreeEntryBack = notice.voucherKind === "freeEntry" && !isGift;
+  const expiresLabel = notice.expiresAt?.toDate
+    ? notice.expiresAt.toDate().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.55)", zIndex: 2500 }}>
@@ -7776,7 +7802,18 @@ function CancellationNoticeModal({ notice, onDismiss }) {
         <div className="w-10 h-10 mb-3 flex items-center justify-center" style={{ background: T.tint, borderRadius: T.rPill }}>
           <Ticket size={18} color={T.accent} />
         </div>
-        {isGrant ? (
+        {isGift ? (
+          <>
+            <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>You've got a free entry!</div>
+            <p className="text-[13px] mb-3 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
+              <strong>{notice.fieldName || "A field"}</strong> gave you one free entry, good for any one event there{expiresLabel ? <> until <strong>{expiresLabel}</strong></> : ""}. It'll show up as an option when you book.
+            </p>
+            {notice.note && (
+              <p className="text-[13px] mb-4 italic" style={{ ...body, color: T.ashDim }}>"{notice.note}"</p>
+            )}
+            {!notice.note && <div className="mb-1" />}
+          </>
+        ) : isGrant ? (
           <>
             <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>You've received a voucher</div>
             <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
@@ -7789,7 +7826,11 @@ function CancellationNoticeModal({ notice, onDismiss }) {
             <p className="text-[13px] mb-3" style={{ ...body, color: T.ashDim }}>
               "{notice.eventTitle || "An event"}" at {notice.fieldName || "the field"} was canceled by the field owner.
             </p>
-            {amount != null ? (
+            {isFreeEntryBack ? (
+              <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
+                Your <strong>free entry</strong> is back — use it for a future event at {notice.fieldName || "this field"}.
+              </p>
+            ) : amount != null ? (
               <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
                 You've received a <strong>${amount % 1 === 0 ? amount : amount.toFixed(2)} voucher</strong>, good for a future event at {notice.fieldName || "this field"}.
               </p>
