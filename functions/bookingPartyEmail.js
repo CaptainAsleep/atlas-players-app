@@ -84,7 +84,7 @@ export function renderPartyBookingEmail({ guardianCallsign, attendees, fieldName
     "[EVENT DATE], [START TIME]": esc(eventDateTime),
     "[AMOUNT_ROW]": amountRow,
     "[STRIPE_NOTE]": stripeNote,
-    "[GATE_LINE]": "Open Atlas &rarr; Home tab &rarr; tap <b>Check In</b> from <b>your</b> account. One code checks in the whole group &mdash; your child profiles don&rsquo;t need their own phones or logins.",
+    "[GATE_LINE]": "When you arrive, open Atlas &rarr; Home tab &rarr; tap <b>Show Check-in QR</b> from <b>your</b> account and show it to field staff. You&rsquo;re not checked in until they scan it. One QR checks in the whole group &mdash; your child profiles don&rsquo;t need their own phones or logins.",
     "[CHECKIN_CODE_BLOCK]": renderCheckInCodeBlock({ code: checkInCode, mode: "party" }),
   });
   return { html, subject };
@@ -119,8 +119,8 @@ function renderChildOnly({ you, childNames, fieldName, eventTitle, eventDateTime
       </p>`
     : "";
   const gateLine = checkInCode
-    ? `Staying for check-in? Open Atlas &rarr; Home tab &rarr; tap <b>Check In</b> from <b>your</b> account and show the QR at the gate. Dropping ${n === 1 ? esc(names) : "them"} off? Give them the check-in code below &mdash; they can give it at the gate without you.`
-    : `Check ${n === 1 ? esc(names) : "them"} in before you head out: open Atlas &rarr; Home tab &rarr; tap <b>Check In</b> from <b>your</b> account and show the code at the gate. Not staying? The field can also check them in by name.`;
+    ? `Staying for check-in? Open Atlas &rarr; Home tab &rarr; tap <b>Show Check-in QR</b> from <b>your</b> account and show it to field staff &mdash; they&rsquo;re not checked in until staff scan it. Dropping ${n === 1 ? esc(names) : "them"} off? Give them the check-in code below &mdash; they can give it at the gate without you. Make sure staff scan them in before you leave.`
+    : `Check ${n === 1 ? esc(names) : "them"} in before you head out: open Atlas &rarr; Home tab &rarr; tap <b>Show Check-in QR</b> from <b>your</b> account and show it to field staff. Make sure staff scan them in before you leave. Not staying? The field can also check them in by name.`;
   const html = fill(template, {
     "[PARTY_COUNT_LABEL]": countLabel,
     "[HEADLINE]": headline,

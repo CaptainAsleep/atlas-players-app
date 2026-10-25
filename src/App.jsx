@@ -25,7 +25,7 @@ import { useBookingCode, formatBookingCode } from "./hooks/useBookingCode";
 import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
-import { eventCloseMs, stateFromCity } from "./lib/eventClose";
+import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 
@@ -1229,6 +1229,75 @@ function LocationCard({ label, name, claimed, address, lat, lng, phone }) {
   );
 }
 
+// When the home screen's next-game / check-in card goes away (2026-10-25,
+// per Michael): at the event's end time on its last day if one is set,
+// otherwise at the end of that day. Field's time zone, same as eventClose.js.
+// Deliberately NOT eventCloseMs: that one falls back to start + 8h for
+// closing bookings, but a booked player's card should last all day.
+function checkInCardEndMs(ev, state) {
+  const lastDay = ev?.endDate || ev?.date;
+  if (!lastDay) return null;
+  const start = parseFirstTime(ev.startTime);
+  const end = parseFirstTime(ev.endTime);
+  let minutes = 1440;
+  if (end != null) minutes = !ev.endDate && start != null && end <= start ? end + 1440 : end;
+  return wallClockToUtcMs(lastDay, minutes, timeZoneForState(state));
+}
+
+// Player-side "you're checked in" chime + haptic (2026-10-25). One shared
+// AudioContext, primed when the player taps Show Check-in QR: iOS only
+// allows audio from a context started inside a tap, and the check-in
+// itself arrives later from a Firestore listener, not a tap. Not primed
+// (e.g. they never opened the QR) = silent; the on-screen flip still shows.
+// navigator.vibrate is Android-only — iOS has no web vibration API.
+let checkInAudioCtx = null;
+function primeCheckInAudio() {
+  try {
+    if (!checkInAudioCtx) checkInAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (checkInAudioCtx.state === "suspended") checkInAudioCtx.resume();
+  } catch (err) {
+    // no audio available — visual confirmation still carries it
+  }
+}
+function playCheckedInChime() {
+  try {
+    const ctx = checkInAudioCtx;
+    if (ctx && ctx.state === "running") {
+      const tone = (freq, t, dur) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.type = "sine";
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        o.start(t);
+        o.stop(t + dur);
+      };
+      tone(660, ctx.currentTime, 0.14);
+      tone(990, ctx.currentTime + 0.12, 0.22);
+    }
+  } catch (err) {
+    // ignore
+  }
+  try {
+    if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+  } catch (err) {
+    // ignore
+  }
+}
+
+function formatCheckedInTime(ts) {
+  try {
+    const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+    return d ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  } catch {
+    return "";
+  }
+}
+
 function HomeScreen({
   onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings, onOpenYearInReview,
   // Filter/view state below is owned by AppShell, not local to this screen
@@ -1335,8 +1404,19 @@ function HomeScreen({
   // reject a QR code generated for one, since there's no real booking to
   // check in against.
   const myEventBookingIds = myBookings.map((b) => b.eventId);
+  // Re-checked every minute so the card leaves on its own at the event's
+  // end time (checkInCardEndMs) without a reload.
+  const [cardNow, setCardNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setCardNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const cardStillOn = (e) => {
+    const endMs = checkInCardEndMs(e, e.isMajor ? e.venueState : stateFromCity(fields.find((f) => f.id === e.fieldId)?.city));
+    return endMs == null ? (e.endDate || e.date) >= today : cardNow < endMs;
+  };
   const nextGame = events
-    .filter((e) => myEventBookingIds.includes(e.id) && !e.canceled && (e.endDate || e.date) >= today)
+    .filter((e) => myEventBookingIds.includes(e.id) && !e.canceled && (e.endDate || e.date) >= today && cardStillOn(e))
     .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
   const nextGameIsToday = nextGame ? isLiveToday(nextGame) : false;
 
@@ -1350,9 +1430,24 @@ function HomeScreen({
   const { booking: nextGameBooking } = useMyBooking(user?.uid, nextGame?.id);
   // Backup for when the QR won't scan (bookingCodes, own-only read).
   const nextGameCode = useBookingCode(nextGameBooking ? user?.uid : null, nextGame?.id);
+  // Chime + haptic only on a live false -> true flip for the same event
+  // while this screen is open — never on first load of an already
+  // checked-in booking, never when reopening the app later.
+  const lastCheckInSeen = useRef(null); // { eventId, checkedIn }
+  useEffect(() => {
+    if (!nextGame || !nextGameBooking) {
+      lastCheckInSeen.current = null;
+      return;
+    }
+    const now = !!nextGameBooking.checkedIn;
+    const prev = lastCheckInSeen.current;
+    if (prev && prev.eventId === nextGame.id && prev.checkedIn === false && now) playCheckedInChime();
+    lastCheckInSeen.current = { eventId: nextGame.id, checkedIn: now };
+  }, [nextGame?.id, nextGameBooking?.checkedIn]);
 
   const handleCheckIn = async () => {
     if (!nextGame || !user) return;
+    primeCheckInAudio(); // inside the tap, so the later check-in chime can play on iOS
     // Minimal payload by design — just enough for a future field-owner
     // scanner to look up the event and player in Firestore. No callsign,
     // email, or other personal info gets embedded in a scannable code.
@@ -1611,8 +1706,8 @@ function HomeScreen({
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Checked in
                 </span>
               ) : (
-                <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.good }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.good, display: "inline-block" }} /> Check-in available
+                <span className="text-[11px] font-medium flex items-center gap-1" style={{ ...body, color: T.ashDim }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", border: `1.5px solid ${T.ashDim}`, display: "inline-block" }} /> Not checked in yet
                 </span>
               )
             )}
@@ -1646,18 +1741,22 @@ function HomeScreen({
                   <div className="w-6 h-6 flex items-center justify-center" style={{ background: T.good, borderRadius: 999 }}>
                     <Check size={14} color={T.inverse} strokeWidth={3} />
                   </div>
-                  <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>Check-In Complete</span>
+                  <span className="text-[12px] font-semibold" style={{ ...display, color: T.good }}>
+                    Checked in{formatCheckedInTime(nextGameBooking.checkedInAt) ? ` · ${formatCheckedInTime(nextGameBooking.checkedInAt)}` : ""}
+                  </span>
                 </div>
               </div>
             ) : showCheckIn ? (
               <div className="flex flex-col items-center pt-1">
+                <div className="text-[14px] font-semibold text-center mb-2" style={{ ...display, color: T.ash }}>Get this scanned at the field</div>
                 {qrDataUrl && <img src={qrDataUrl} alt="Check-in QR code" className="mb-2" style={{ width: 160, height: 160, borderRadius: 4 }} />}
-                <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashFaint }}>Show this to field staff to check in.</p>
+                <p className="text-[11px] text-center mb-2" style={{ ...body, color: T.ashDim }}>
+                  You're not checked in until field staff scan this code.{nextGameCode ? " If their scanner won't read it, give them the code below." : ""}
+                </p>
                 {nextGameCode && (
                   <div className="text-center mb-2">
                     <div className="text-[9px] font-semibold uppercase" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.08em" }}>Check-in code</div>
                     <div className="text-[18px] font-semibold" style={{ ...mono, color: T.ash, letterSpacing: "0.1em" }}>{formatBookingCode(nextGameCode)}</div>
-                    <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>QR won't scan? Give staff this code.</div>
                   </div>
                 )}
                 <button onClick={() => setShowCheckIn(false)} className="text-[11px] font-medium" style={{ ...body, color: T.accent }}>
@@ -1666,13 +1765,13 @@ function HomeScreen({
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Ready when you are</span>
+                <span className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Staff scan checks you in</span>
                 <button
                   onClick={handleCheckIn}
                   className="px-4 py-2 text-[11px] font-semibold transition-transform duration-100 active:scale-95"
                   style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}
                 >
-                  Check In Now
+                  Show Check-in QR
                 </button>
               </div>
             )
@@ -6970,6 +7069,9 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
           {referralQr && <img src={referralQr} alt="Referral QR code" className="mb-3" style={{ width: 140, height: 140 }} />}
           <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
             Share this code or let someone scan it to invite them to Atlas.
+          </p>
+          <p className="text-[11px] font-semibold mb-3 -mt-2" style={{ ...body, color: T.ashFaint }}>
+            Share with a friend — not for check-in.
           </p>
           <button
             onClick={handleCopyReferral}
