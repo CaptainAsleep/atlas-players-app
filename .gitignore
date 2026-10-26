@@ -13,3 +13,4 @@ scripts/_tmp_*
 .fuse_hidden*
 # iCloud sync duplicates ("App 2.jsx", "index 2.css", …)
 * 2.*
+scripts/_backup_*
