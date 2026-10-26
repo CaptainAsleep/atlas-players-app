@@ -566,6 +566,25 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // Multiple teams per player (2026-10-25, Brandon/Heretic feedback). The
+    // team's members subcollection is the source of truth for which teams a
+    // player is on; the app finds them with a collectionGroup("members")
+    // query on uid. Same public read as the nested teams/{teamId}/members
+    // rule — this form is the only one collection-group queries honor (see
+    // the patches note above). "members" only ever exists under teams/.
+    // Needs the collection-group uid index in firestore.indexes.json.
+    match /{path=**}/members/{memberUid} {
+      allow read: if true;
+    }
+
+    // In-app "Send feedback" from the Profile page (2026-10-25). Written only
+    // by the submitPlayerFeedback Cloud Function (Admin SDK), which also
+    // emails it to Michael. Clients never write; only the admin reads.
+    match /playerFeedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // The public-facing mirror of a player's profile — deliberately narrow.
     // Only ever contains callsign, avatarUrl, featuredPatch, teamId/Name,
     // createdAt, and verified — never email, phone, or real name. Kept in

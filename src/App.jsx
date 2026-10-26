@@ -14,7 +14,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useSWUpdate } from "./hooks/useSWUpdate";
-import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks } from "./hooks/useTeams";
+import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useMyTeamMemberships, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
@@ -27,6 +27,8 @@ import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEv
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs } from "./lib/eventClose";
 import { FONTS } from "./theme";
+import { httpsCallable } from "firebase/functions";
+import { functions as firebaseFunctions } from "./lib/firebase";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 
 /* ---------- design tokens ---------- */
@@ -4092,7 +4094,14 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const myTeam = profile?.teamId ? teams.find((t) => t.id === profile.teamId) : null;
+  // Players can be on several teams (2026-10-25). The one shown on their
+  // profile is listed first, then the rest in the order they joined.
+  const { memberships } = useMyTeamMemberships(user?.uid);
+  const myTeams = memberships
+    .map((m) => ({ ...m, team: teams.find((t) => t.id === m.teamId) }))
+    .filter((m) => m.team)
+    .sort((a, b) => (b.teamId === profile?.teamId) - (a.teamId === profile?.teamId) || a.joinedAtMs - b.joinedAtMs)
+    .map((m) => m.team);
   const filteredTeams = teams.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()));
 
   const handlePick = () => fileInputRef.current?.click();
@@ -4126,32 +4135,39 @@ function TeamsTabContent({ onOpenTeam, profile, user, teams, teamsLoading, creat
 
   return (
     <div className="px-6 pt-4">
-        {myTeam && (
+        {myTeams.length > 0 && (
           <>
-            <Eyebrow>My Team</Eyebrow>
-            <button
-              onClick={() => onOpenTeam(myTeam.id)}
-              className="w-full mb-5 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
-              style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: `1.5px solid ${T.accent}`, outlineOffset: -1 }}
-            >
-              <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
-                {myTeam.patchUrl ? (
-                  <img src={myTeam.patchUrl} alt={myTeam.name} className="w-full h-full" style={{ objectFit: "contain" }} />
-                ) : (
-                  <Shield size={22} color={T.ashDim} />
-                )}
-              </div>
-              <div className="flex-1">
-                <div className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>{myTeam.name}</div>
-                <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>View roster & team info</div>
-              </div>
-              <ChevronRight size={16} color={T.ashFaint} />
-            </button>
+            <Eyebrow>{myTeams.length > 1 ? "My Teams" : "My Team"}</Eyebrow>
+            {myTeams.map((t) => {
+              const shown = t.id === profile?.teamId;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onOpenTeam(t.id)}
+                  className="w-full mb-3 p-3 flex items-center gap-3 text-left transition-transform duration-100 active:scale-[0.98]"
+                  style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, ...(shown ? { outline: `1.5px solid ${T.accent}`, outlineOffset: -1 } : {}) }}
+                >
+                  <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                    {t.patchUrl ? (
+                      <img src={t.patchUrl} alt={t.name} className="w-full h-full" style={{ objectFit: "contain" }} />
+                    ) : (
+                      <Shield size={22} color={T.ashDim} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>{t.name}</div>
+                    <div className="text-[11px]" style={{ ...body, color: shown ? T.accent : T.ashFaint }}>{shown ? "Shown on your profile" : "View roster & team info"}</div>
+                  </div>
+                  <ChevronRight size={16} color={T.ashFaint} />
+                </button>
+              );
+            })}
+            <div className="mb-2" />
           </>
         )}
 
         <div className="mb-4 flex items-center justify-between">
-          <Eyebrow>{myTeam ? "Other Teams" : "Find a Team"}</Eyebrow>
+          <Eyebrow>{myTeams.length > 0 ? "Other Teams" : "Find a Team"}</Eyebrow>
           <button onClick={() => setShowCreate(!showCreate)} className="text-[12px] font-semibold" style={{ ...body, color: T.accent }}>
             {showCreate ? "Cancel" : "+ Create a Team"}
           </button>
@@ -5197,7 +5213,7 @@ function TeamLinksSection({ team, isOfficer }) {
 }
 
 function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, myJoinRequest, joinRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
-  joinTeam, leaveTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
+  joinTeam, leaveTeam, setDisplayedTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
   requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, atlasEvents, onOpenEvent, highlightEventId }) {
   const { T, display, body, mono } = useTheme();
   const [editing, setEditing] = useState(false);
@@ -5221,7 +5237,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   const myMembership = members.find((m) => m.uid === user?.uid);
   const isOfficer = myMembership?.role === "officer";
   const isMember = !!myMembership;
-  const alreadyOnAnotherTeam = !isMember && profile?.teamId && profile.teamId !== team?.id;
+  const shownOnProfile = isMember && profile?.teamId === team?.id;
+  const [displayBusy, setDisplayBusy] = useState(false);
 
   const startEdit = () => {
     setEditName(team?.name || "");
@@ -5325,10 +5342,22 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
     }
   };
 
+  const handleShowOnProfile = async () => {
+    setActionError("");
+    setDisplayBusy(true);
+    try {
+      await setDisplayedTeam(user.uid, team.id, team.name);
+    } catch (err) {
+      setActionError("Couldn't update your profile — try again.");
+    } finally {
+      setDisplayBusy(false);
+    }
+  };
+
   const handleLeave = async () => {
     setActionError("");
     try {
-      await leaveTeam(user.uid, team.id);
+      await leaveTeam(user.uid, team.id, profile);
       onBack();
     } catch (err) {
       setActionError("Couldn't leave — try again.");
@@ -5499,7 +5528,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
       <div className="px-6 pt-2">
         {actionError && <p className="text-[12px] mb-3 text-center" style={{ ...body, color: T.alert }}>{actionError}</p>}
 
-        {!isMember && !alreadyOnAnotherTeam && team.joinPolicy !== "approval" && (
+        {!isMember && team.joinPolicy !== "approval" && (
           <button
             onClick={handleJoin}
             className="w-full py-3 font-semibold text-[14px] mb-5"
@@ -5508,7 +5537,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
             Join Team
           </button>
         )}
-        {!isMember && !alreadyOnAnotherTeam && team.joinPolicy === "approval" && !myJoinRequest && (
+        {!isMember && team.joinPolicy === "approval" && !myJoinRequest && (
           <button
             onClick={handleRequestToJoin}
             disabled={joinBusy}
@@ -5518,7 +5547,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
             {joinBusy ? "…" : "Request to Join"}
           </button>
         )}
-        {!isMember && !alreadyOnAnotherTeam && team.joinPolicy === "approval" && myJoinRequest && (
+        {!isMember && team.joinPolicy === "approval" && myJoinRequest && (
           <div className="mb-5 text-center">
             <div
               className="w-full py-3 font-semibold text-[14px]"
@@ -5533,11 +5562,20 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
             )}
           </div>
         )}
-        {alreadyOnAnotherTeam && (
-          <p className="text-[12px] text-center mb-5" style={{ ...body, color: T.ashFaint }}>
-            You're already on {profile.teamName} — leave that team first to join this one.
-          </p>
-        )}
+        {isMember && (shownOnProfile ? (
+          <div className="mb-5 flex items-center justify-center gap-1.5 text-[12px] font-medium" style={{ ...body, color: T.accent }}>
+            <Check size={14} color={T.accent} /> Shown on your profile
+          </div>
+        ) : (
+          <button
+            onClick={handleShowOnProfile}
+            disabled={displayBusy}
+            className="w-full py-3 font-medium text-[14px] mb-5"
+            style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill, opacity: displayBusy ? 0.6 : 1 }}
+          >
+            {displayBusy ? "…" : "Display this team on my profile"}
+          </button>
+        ))}
 
         <TeamLinksSection team={team} isOfficer={isOfficer} />
 
@@ -6858,6 +6896,102 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   );
 }
 
+// "Send Feedback" on the Profile page (2026-10-25). Title + message go to the
+// submitPlayerFeedback Cloud Function, which emails them to Michael as plain
+// text (Reply-To = the player) and keeps a copy in playerFeedback.
+const FEEDBACK_MAX_TITLE = 120;
+const FEEDBACK_MAX_MESSAGE = 5000;
+function FeedbackPanel() {
+  const { T, display, body } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+
+  const toggle = () => {
+    setOpen(!open);
+    setError("");
+    setSent(false);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!title.trim() || !message.trim()) {
+      setError("Add a title and a message.");
+      return;
+    }
+    setSending(true);
+    setError("");
+    try {
+      await httpsCallable(firebaseFunctions, "submitPlayerFeedback")({ title: title.trim(), message: message.trim() });
+      setTitle("");
+      setMessage("");
+      setSent(true);
+    } catch (err) {
+      setError(err?.code === "functions/resource-exhausted" || err?.code === "functions/invalid-argument"
+        ? err.message
+        : "Couldn't send that — try again in a moment.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const fieldStyle = { ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+
+  return (
+    <>
+      <button
+        onClick={toggle}
+        className="w-full flex items-center justify-between py-3 px-4 mb-6"
+        style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
+      >
+        <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Send Feedback</span>
+        <ChevronRight size={15} color={T.ashFaint} style={{ transform: open ? "rotate(90deg)" : "none" }} />
+      </button>
+
+      {open && (
+        sent ? (
+          <div className="mb-6 -mt-4 p-4 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+            <p className="text-[13px] mb-3" style={{ ...body, color: T.good }}>Thanks — your feedback went straight to Michael.</p>
+            <button onClick={() => setSent(false)} className="text-[12px] font-medium" style={{ ...body, color: T.accent }}>Send more</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="flex flex-col gap-2.5 mb-6 -mt-4">
+            <input
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); setError(""); }}
+              maxLength={FEEDBACK_MAX_TITLE}
+              placeholder="Title"
+              className="px-4 py-3 text-[14px] bg-transparent outline-none"
+              style={fieldStyle}
+            />
+            <textarea
+              value={message}
+              onChange={(e) => { setMessage(e.target.value); setError(""); }}
+              maxLength={FEEDBACK_MAX_MESSAGE}
+              placeholder="What's on your mind? Bugs, ideas, anything."
+              rows={5}
+              className="px-4 py-3 text-[14px] bg-transparent outline-none"
+              style={{ ...fieldStyle, resize: "vertical" }}
+            />
+            {error && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</p>}
+            <button
+              type="submit"
+              disabled={sending}
+              className="w-full py-3 font-semibold text-[13px]"
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: sending ? 0.6 : 1 }}
+            >
+              {sending ? "Sending…" : "Send Feedback"}
+            </button>
+          </form>
+        )
+      )}
+    </>
+  );
+}
+
 function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
   const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
@@ -7204,6 +7338,8 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
             </button>
           )}
         </div>
+
+        <FeedbackPanel />
 
         <button
           onClick={() => { setShowPasswordForm(!showPasswordForm); setPasswordError(""); setPasswordSuccess(false); }}
@@ -8217,6 +8353,7 @@ function AppShell() {
     createTeam,
     joinTeam,
     leaveTeam,
+    setDisplayedTeam,
     updateTeamInfo,
     setHomeField,
     updateTeamPatch,
@@ -8663,6 +8800,7 @@ function AppShell() {
         onOpenPlayer={openPlayer}
         joinTeam={joinTeam}
         leaveTeam={leaveTeam}
+        setDisplayedTeam={setDisplayedTeam}
         updateTeamInfo={updateTeamInfo}
         setHomeField={setHomeField}
         updateTeamPatch={updateTeamPatch}

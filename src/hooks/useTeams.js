@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
@@ -148,6 +149,72 @@ export function useMyJoinRequest(teamId, uid) {
   }, [teamId, uid]);
 
   return { myJoinRequest: request };
+}
+
+// Multiple teams per player (2026-10-25). The members subcollection under
+// each team is the source of truth for which teams a player is on — found
+// with one collectionGroup query on uid (needs the {path=**}/members rule and
+// the collection-group uid index in firestore.indexes.json). The profile's
+// teamId/teamName now only means "the team shown on my profile". There is
+// deliberately no teamIds list on the profile: an officer removing someone
+// can't write that player's profile, so a list there would drift.
+export function useMyTeamMemberships(uid) {
+  const [memberships, setMemberships] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!uid) {
+      setMemberships([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const unsub = onSnapshot(
+      query(collectionGroup(db, "members"), where("uid", "==", uid)),
+      (snap) => {
+        setMemberships(snap.docs.map(membershipFromDoc));
+        setLoading(false);
+      },
+      (err) => {
+        console.error("useMyTeamMemberships error:", err);
+        setLoading(false);
+      }
+    );
+    return unsub;
+  }, [uid]);
+
+  return { memberships, membershipsLoading: loading };
+}
+
+function membershipFromDoc(d) {
+  const data = d.data();
+  return {
+    teamId: d.ref.parent.parent.id,
+    role: data.role,
+    joinedAtMs: data.joinedAt?.toMillis?.() ?? 0,
+  };
+}
+
+// The team a player's profile should fall back to when the one it shows is
+// gone (they left, or an officer removed them): the earliest-joined team
+// they're still on, or none. Returns { teamId, teamName } with nulls for none.
+async function nextDisplayTeam(uid, excludeTeamId) {
+  let rows = [];
+  try {
+    const snap = await getDocs(query(collectionGroup(db, "members"), where("uid", "==", uid)));
+    rows = snap.docs.map(membershipFromDoc).filter((m) => m.teamId !== excludeTeamId);
+  } catch (err) {
+    // e.g. the collection-group index isn't built yet — show no team rather
+    // than block the leave itself.
+    console.error("nextDisplayTeam lookup failed:", err);
+    return { teamId: null, teamName: null };
+  }
+  rows.sort((a, b) => a.joinedAtMs - b.joinedAtMs);
+  for (const m of rows) {
+    const t = await getDoc(doc(db, "teams", m.teamId));
+    if (t.exists()) return { teamId: m.teamId, teamName: t.data().name || "" };
+  }
+  return { teamId: null, teamName: null };
 }
 
 // Every join request this player has made, across teams. App-level, so an
@@ -346,10 +413,17 @@ export function useTeamActions() {
       role: "officer",
       joinedAt: serverTimestamp(),
     });
-    batch.update(doc(db, "publicProfiles", uid), { teamId: teamRef.id, teamName: name });
+    // A player already showing a team keeps showing it; they can switch on
+    // the new team's page. Only a player showing none gets this one.
+    const showOnProfile = !profile?.teamId;
+    if (showOnProfile) {
+      batch.update(doc(db, "publicProfiles", uid), { teamId: teamRef.id, teamName: name });
+    }
     await batch.commit();
 
-    await updateDoc(doc(db, "users", uid), { teamId: teamRef.id, teamName: name });
+    if (showOnProfile) {
+      await updateDoc(doc(db, "users", uid), { teamId: teamRef.id, teamName: name });
+    }
 
     if (patchBlob) {
       const storageRef = ref(storage, `teamPatches/${teamRef.id}/patch.jpg`);
@@ -370,16 +444,33 @@ export function useTeamActions() {
       role: "member",
       joinedAt: serverTimestamp(),
     });
-    batch.update(doc(db, "users", uid), { teamId, teamName });
-    batch.update(doc(db, "publicProfiles", uid), { teamId, teamName });
+    // Same rule as createTeam: joining never replaces the team already shown.
+    if (!profile?.teamId) {
+      batch.update(doc(db, "users", uid), { teamId, teamName });
+      batch.update(doc(db, "publicProfiles", uid), { teamId, teamName });
+    }
     await batch.commit();
   }
 
-  async function leaveTeam(uid, teamId) {
+  // Leaving the team that's shown on the profile falls back to the
+  // earliest-joined team they're still on (or none). Leaving any other team
+  // leaves the profile alone.
+  async function leaveTeam(uid, teamId, profile) {
     const batch = writeBatch(db);
     batch.delete(doc(db, "teams", teamId, "members", uid));
-    batch.update(doc(db, "users", uid), { teamId: null, teamName: null });
-    batch.update(doc(db, "publicProfiles", uid), { teamId: null, teamName: null });
+    if (profile?.teamId === teamId) {
+      const next = await nextDisplayTeam(uid, teamId);
+      batch.update(doc(db, "users", uid), next);
+      batch.update(doc(db, "publicProfiles", uid), next);
+    }
+    await batch.commit();
+  }
+
+  // "Display this team on my profile" from a team page the player is on.
+  async function setDisplayedTeam(uid, teamId, teamName) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "users", uid), { teamId, teamName });
+    batch.update(doc(db, "publicProfiles", uid), { teamId, teamName });
     await batch.commit();
   }
 
@@ -387,12 +478,17 @@ export function useTeamActions() {
     await updateDoc(doc(db, "teams", teamId), { name, description });
     // Keep every current member's denormalized teamName in sync — a rename
     // shouldn't leave the roster or player profiles showing the old name.
+    // Only for members actually showing this team: with several teams per
+    // player (2026-10-25), writing teamName blindly would put this name next
+    // to a different team's id on someone showing another team.
     const membersSnap = await getDocs(collection(db, "teams", teamId, "members"));
     await Promise.all(
-      membersSnap.docs.flatMap((m) => [
-        updateDoc(doc(db, "users", m.id), { teamName: name }).catch(() => {}),
-        updateDoc(doc(db, "publicProfiles", m.id), { teamName: name }).catch(() => {}),
-      ])
+      membersSnap.docs.map(async (m) => {
+        const pub = await getDoc(doc(db, "publicProfiles", m.id)).catch(() => null);
+        if (pub?.data()?.teamId !== teamId) return;
+        await updateDoc(doc(db, "users", m.id), { teamName: name }).catch(() => {});
+        await updateDoc(doc(db, "publicProfiles", m.id), { teamName: name }).catch(() => {});
+      })
     );
   }
 
@@ -510,23 +606,16 @@ export function useTeamActions() {
   }
 
   // Runs on the player's own client once their request shows approved:
-  // sets their teamId/teamName and clears the request. Handles the two
-  // ways an approval can be stale by the time the player's app sees it:
-  // an officer already removed them again, or they joined a different
-  // team in the meantime (then the stray member doc is removed instead).
+  // clears the request and, if they aren't showing a team yet, shows this
+  // one. If an officer already removed them again, just clears the request.
+  // (Before 2026-10-25 an approval for a second team was undone here; players
+  // can now be on several teams.)
   async function finishApprovedJoin(uid, profile, teamId) {
     const memberRef = doc(db, "teams", teamId, "members", uid);
     const requestRef = doc(db, "joinRequests", `${teamId}_${uid}`);
     const memberSnap = await getDoc(memberRef);
-    if (!memberSnap.exists()) {
+    if (!memberSnap.exists() || profile?.teamId) {
       await deleteDoc(requestRef);
-      return;
-    }
-    if (profile?.teamId && profile.teamId !== teamId) {
-      const b = writeBatch(db);
-      b.delete(memberRef);
-      b.delete(requestRef);
-      await b.commit();
       return;
     }
     const teamSnap = await getDoc(doc(db, "teams", teamId));
@@ -548,8 +637,11 @@ export function useTeamActions() {
     if (!uid || !teamId) return;
     const memberSnap = await getDoc(doc(db, "teams", teamId, "members", uid));
     if (!memberSnap.exists()) {
-      await updateDoc(doc(db, "users", uid), { teamId: null, teamName: null });
-      await updateDoc(doc(db, "publicProfiles", uid), { teamId: null, teamName: null }).catch(() => {});
+      // Removed from the team they were showing: fall back the same way a
+      // leave does.
+      const next = await nextDisplayTeam(uid, teamId);
+      await updateDoc(doc(db, "users", uid), next);
+      await updateDoc(doc(db, "publicProfiles", uid), next).catch(() => {});
     }
   }
 
@@ -724,6 +816,7 @@ export function useTeamActions() {
     createTeam,
     joinTeam,
     leaveTeam,
+    setDisplayedTeam,
     updateTeamInfo,
     setHomeField,
     updateTeamPatch,

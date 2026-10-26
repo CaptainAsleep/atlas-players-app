@@ -3447,3 +3447,101 @@ export const checkInByCode = onCall(async (request) => {
   await batch.commit();
   return { ...result, ok: true, preview: false };
 });
+
+// ===========================================================================
+// In-app "Send Feedback" from the player Profile page (2026-10-25)
+// ===========================================================================
+// A title and a message, emailed as plain text to Michael's inbox (which
+// forwards to his personal mail). Reply-To is the player's own Auth email,
+// so hitting Reply answers them directly. A copy is also kept in the
+// server-only playerFeedback collection, so nothing is lost if Resend fails
+// and the admin portal can list it later. Signed-in players only; one send
+// per minute per account (server-only emailSends doc, same pattern as the
+// verification resend above).
+const PLAYER_FEEDBACK_TO = "Michael@airsoftatlas.app";
+const PLAYER_FEEDBACK_FROM = "Atlas Feedback <feedback@airsoftatlas.app>";
+const PLAYER_FEEDBACK_COOLDOWN_MS = 60 * 1000;
+const PLAYER_FEEDBACK_MAX_TITLE = 120;
+const PLAYER_FEEDBACK_MAX_MESSAGE = 5000;
+
+export const submitPlayerFeedback = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in to send feedback.");
+    }
+    const uid = request.auth.uid;
+    // Title goes into the subject line, so no line breaks.
+    const title = String(request.data?.title ?? "").replace(/[\r\n]+/g, " ").trim();
+    const message = String(request.data?.message ?? "").trim();
+    if (!title || !message) {
+      throw new HttpsError("invalid-argument", "Add a title and a message.");
+    }
+    if (title.length > PLAYER_FEEDBACK_MAX_TITLE || message.length > PLAYER_FEEDBACK_MAX_MESSAGE) {
+      throw new HttpsError("invalid-argument", "That's a bit long — trim it down and try again.");
+    }
+
+    const db = getFirestore();
+    const sendRef = db.collection("emailSends").doc(`playerFeedback_${uid}`);
+    const now = Date.now();
+    const allowed = await db.runTransaction(async (t) => {
+      const s = await t.get(sendRef);
+      const last = s.data()?.sentAtMs;
+      if (typeof last === "number" && now - last < PLAYER_FEEDBACK_COOLDOWN_MS) return false;
+      t.set(sendRef, { uid, sentAtMs: now, sendCount: FieldValue.increment(1) }, { merge: true });
+      return true;
+    });
+    if (!allowed) {
+      throw new HttpsError("resource-exhausted", "Give it a minute before sending more feedback.");
+    }
+
+    const [authUser, userSnap] = await Promise.all([
+      getAuth().getUser(uid),
+      db.collection("users").doc(uid).get(),
+    ]);
+    const email = String(authUser.email || "").trim();
+    const callsign = userSnap.data()?.callsign || "";
+
+    const feedbackRef = db.collection("playerFeedback").doc();
+    await feedbackRef.set({
+      uid,
+      callsign,
+      email,
+      title,
+      message,
+      createdAt: FieldValue.serverTimestamp(),
+      emailed: false,
+    });
+
+    const sentAt = new Date(now).toLocaleString("en-US", { timeZone: "America/Detroit", dateStyle: "medium", timeStyle: "short" });
+    const text = [
+      message,
+      "",
+      "---",
+      `From: ${callsign || "(no callsign)"}`,
+      `Email: ${email || "(none on file)"}`,
+      `Account ID: ${uid}`,
+      `Sent: ${sentAt} ET`,
+    ].join("\n");
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: PLAYER_FEEDBACK_FROM,
+        to: PLAYER_FEEDBACK_TO,
+        subject: `Atlas feedback: ${title}`,
+        text,
+        ...(email ? { replyTo: email } : {}),
+      });
+      if (error) throw new Error(JSON.stringify(error));
+      await feedbackRef.update({ emailed: true });
+    } catch (err) {
+      // The copy in playerFeedback is already saved, so the player's
+      // feedback isn't lost — don't make them resend it.
+      console.error(`submitPlayerFeedback: Resend failed for ${uid} (${feedbackRef.id}):`, err);
+      await feedbackRef.update({ emailError: String(err?.message || err).slice(0, 500) }).catch(() => {});
+    }
+
+    return { ok: true };
+  }
+);
