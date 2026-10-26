@@ -14,7 +14,7 @@ import {
   updatePassword,
   updateProfile,
 } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, increment, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 import { auth, db, functions, storage } from "../lib/firebase";
@@ -55,16 +55,40 @@ export function useAuth() {
   // missing, create it instead of leaving the account stranded.
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
-      if (snap.exists()) {
-        setProfile(snap.data());
-      } else {
+    //
+    // Real report, 2026-10-25: an established player (team captain, many
+    // patches, a booked event) signed in and was walked through the
+    // brand-new-account flow (terms, welcome splash, onboarding wizard),
+    // after which his team/patches/bookings were all still there. Cause:
+    // this listener used to treat ANY "doc doesn't exist" snapshot as
+    // authoritative — including one served from the local cache when the
+    // device couldn't reach Firestore yet (Firestore raises a fromCache
+    // snapshot with exists() === false once it decides it's offline). The
+    // backfill then ran a full setDoc (no merge) over his real users doc
+    // and publicProfiles doc, resetting completedOnboarding to false and
+    // wiping acceptedTermsVersion, which is exactly what sent him through
+    // signup again. Two fixes: (1) a cache-only "missing" is never acted
+    // on — profile stays null, so the shared LoadingScreen (with its
+    // existing 8s Retry fallback) keeps showing until the server answers;
+    // (2) createPlayerDocs is now create-only inside a transaction (which
+    // always reads from the server), so even if this path ever fires for
+    // an existing account again, it can't overwrite anything.
+    const unsub = onSnapshot(
+      doc(db, "users", user.uid),
+      { includeMetadataChanges: true },
+      (snap) => {
+        if (snap.exists()) {
+          setProfile(snap.data());
+          return;
+        }
+        if (snap.metadata.fromCache) return; // not a real answer yet — keep loading
         setProfile(null);
         createPlayerDocs(user.uid, user.email, null, null).catch((err) =>
           console.error("player profile backfill failed:", err)
         );
-      }
-    });
+      },
+      (err) => console.error("profile listener failed:", err)
+    );
     return unsub;
   }, [user]);
 
@@ -78,7 +102,9 @@ export function useAuth() {
   // the app, no manual step needed.
   useEffect(() => {
     if (!user || !profile) return;
-    getDoc(doc(db, "publicProfiles", user.uid)).then((snap) => {
+    // From the server, never the cache — a cache "missing" here would
+    // overwrite a real public profile (team, featured patch) with blanks.
+    getDocFromServer(doc(db, "publicProfiles", user.uid)).then((snap) => {
       if (!snap.exists()) {
         setDoc(doc(db, "publicProfiles", user.uid), {
           callsign: profile.callsign || "Player",
@@ -90,7 +116,7 @@ export function useAuth() {
           verified: profile.verified || false,
         }).catch((err) => console.error("public profile backfill failed:", err));
       }
-    });
+    }).catch(() => {}); // offline — skip; it re-runs on the next profile load
   }, [user, profile?.callsign]);
 
   // Picks up email verification completed outside the app (the player
@@ -154,44 +180,59 @@ export function useAuth() {
   // brand-new account, and bumps the referrer's count if this signup came
   // through a referral link/QR. Callers must only invoke this for a uid that
   // doesn't already have a users/{uid} doc.
+  //
+  // Create-only (2026-10-25): runs in a transaction that re-reads both docs
+  // from the server first and writes only what's genuinely missing, so it
+  // can never overwrite an existing account's profile — see the profile
+  // listener's comment above for the incident that made this necessary.
+  // Resolves true only if it actually created the users doc.
   async function createPlayerDocs(uid, email, callsign, referredBy) {
     const finalCallsign = callsign || (email ? email.split("@")[0] : "Player");
-    const createdAt = serverTimestamp();
-    await setDoc(doc(db, "users", uid), {
-      email,
-      callsign: finalCallsign,
-      createdAt,
-      // Explicitly false, not just absent — this is what the onboarding
-      // wizard gates on. Only brand-new accounts from this point forward
-      // ever get this field at all, so an existing, already-established
-      // account (where this key simply doesn't exist) can never
-      // accidentally match the gate and get forced through it.
-      completedOnboarding: false,
-      // Whoever's referral link/QR they came through, if any — captured
-      // once at signup, not editable after.
-      ...(referredBy ? { referredBy } : {}),
-    });
-    // The narrow public mirror — never email/phone/real name, just what
-    // another player is allowed to see.
-    await setDoc(doc(db, "publicProfiles", uid), {
-      callsign: finalCallsign,
-      avatarUrl: null,
-      featuredPatch: null,
-      teamId: null,
-      teamName: null,
-      createdAt,
-      verified: false,
-      referralCount: 0,
+    const userRef = doc(db, "users", uid);
+    const pubRef = doc(db, "publicProfiles", uid);
+    const created = await runTransaction(db, async (tx) => {
+      const existingUser = await tx.get(userRef);
+      const existingPub = await tx.get(pubRef);
+      if (existingUser.exists()) return false;
+      const createdAt = serverTimestamp();
+      tx.set(userRef, {
+        email,
+        callsign: finalCallsign,
+        createdAt,
+        // Explicitly false, not just absent — this is what the onboarding
+        // wizard gates on. Only brand-new accounts from this point forward
+        // ever get this field at all, so an existing, already-established
+        // account (where this key simply doesn't exist) can never
+        // accidentally match the gate and get forced through it.
+        completedOnboarding: false,
+        // Whoever's referral link/QR they came through, if any — captured
+        // once at signup, not editable after.
+        ...(referredBy ? { referredBy } : {}),
+      });
+      // The narrow public mirror — never email/phone/real name, just what
+      // another player is allowed to see. Left alone if it already exists.
+      if (!existingPub.exists()) tx.set(pubRef, {
+        callsign: finalCallsign,
+        avatarUrl: null,
+        featuredPatch: null,
+        teamId: null,
+        teamName: null,
+        createdAt,
+        verified: false,
+        referralCount: 0,
+      });
+      return true;
     });
     // Real referral tracking now: bump the referrer's own public count by
     // one. This has to target THEIR profile, not the new signer's — the
     // one narrow exception in the rules that allows writing to someone
     // else's publicProfiles doc, and only for this exact field.
-    if (referredBy) {
+    if (created && referredBy) {
       await updateDoc(doc(db, "publicProfiles", referredBy), { referralCount: increment(1) }).catch((err) =>
         console.error("referral count increment failed:", err)
       );
     }
+    return created;
   }
 
   async function signUp(email, password, callsign, referredBy) {
