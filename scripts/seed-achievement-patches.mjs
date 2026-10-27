@@ -136,9 +136,14 @@ const achievementPatches = [
     details: "Attend 3 night games",
     trigger: { type: "filtered_checkin_count", count: 3, filter: { timeAfterHour: 20 } } },
 
+  // Migrated 2026-10-27 to The Compound's own owner-built field patch
+  // (fields/the-compound/fieldPatches/dtb: 5 events in a row OR 10 games),
+  // which keeps doc id "dtb" for existing holders. Catalog-only now so the
+  // old 3-check-in rule can't come back on a re-seed. DTB officers can also
+  // grant it from the DTB team library.
   { id: "dtb", name: "DTB", imageFile: "dtb.jpg",
-    details: "Awarded for attending 3 events at The Compound",
-    trigger: { type: "field_checkin_count", fieldId: "the-compound", count: 3 } },
+    details: "Check in to 5 events in a row or 10 games total at The Compound in Auburn, MI, or be given it by a DTB officer",
+    trigger: null },
 
   { id: "one-of-us", name: "One of Us", imageFile: "oneofus.png",
     details: "Join a Team", trigger: { type: "team_joined" } },

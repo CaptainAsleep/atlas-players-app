@@ -43,12 +43,19 @@ export function usePatches(uid) {
   // load, so it can't prevent a duplicate grant across two separate
   // sessions, only within one. This makes a repeat call a genuine no-op
   // at the data level regardless of what triggered it twice.
-  async function grantPatch(uid, name, imageUrl, details = null) {
-    const patchId = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
+  //
+  // opts.docId (2026-10-27): owner-built field patches pass their own
+  // namespaced grantDocId ("field-{fieldId}-{patchId}", or the catalog id for
+  // a migrated one like "dtb") instead of the name slug, because owner-chosen
+  // names can collide across fields. opts.extra adds provenance keys
+  // (fieldId, fieldPatchId).
+  async function grantPatch(uid, name, imageUrl, details = null, opts = {}) {
+    const patchId = opts.docId || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
     const ref = doc(db, "users", uid, "patches", patchId);
     const existing = await getDoc(ref);
     if (existing.exists()) return { id: patchId, name, imageUrl, details, alreadyOwned: true };
     await setDoc(ref, {
+      ...(opts.extra || {}),
       name,
       imageUrl,
       details,

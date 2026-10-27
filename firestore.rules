@@ -10,6 +10,82 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == 'lg4HMLTJvsPfSEN1pvNhMV4fbct1';
     }
 
+    // ── Owner-built field patches + team patch libraries (2026-10-27) ────
+    // Libraries live at fields/{fieldId}/fieldPatches and
+    // teams/{teamId}/teamPatches — deliberately NOT named "patches", which is
+    // reserved for users/{uid}/patches (see the {path=**}/patches
+    // collection-group rule below and the admin portal's count of it).
+    function isFieldOwnerOf(fieldId) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid;
+    }
+
+    function isTeamOfficerOf(teamId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer";
+    }
+
+    function validPatchArt(d) {
+      return d.name is string && d.name.size() >= 1 && d.name.size() <= 40
+        && d.imageUrl is string && d.imageUrl.matches('https://firebasestorage[.]googleapis[.]com/.*')
+        && (d.get('details', null) == null || (d.details is string && d.details.size() <= 200));
+    }
+
+    // One owner rule template (see FIELD_RULE_TYPES in achievementEngine.js).
+    // The field id is never stored on the rule — the engine forces it from
+    // the path — so an owner can only ever write rules about their own field.
+    function validFieldRule(r) {
+      return r is map
+        && r.keys().hasOnly(['type', 'count', 'eventType', 'hour', 'keywords', 'start', 'end'])
+        && r.type in ['checkins', 'event_streak', 'weekend_streak', 'event_type', 'night', 'keywords', 'date_range']
+        && r.count is int && r.count >= 1 && r.count <= 100
+        && (r.get('eventType', '') is string)
+        && (r.get('hour', 20) is int && r.get('hour', 20) >= 0 && r.get('hour', 20) <= 23)
+        && (r.get('keywords', []) is list && r.get('keywords', []).size() <= 5)
+        && (r.get('start', '') is string && r.get('end', '') is string);
+    }
+
+    function validFieldPatch(d) {
+      return d.keys().hasOnly(['name', 'imageUrl', 'details', 'rules', 'active', 'grantDocId', 'migratedFromCatalogId', 'createdBy', 'createdAt', 'updatedAt'])
+        && validPatchArt(d)
+        && d.rules is list && d.rules.size() <= 2
+        && (d.rules.size() < 1 || validFieldRule(d.rules[0]))
+        && (d.rules.size() < 2 || validFieldRule(d.rules[1]))
+        && d.active is bool;
+    }
+
+    // A field owner handing one of their field's patches to a player who has
+    // a checked-in booking at that field. Rules can't search for "any
+    // check-in here", so the client names one (proofEventId) and this checks
+    // it. The granted copy must match the library entry exactly and land at
+    // its grantDocId — so an owner can't mint anything that isn't theirs.
+    function fieldOwnerGrant(userId, patchId) {
+      let d = request.resource.data;
+      let lib = get(/databases/$(database)/documents/fields/$(d.fieldId)/fieldPatches/$(d.fieldPatchId)).data;
+      return d.keys().hasOnly(['name', 'imageUrl', 'details', 'addedAt', 'granted', 'seen', 'fieldId', 'fieldPatchId', 'grantedBy', 'proofEventId'])
+        && d.grantedBy == request.auth.uid
+        && d.granted == true && d.seen == false && d.addedAt == request.time
+        && isFieldOwnerOf(d.fieldId)
+        && lib.grantDocId == patchId && lib.name == d.name && lib.imageUrl == d.imageUrl
+        && lib.get('active', true) == true
+        && get(/databases/$(database)/documents/events/$(d.proofEventId)).data.fieldId == d.fieldId
+        && get(/databases/$(database)/documents/events/$(d.proofEventId)/bookings/$(userId)).data.get('checkedIn', false) == true;
+    }
+
+    // A team officer handing one of the team library's patches to a current
+    // member of that team (Team Patches, 2026-10-27). Same exact-match idea.
+    function teamOfficerGrant(userId, patchId) {
+      let d = request.resource.data;
+      let lib = get(/databases/$(database)/documents/teams/$(d.teamId)/teamPatches/$(d.teamPatchId)).data;
+      return d.keys().hasOnly(['name', 'imageUrl', 'details', 'addedAt', 'granted', 'seen', 'teamId', 'teamPatchId', 'grantedBy'])
+        && d.grantedBy == request.auth.uid
+        && d.granted == true && d.seen == false && d.addedAt == request.time
+        && isTeamOfficerOf(d.teamId)
+        && exists(/databases/$(database)/documents/teams/$(d.teamId)/members/$(userId))
+        && lib.grantDocId == patchId && lib.name == d.name && lib.imageUrl == d.imageUrl;
+    }
+
     // No field-count cap anymore — Atlas Standard has no subscription
     // tiers to key one off of, so any owner can claim unlimited fields
     // (removed 2026-09 along with tierFieldCap/ownerCanClaimAnotherField).
@@ -141,6 +217,32 @@ service cloud.firestore {
       // a separate, narrower rule rather than reusing that one.
       match /adminNotes/{noteId} {
         allow read, write: if isAdmin();
+      }
+
+      // Owner-built unlockable patches (2026-10-27). Public read (players see
+      // what a field offers and track progress). The owner creates and edits
+      // their own; grantDocId is pinned to a field-namespaced id so a patch
+      // can never be aimed at a catalog id like "secret-agent". Only an admin
+      // (or the Admin SDK migration script) can create one that reuses a
+      // catalog id (migratedFromCatalogId, e.g. DTB). No delete — retiring
+      // (active: false) keeps provenance; holders keep their copy either way.
+      match /fieldPatches/{patchId} {
+        allow read: if true;
+        allow create: if isAdmin() || (
+          isFieldOwnerOf(fieldId)
+          && validFieldPatch(request.resource.data)
+          && request.resource.data.grantDocId == 'field-' + fieldId + '-' + patchId
+          && request.resource.data.get('migratedFromCatalogId', null) == null
+          && request.resource.data.createdBy == request.auth.uid
+        );
+        allow update: if isAdmin() || (
+          isFieldOwnerOf(fieldId)
+          && validFieldPatch(request.resource.data)
+          && request.resource.data.grantDocId == resource.data.grantDocId
+          && request.resource.data.get('migratedFromCatalogId', null) == resource.data.get('migratedFromCatalogId', null)
+          && request.resource.data.createdBy == resource.data.createdBy
+        );
+        allow delete: if isAdmin();
       }
     }
     match /events/{eventId} {
@@ -520,6 +622,16 @@ service cloud.firestore {
         // granted from the admin portal's Players section instead of by
         // hand through the Firebase console.
         allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        // 2026-10-27: a field owner (one of their field's patches, to a player
+        // checked in there) or a team officer (a team-library patch, to a
+        // current member) may create — never update or delete — a patch in
+        // someone else's collection. Both pinned to the library entry.
+        // Each path is guarded on its own key so the other path's lookups
+        // (which assume that key) never run and error out.
+        allow create: if request.auth != null && (
+          ('fieldId' in request.resource.data && fieldOwnerGrant(userId, patchId))
+          || ('teamId' in request.resource.data && teamOfficerGrant(userId, patchId))
+        );
       }
 
       // Digital vouchers issued when an owner cancels an event a player
@@ -563,6 +675,16 @@ service cloud.firestore {
     // like this because "patches" only ever exists at users/{uid}/patches
     // — no other subcollection anywhere in this schema shares that name.
     match /{path=**}/patches/{patchId} {
+      allow read: if true;
+    }
+
+    // Collection-group reads for the admin portal's #patches page
+    // (2026-10-27) — same public read as the nested library rules; this
+    // {path=**} form is what collection-group queries require.
+    match /{path=**}/fieldPatches/{patchId} {
+      allow read: if true;
+    }
+    match /{path=**}/teamPatches/{libId} {
       allow read: if true;
     }
 
@@ -765,6 +887,24 @@ service cloud.firestore {
           || (exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
               && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer") // an officer removing someone
         );
+      }
+
+      // Team patch library (2026-10-27). Public read. Officers add their own
+      // uploads (grantDocId pinned to a team-namespaced id, catalogId null)
+      // and can remove entries; nobody edits an entry after creation
+      // (delete + re-add), so it never drifts from copies already granted.
+      // Catalog-linked entries (DTB, WhiteHorse, ...) are created only by the
+      // Admin SDK seed script.
+      match /teamPatches/{libId} {
+        allow read: if true;
+        allow create: if isTeamOfficerOf(teamId)
+          && request.resource.data.keys().hasOnly(['name', 'imageUrl', 'details', 'grantDocId', 'catalogId', 'createdBy', 'createdAt'])
+          && validPatchArt(request.resource.data)
+          && request.resource.data.grantDocId == 'team-' + teamId + '-' + libId
+          && request.resource.data.get('catalogId', null) == null
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if false;
+        allow delete: if isTeamOfficerOf(teamId) || isAdmin();
       }
 
       // Team event calendar (WhiteHorse Milsim request, 2026-10-06). Events

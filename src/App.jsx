@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2, Users, Shield,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
@@ -14,12 +14,13 @@ import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useSWUpdate } from "./hooks/useSWUpdate";
-import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useMyTeamMemberships, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks } from "./hooks/useTeams";
+import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useMyTeamMemberships, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks, useTeamPatchLibrary, addTeamPatch, deleteTeamPatch, fetchPatchHolders, grantTeamPatch } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
 import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
-import { evaluateAchievements } from "./achievementEngine";
+import { evaluateAchievements, achievementProgress, fieldPatchToEnginePatch } from "./achievementEngine";
+import { useFieldPatches } from "./hooks/useFieldPatches";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useBookingCode, formatBookingCode } from "./hooks/useBookingCode";
 import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
@@ -3307,7 +3308,46 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   );
 }
 
-function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite, fieldsLoading }) {
+// "Unlockable patches here" (2026-10-27): the field's own owner-built
+// patches, with how to earn each and the viewer's progress (or a check if
+// they already have it). Hidden when the field has none.
+function FieldPatchStrip({ rows, signedIn }) {
+  const { T, display, body, mono } = useTheme();
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+      <Eyebrow>Unlockable Patches Here</Eyebrow>
+      <div className="flex flex-col gap-3">
+        {rows.map(({ patch, owned, paths }) => (
+          <div key={patch.grantDocId} className="flex gap-3">
+            <img src={patch.imageUrl} alt="" className="w-12 h-12 shrink-0" style={{ objectFit: "contain", filter: owned ? "none" : "grayscale(0.6)", opacity: owned ? 1 : 0.85 }} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{patch.name}</span>
+                {owned && <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.good, border: `1px solid ${T.good}`, borderRadius: 999 }}>EARNED</span>}
+              </div>
+              {patch.details && <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>{patch.details}</p>}
+              {paths.length === 0 && !owned && <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Given out by the field.</p>}
+              {!owned && signedIn && paths.map((p, i) => (
+                <div key={i} className="mt-1">
+                  <div className="flex justify-between text-[11px]" style={body}>
+                    <span style={{ color: T.ashDim }}>{i > 0 ? "or " : ""}{p.current} of {p.target} {p.label}</span>
+                    <span style={{ ...mono, color: T.ashFaint }}>{p.remaining} to go</span>
+                  </div>
+                  <div className="h-1 w-full mt-0.5" style={{ background: T.panelAlt, borderRadius: 999 }}>
+                    <div className="h-full" style={{ width: `${Math.round((p.current / Math.max(1, p.target)) * 100)}%`, background: T.accent, borderRadius: 999 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField, onBack, onNavigate, onOpenEvent, onOpenField, favorited, onToggleFavorite, fieldsLoading, fieldPatchRows, signedIn }) {
   const { T, display, body, mono } = useTheme();
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [shareState, setShareState] = useState(null);
@@ -3419,6 +3459,8 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
           )}
 
           <FieldFacts field={field} />
+
+          <FieldPatchStrip rows={fieldPatchRows} signedIn={signedIn} />
 
           <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <Eyebrow>Scheduled Events</Eyebrow>
@@ -5212,6 +5254,267 @@ function TeamLinksSection({ team, isOfficer }) {
   );
 }
 
+// Team patch library (2026-10-27). Everyone sees what the team awards;
+// officers can add patches (transparent PNG) and give any of them to current
+// members. Given patches are permanent — leaving the team doesn't remove them,
+// and removing an entry from the library doesn't take it back from anyone.
+const PATCH_NAME_MAX = 40;
+const PATCH_DETAILS_MAX = 200;
+
+// A team/field patch can't reuse an Atlas catalog patch's name: the app's
+// catalog auto-grant treats "owns a patch called X" as "already earned X",
+// so a look-alike would block the real one forever.
+function clashesWithCatalog(name, catalog) {
+  const n = name.trim().toLowerCase();
+  return (catalog || []).some((c) => (c.name || "").trim().toLowerCase() === n);
+}
+
+function TeamPatchesSection({ team, members, isOfficer, user }) {
+  const { T, display, body, mono } = useTheme();
+  const { library, libraryLoading } = useTeamPatchLibrary(team?.id);
+  const { catalog } = useAchievementCatalog();
+  const [openId, setOpenId] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDetails, setNewDetails] = useState("");
+  const [newBlob, setNewBlob] = useState(null);
+  const [newPreview, setNewPreview] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+  const [giving, setGiving] = useState(false);
+  const [holders, setHolders] = useState(null); // Set of uids, null = loading
+  const [picked, setPicked] = useState(new Set());
+  const fileRef = useRef(null);
+
+  const open = library.find((p) => p.id === openId) || null;
+  const inputStyle = { ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash };
+
+  useEffect(() => () => { if (newPreview) URL.revokeObjectURL(newPreview); }, [newPreview]);
+
+  if (libraryLoading) return null;
+  if (!isOfficer && library.length === 0) return null;
+
+  const resetAdd = () => {
+    setAdding(false);
+    setNewName("");
+    setNewDetails("");
+    setNewBlob(null);
+    setNewPreview(null);
+    setError("");
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    try {
+      const blob = await resizeImageFile(file, 512, 1, "image/png");
+      setNewBlob(blob);
+      setNewPreview(URL.createObjectURL(blob));
+    } catch (err) {
+      setError(err.message || "Couldn't read that image.");
+    }
+  };
+
+  const handleAdd = async () => {
+    const name = newName.trim();
+    if (!newBlob) return setError("Pick an image for the patch.");
+    if (!name) return setError("Give the patch a name.");
+    if (clashesWithCatalog(name, catalog)) return setError(`"${name}" is already an Atlas patch name. Pick a different name.`);
+    if (library.some((p) => p.name.trim().toLowerCase() === name.toLowerCase())) return setError("Your team already has a patch with that name.");
+    setBusy(true);
+    setError("");
+    try {
+      await addTeamPatch(team.id, user.uid, { name, details: newDetails.trim().slice(0, PATCH_DETAILS_MAX) }, newBlob);
+      resetAdd();
+      setToast(`${name} added. Tap it to give it out.`);
+    } catch (err) {
+      console.error("addTeamPatch:", err);
+      setError("Couldn't add the patch — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openPatch = (id) => {
+    setToast("");
+    setError("");
+    setGiving(false);
+    setOpenId(openId === id ? null : id);
+  };
+
+  const startGive = async () => {
+    setGiving(true);
+    setHolders(null);
+    setPicked(new Set());
+    try {
+      setHolders(await fetchPatchHolders(open.grantDocId, members.map((m) => m.uid)));
+    } catch (err) {
+      console.error("fetchPatchHolders:", err);
+      setHolders(new Set());
+    }
+  };
+
+  const togglePick = (uid) => setPicked((prev) => {
+    const next = new Set(prev);
+    if (next.has(uid)) next.delete(uid); else next.add(uid);
+    return next;
+  });
+
+  const handleGive = async () => {
+    if (picked.size === 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      const r = await grantTeamPatch(team.id, open, [...picked], user.uid);
+      const parts = [];
+      if (r.granted) parts.push(`Given to ${r.granted} ${r.granted === 1 ? "member" : "members"}`);
+      if (r.already) parts.push(`${r.already} already had it`);
+      if (r.failed) parts.push(`${r.failed} couldn't be given (they may have left the team)`);
+      setToast(parts.join(" · ") || "Nothing to give.");
+      setGiving(false);
+    } catch (err) {
+      console.error("grantTeamPatch:", err);
+      setError("Couldn't give the patch — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!window.confirm(`Remove ${open.name} from the team's patches? Anyone who already has it keeps it.`)) return;
+    setBusy(true);
+    try {
+      await deleteTeamPatch(team.id, open.id);
+      setOpenId(null);
+    } catch (err) {
+      console.error("deleteTeamPatch:", err);
+      setError("Couldn't remove it — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const givable = holders ? members.filter((m) => !holders.has(m.uid)) : [];
+
+  return (
+    <>
+      <Eyebrow>Team Patches</Eyebrow>
+      <div className="mb-4 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+        {library.length === 0 ? (
+          <p className="text-[12px] mb-2" style={{ ...body, color: T.ashDim }}>
+            Add your team's patches here, then give them to members. They show up on each member's profile.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {library.map((p) => (
+              <button key={p.id} onClick={() => openPatch(p.id)} className="p-2 flex flex-col items-center gap-1 transition-transform duration-100 active:scale-[0.97]"
+                style={{ background: openId === p.id ? T.panelAlt : "transparent", borderRadius: 8, border: `1px solid ${openId === p.id ? T.line : "transparent"}` }}>
+                <img src={p.imageUrl} alt="" className="w-14 h-14" style={{ objectFit: "contain" }} />
+                <span className="text-[11px] font-medium text-center leading-tight" style={{ ...body, color: T.ash }}>{p.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {open && (
+          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
+            <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{open.name}</div>
+            {open.details && <p className="text-[12px] mt-1" style={{ ...body, color: T.ashDim }}>{open.details}</p>}
+            {isOfficer && !giving && (
+              <div className="flex gap-2 mt-3">
+                <button onClick={startGive} disabled={busy} className="flex-1 py-2 text-[12px] font-semibold"
+                  style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}>
+                  Give to members
+                </button>
+                {!open.catalogId && (
+                  <button onClick={handleRemove} disabled={busy} className="px-3 py-2 text-[12px] font-medium"
+                    style={{ ...body, border: `1px solid ${T.line}`, color: T.alert, borderRadius: T.rPill }}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+            {isOfficer && giving && (
+              <div className="mt-3">
+                {holders === null ? (
+                  <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>Checking who already has it…</p>
+                ) : (
+                  <>
+                    {givable.length > 0 && (
+                      <button onClick={() => setPicked(new Set(givable.map((m) => m.uid)))} className="text-[12px] font-medium mb-2" style={{ ...body, color: T.accent }}>
+                        Select everyone who doesn't have it ({givable.length})
+                      </button>
+                    )}
+                    <div className="flex flex-col max-h-72 overflow-y-auto">
+                      {members.map((m) => {
+                        const has = holders.has(m.uid);
+                        return (
+                          <label key={m.uid} className="flex items-center justify-between gap-2 py-2" style={{ borderBottom: `1px solid ${T.line}`, opacity: has ? 0.55 : 1 }}>
+                            <span className="text-[13px] truncate" style={{ ...body, color: T.ash }}>{m.callsign || "Player"}</span>
+                            {has ? (
+                              <span className="text-[11px]" style={{ ...mono, color: T.good }}>HAS IT</span>
+                            ) : (
+                              <input type="checkbox" checked={picked.has(m.uid)} onChange={() => togglePick(m.uid)} className="w-4 h-4" />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={() => setGiving(false)} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Cancel</button>
+                      <button onClick={handleGive} disabled={busy || picked.size === 0} className="flex-1 py-2 text-[12px] font-semibold"
+                        style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: busy || picked.size === 0 ? 0.5 : 1 }}>
+                        {busy ? "Giving…" : `Give to ${picked.size}`}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {isOfficer && !adding && (
+          <button onClick={() => { setAdding(true); setOpenId(null); setToast(""); }} className="text-[12px] font-medium mt-3" style={{ ...body, color: T.accent }}>
+            + Add a patch
+          </button>
+        )}
+        {isOfficer && adding && (
+          <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: `1px solid ${T.line}` }}>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+            <button onClick={() => fileRef.current?.click()} className="flex items-center gap-3 p-2" style={{ border: `1px dashed ${T.line}`, borderRadius: 8 }}>
+              {newPreview ? (
+                <img src={newPreview} alt="" className="w-14 h-14" style={{ objectFit: "contain" }} />
+              ) : (
+                <div className="w-14 h-14 flex items-center justify-center text-[20px]" style={{ background: T.panelAlt, borderRadius: 8, color: T.ashFaint }}>+</div>
+              )}
+              <span className="text-[12px] text-left" style={{ ...body, color: T.ashDim }}>
+                {newPreview ? "Change image" : "Choose patch image (a PNG with a transparent background looks best)"}
+              </span>
+            </button>
+            <input value={newName} onChange={(e) => setNewName(e.target.value.slice(0, PATCH_NAME_MAX))} placeholder="Patch name"
+              className="w-full px-3 py-2 text-[13px] outline-none" style={inputStyle} />
+            <textarea value={newDetails} onChange={(e) => setNewDetails(e.target.value.slice(0, PATCH_DETAILS_MAX))} placeholder="What it's for (optional)" rows={2}
+              className="w-full px-3 py-2 text-[13px] outline-none resize-none" style={inputStyle} />
+            <div className="flex gap-2">
+              <button onClick={resetAdd} className="flex-1 py-2 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill }}>Cancel</button>
+              <button onClick={handleAdd} disabled={busy} className="flex-1 py-2 text-[12px] font-semibold"
+                style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: busy ? 0.6 : 1 }}>
+                {busy ? "Adding…" : "Add patch"}
+              </button>
+            </div>
+          </div>
+        )}
+        {error && <p className="text-[12px] mt-2" style={{ ...body, color: T.alert }}>{error}</p>}
+        {toast && <p className="text-[12px] mt-2" style={{ ...body, color: T.good }}>{toast}</p>}
+      </div>
+    </>
+  );
+}
+
 function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, myJoinRequest, joinRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, setDisplayedTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
   requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, atlasEvents, onOpenEvent, highlightEventId }) {
@@ -5578,6 +5881,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
         ))}
 
         <TeamLinksSection team={team} isOfficer={isOfficer} />
+
+        <TeamPatchesSection team={team} members={members} isOfficer={isOfficer} user={user} />
 
         <Eyebrow>Home Field</Eyebrow>
         {team.homeFieldName ? (
@@ -6050,6 +6355,62 @@ function RedeemScannerScreen({ onBack, user, grantPatch }) {
         ) : (
           <div className="py-3 text-center text-[13px]" style={{ ...body, color: T.ashFaint }}>
             Point the camera at a patch redemption code
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Active Achievements (2026-10-27): every patch the player is still working
+// toward, with live progress. Rows come from achievementProgress() in
+// achievementEngine.js — the same counters the unlock itself uses — so a bar
+// can never read full while the patch stays locked. A patch with two ways to
+// earn it (e.g. DTB: events in a row OR games total) shows both.
+function ActiveAchievementsScreen({ onBack, rows, loading, fields }) {
+  const { T, display, body, mono } = useTheme();
+  return (
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>Active Achievements</h1>
+      </div>
+      <div className="px-5 pt-4">
+        {loading ? (
+          <p className="text-[13px]" style={{ ...body, color: T.ashFaint }}>Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>
+            Nothing in progress right now. Check in to games to start working toward new patches.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {rows.map(({ patch, paths }) => {
+              const fieldName = patch.fieldId ? fields.find((f) => f.id === patch.fieldId)?.name : null;
+              return (
+                <div key={patch.grantDocId || patch.id || patch.name} className="p-3 flex gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                  <img src={patch.imageUrl} alt="" className="w-14 h-14 shrink-0" style={{ objectFit: "contain", filter: "grayscale(0.6)", opacity: 0.85 }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{patch.name}</div>
+                    {fieldName && <div className="text-[11px]" style={{ ...mono, color: T.ashFaint }}>{fieldName.toUpperCase()}</div>}
+                    {patch.details && <p className="text-[12px] mt-0.5" style={{ ...body, color: T.ashDim }}>{patch.details}</p>}
+                    {paths.map((p, i) => (
+                      <div key={i} className="mt-2">
+                        {i > 0 && <div className="text-[10px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.08em" }}>or</div>}
+                        <div className="flex items-center justify-between text-[12px] mb-1" style={body}>
+                          <span style={{ color: T.ash }}>{p.current} of {p.target} {p.label}</span>
+                          <span style={{ ...mono, color: T.ashFaint }}>{p.remaining} to go</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden" style={{ background: T.panelAlt, borderRadius: 999 }}>
+                          <div className="h-full" style={{ width: `${Math.round((p.current / Math.max(1, p.target)) * 100)}%`, background: T.accent, borderRadius: 999 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -6992,7 +7353,7 @@ function FeedbackPanel() {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenActiveAchievements, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
   const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
@@ -7321,6 +7682,10 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
           </button>
           <button onClick={onOpenPatches} className="w-full flex items-center justify-between py-3.5">
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Patches</span>
+            <ChevronRight size={15} color={T.ashFaint} />
+          </button>
+          <button onClick={onOpenActiveAchievements} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Active Achievements</span>
             <ChevronRight size={15} color={T.ashFaint} />
           </button>
           <button onClick={onOpenYearInReview} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
@@ -8503,11 +8868,78 @@ function AppShell() {
   // grantingPatchRef so a patch never gets double-submitted regardless of
   // which of the two effects found it first.
   const { catalog: achievementCatalog, catalogLoading: achievementCatalogLoading } = useAchievementCatalog();
+
+  // Owner-built field patches (2026-10-27): loaded for every field this
+  // player has checked in at (unlocks + Active Achievements) and for the
+  // field page that's open (its "Unlockable patches here" strip).
+  const playedFieldIds = useMemo(() => {
+    const ids = new Set();
+    myBookings.forEach((b) => {
+      if (!b.checkedIn) return;
+      const ev = events.find((e) => e.id === b.eventId);
+      if (ev?.fieldId) ids.add(ev.fieldId);
+    });
+    return [...ids];
+  }, [myBookings, events]);
+  const fieldPatchFieldIds = useMemo(
+    () => (activeFieldId ? [...playedFieldIds, activeFieldId] : playedFieldIds),
+    [playedFieldIds, activeFieldId]
+  );
+  const { byField: fieldPatchesByField, fieldPatchesLoading } = useFieldPatches(fieldPatchFieldIds);
+  // Catalog + field patches in one list, field ones in catalog shape. Only
+  // fields the player has played at feed unlocks/progress; the open field
+  // page reads fieldPatchesByField directly.
+  const playedFieldEnginePatches = useMemo(
+    () => playedFieldIds.flatMap((fid) => (fieldPatchesByField[fid] || []).map((fp) => fieldPatchToEnginePatch(fid, fp))),
+    [playedFieldIds, fieldPatchesByField]
+  );
+  // Catalog patches dedupe by name (legacy, matches grantPatch's name-slug
+  // ids); field patches by their own grantDocId, since owner-chosen names
+  // can collide across fields.
+  const ownsPatch = useCallback(
+    (patch) => (patch.grantDocId ? patches.some((p) => p.id === patch.grantDocId) : patches.some((p) => p.name === patch.name)),
+    [patches]
+  );
+  // The open field page's own patches (active only) for its strip: every
+  // one is listed, with progress for un-earned ones (manual-only patches
+  // have no progress paths).
+  const activeFieldPatchRows = useMemo(() => {
+    if (!activeFieldId) return [];
+    const list = (fieldPatchesByField[activeFieldId] || [])
+      .filter((fp) => fp.active !== false)
+      .map((fp) => fieldPatchToEnginePatch(activeFieldId, fp));
+    const progress = achievementProgress({
+      patches: list,
+      isOwned: () => false,
+      myBookings: myBookings.filter(isPlayedBooking),
+      events,
+      fields,
+      profile,
+      US_STATES,
+    });
+    return list.map((patch) => ({
+      patch,
+      owned: ownsPatch(patch),
+      paths: progress.find((r) => r.patch.grantDocId === patch.grantDocId)?.paths || [],
+    }));
+  }, [activeFieldId, fieldPatchesByField, myBookings, events, fields, profile, ownsPatch]);
+  const activeAchievementRows = useMemo(
+    () => achievementProgress({
+      patches: [...achievementCatalog, ...playedFieldEnginePatches],
+      isOwned: ownsPatch,
+      myBookings: myBookings.filter(isPlayedBooking),
+      events,
+      fields,
+      profile,
+      US_STATES,
+    }),
+    [achievementCatalog, playedFieldEnginePatches, ownsPatch, myBookings, events, fields, profile]
+  );
+
   useEffect(() => {
-    if (!user || myBookingsLoading || patchesLoading || achievementCatalogLoading) return;
-    const ownedPatchNames = new Set(patches.map((p) => p.name));
+    if (!user || myBookingsLoading || patchesLoading || achievementCatalogLoading || fieldPatchesLoading) return;
     evaluateAchievements({
-      catalog: achievementCatalog,
+      catalog: [...achievementCatalog, ...playedFieldEnginePatches],
       // Child-only bookings (parent didn't play) earn the parent nothing.
       myBookings: myBookings.filter(isPlayedBooking),
       events,
@@ -8516,14 +8948,18 @@ function AppShell() {
       US_STATES,
     }).then((earned) => {
       earned.forEach((patch) => {
-        if (ownedPatchNames.has(patch.name) || grantingPatchRef.current.has(patch.name)) return;
-        grantingPatchRef.current.add(patch.name);
-        grantPatch(user.uid, patch.name, patch.imageUrl, patch.details || null)
+        const key = patch.grantDocId || patch.name;
+        if (ownsPatch(patch) || grantingPatchRef.current.has(key)) return;
+        grantingPatchRef.current.add(key);
+        const opts = patch.grantDocId
+          ? { docId: patch.grantDocId, extra: { fieldId: patch.fieldId, fieldPatchId: patch.fieldPatchId } }
+          : {};
+        grantPatch(user.uid, patch.name, patch.imageUrl, patch.details || null, opts)
           .catch((err) => console.error("achievement grant failed:", err))
-          .finally(() => grantingPatchRef.current.delete(patch.name));
+          .finally(() => grantingPatchRef.current.delete(key));
       });
     }).catch((err) => console.error("achievement evaluation failed:", err));
-  }, [user, myBookings, myBookingsLoading, events, fields, patches, patchesLoading, profile, achievementCatalog, achievementCatalogLoading]);
+  }, [user, myBookings, myBookingsLoading, events, fields, patches, patchesLoading, profile, achievementCatalog, achievementCatalogLoading, playedFieldEnginePatches, fieldPatchesLoading, ownsPatch]);
 
   // featuredPatch is denormalized onto users/{uid} and publicProfiles/{uid},
   // which only the player can write. If an admin removes the patch it points
@@ -8563,6 +8999,7 @@ function AppShell() {
   const openAccount = () => push("account");
   const openChildProfiles = () => push("childProfiles");
   const openPatches = () => push("patches");
+  const openActiveAchievements = () => push("activeAchievements");
   const openYearInReview = () => push("yearInReview");
   const openSecretPatchQR = () => push("secretPatchQR");
   const openScanRedeem = () => push("scanRedeem");
@@ -8729,6 +9166,8 @@ function AppShell() {
         onOpenField={openField}
         favorited={activeField ? isFavorited("field", activeField.id) : false}
         onToggleFavorite={() => activeField && toggleFavorite("field", activeField.id)}
+        fieldPatchRows={activeFieldPatchRows}
+        signedIn={!!user}
       />
     );
   } else if (screen === "favorites") {
@@ -8827,6 +9266,7 @@ function AppShell() {
         onOpenChildProfiles={openChildProfiles}
         dependentCount={dependents.length}
         onOpenPatches={openPatches}
+        onOpenActiveAchievements={openActiveAchievements}
         onOpenYearInReview={openYearInReview}
         onOpenSecretPatchQR={openSecretPatchQR}
         onOpenScanRedeem={openScanRedeem}
@@ -8875,6 +9315,15 @@ function AppShell() {
         patches={patches}
         patchesLoading={patchesLoading}
         setFeaturedPatch={setFeaturedPatch}
+      />
+    );
+  } else if (screen === "activeAchievements") {
+    content = (
+      <ActiveAchievementsScreen
+        onBack={pop}
+        rows={activeAchievementRows}
+        loading={myBookingsLoading || patchesLoading || achievementCatalogLoading || fieldPatchesLoading}
+        fields={fields}
       />
     );
   } else if (screen === "yearInReview") {

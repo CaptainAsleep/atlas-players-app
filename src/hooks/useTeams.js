@@ -849,3 +849,106 @@ export function useTeamActions() {
     setMemberRoleIds,
   };
 }
+
+// ── Team patch library (2026-10-27) ──────────────────────────────────────
+// teams/{teamId}/teamPatches/{libId} — the patches this team's officers can
+// hand out. Catalog-linked entries (DTB, WhiteHorse, …) were seeded by
+// script and use the catalog id as grantDocId so existing holders are
+// recognised; officer uploads get "team-{teamId}-{libId}". Grants land in the
+// recipient's own users/{uid}/patches/{grantDocId} (rules: officer of this
+// team, recipient a current member, exact match to the library entry).
+export function useTeamPatchLibrary(teamId) {
+  const [library, setLibrary] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!teamId) {
+      setLibrary([]);
+      setLoading(false);
+      return undefined;
+    }
+    setLoading(true);
+    const unsub = onSnapshot(
+      collection(db, "teams", teamId, "teamPatches"),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+        setLibrary(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("useTeamPatchLibrary error:", err);
+        setLoading(false);
+      }
+    );
+    return unsub;
+  }, [teamId]);
+  return { library, libraryLoading: loading };
+}
+
+// pngBlob: already resized (transparent PNG). The doc id is generated first so
+// the image can go to its own path (covered by the existing officer-only
+// teamPatches/{teamId}/{fileName} Storage rule).
+export async function addTeamPatch(teamId, uid, { name, details }, pngBlob) {
+  const libRef = doc(collection(db, "teams", teamId, "teamPatches"));
+  const storageRef = ref(storage, `teamPatches/${teamId}/lib-${libRef.id}.png`);
+  await uploadBytes(storageRef, pngBlob, { contentType: "image/png" });
+  const imageUrl = await getDownloadURL(storageRef);
+  await setDoc(libRef, {
+    name,
+    imageUrl,
+    details: details || null,
+    grantDocId: `team-${teamId}-${libRef.id}`,
+    catalogId: null,
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  });
+  return libRef.id;
+}
+
+// Removes it from the library only — anyone already given it keeps it.
+export async function deleteTeamPatch(teamId, libId) {
+  await deleteDoc(doc(db, "teams", teamId, "teamPatches", libId));
+}
+
+// Which of these uids already hold this patch (users/{uid}/patches is public
+// read). One doc read per member.
+export async function fetchPatchHolders(grantDocId, uids) {
+  const snaps = await Promise.all(uids.map((uid) => getDoc(doc(db, "users", uid, "patches", grantDocId)).catch(() => null)));
+  return new Set(uids.filter((uid, i) => snaps[i]?.exists()));
+}
+
+// Gives one library patch to several members. Skips anyone who already has
+// it (same read-before-write idempotency as grantPatch). Writes are
+// independent, so one rejected recipient (e.g. they just left the team)
+// doesn't block the rest.
+export async function grantTeamPatch(teamId, entry, uids, grantedBy) {
+  const result = { granted: 0, already: 0, failed: 0 };
+  await Promise.all(
+    uids.map(async (uid) => {
+      const target = doc(db, "users", uid, "patches", entry.grantDocId);
+      try {
+        const existing = await getDoc(target);
+        if (existing.exists()) {
+          result.already += 1;
+          return;
+        }
+        await setDoc(target, {
+          name: entry.name,
+          imageUrl: entry.imageUrl,
+          details: entry.details || null,
+          addedAt: serverTimestamp(),
+          granted: true,
+          seen: false,
+          teamId,
+          teamPatchId: entry.id,
+          grantedBy,
+        });
+        result.granted += 1;
+      } catch (err) {
+        console.error("grantTeamPatch failed for", uid, err);
+        result.failed += 1;
+      }
+    })
+  );
+  return result;
+}

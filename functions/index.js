@@ -1648,6 +1648,67 @@ export const giftFreeEntryVoucher = onCall(
   }
 );
 
+// Owner-side "Vouchers issued" history (2026-10-27). Every voucher ever
+// issued at one of the caller's fields: cancellation credits (whole-event
+// cancel and single-booking cancel) and gifted free entries. Voucher docs are
+// money and stay function-only/player-only in the rules, so owners get this
+// sanitized read instead of rule access to players' voucher subcollections.
+// Read-only — no void/extend from here. Major-hosted vouchers (hostOwnerId,
+// no fieldId) are out of scope for v1. Needs the single-field
+// collection-group index on vouchers.fieldId (firestore.indexes.json).
+export const listFieldVouchers = onCall(
+  { invoker: "public" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const db = getFirestore();
+    const fieldId = request.data?.fieldId;
+    await assertOwnsClaimedField(db, fieldId, request.auth.uid);
+
+    const snap = await db.collectionGroup("vouchers").where("fieldId", "==", fieldId).get();
+    // Only users/{uid}/vouchers — guard against any future same-named
+    // subcollection elsewhere.
+    const docs = snap.docs.filter((d) => d.ref.parent.parent?.parent?.id === "users");
+    const ms = (ts) => (ts?.toMillis ? ts.toMillis() : null);
+    docs.sort((a, b) => (ms(b.data().issuedAt) || 0) - (ms(a.data().issuedAt) || 0));
+    const capped = docs.slice(0, 500);
+
+    const uids = [...new Set(capped.map((d) => d.ref.parent.parent.id))];
+    const profiles = uids.length ? await db.getAll(...uids.map((u) => db.collection("publicProfiles").doc(u))) : [];
+    const callsignByUid = {};
+    profiles.forEach((p, i) => { callsignByUid[uids[i]] = p.exists ? (p.data().callsign || "Player") : "Player"; });
+
+    const nowMs = Date.now();
+    const vouchers = capped.map((d) => {
+      const v = d.data();
+      const uid = d.ref.parent.parent.id;
+      const expiresAtMs = ms(v.expiresAt);
+      let status;
+      if (v.status === "redeemed") status = "used";
+      else if (v.status !== "active") status = String(v.status || "unknown");
+      else if (expiresAtMs && expiresAtMs < nowMs) status = "expired";
+      else if (v.kind !== "freeEntry" && v.redeemedAt && (v.amountCents ?? 0) < (v.originalAmountCents ?? 0)) status = "partly-used";
+      else status = "active";
+      return {
+        id: d.id,
+        uid,
+        callsign: callsignByUid[uid] || "Player",
+        kind: v.kind === "freeEntry" ? "freeEntry" : "credit",
+        gifted: !!v.giftedByOwnerId,
+        amountCents: v.amountCents ?? 0,
+        originalAmountCents: v.originalAmountCents ?? 0,
+        status,
+        sourceEventTitle: v.sourceEventTitle || null,
+        issuedAtMs: ms(v.issuedAt),
+        expiresAtMs,
+        redeemedAtMs: ms(v.redeemedAt),
+        redeemedEventTitle: v.redeemedEventTitle || null,
+        note: v.note || null,
+      };
+    });
+    return { vouchers, truncated: docs.length > capped.length };
+  }
+);
+
 // The redemption side of cancelEventWithVouchers above — lets a player use
 // an active, field-scoped voucher to book a future event at that same
 // field, entirely without Stripe. Deliberately full-cover-only for now: a

@@ -41,6 +41,18 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // Owner-built field patch art (2026-10-27), fieldPatches/{fieldId}/{patchId}.png.
+    // Public read; only the field's own owner can upload — same
+    // Firestore-lookup ownership check the field's Firestore rules use.
+    match /fieldPatches/{fieldId}/{fileName} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/fields/$(fieldId)).data.get('ownerId', null) == request.auth.uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+
     // Team calendar event banners — same officer-only model as teamPatches.
     match /teamEventBanners/{teamId}/{eventId}/{fileName} {
       allow read: if true;

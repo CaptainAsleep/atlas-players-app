@@ -76,9 +76,9 @@ const fields = [
     indoorOutdoor: "outdoor",
     about:
       "Large outdoor paintball and airsoft park with regular weekend public-play sessions plus named big-game events through the season.",
-    imageUrl: "https://www.futureball.com/wp-content/uploads/2025/02/472333646_122128428062561121_6556266903748369289_n-256x300.jpg",
+    imageUrl: "https://www.futureball.com/wp-content/uploads/2026/02/Futureball-Map-LOW-res-768x705.jpg",
     status: "active",
-    dataSource: "website",
+    dataSource: "website; field-profile image replaced 2026-10-26 with the field map image supplied directly by Michael (same image also used for the new Open Play event banners)",
     lastScraped: "2026-08-23",
   },
   {
@@ -6819,6 +6819,161 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     },
   },
   {
+    id: "futureball-2026-10-31-open-play",
+    fieldId: "futureball",
+    fieldName: "Futureball",
+    title: "Open Play",
+    date: "2026-10-31",
+    startTime: "11:00 AM",
+    endTime: "3:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    imageUrl: "https://www.futureball.com/wp-content/uploads/2026/02/Futureball-Map-LOW-res-768x705.jpg",
+    description:
+      "Fall weekend Open Play \u2014 single public-play session (11am-3pm), paintball and airsoft.",
+    waiver: {
+      version: "2026-10-26",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-26); per its own text, good through 3/26/27
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
+
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
+
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
+    },
+  },
+  {
+    id: "futureball-2026-11-01-open-play",
+    fieldId: "futureball",
+    fieldName: "Futureball",
+    title: "Open Play",
+    date: "2026-11-01",
+    startTime: "11:00 AM",
+    endTime: "3:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    imageUrl: "https://www.futureball.com/wp-content/uploads/2026/02/Futureball-Map-LOW-res-768x705.jpg",
+    description:
+      "Fall weekend Open Play \u2014 single public-play session (11am-3pm), paintball and airsoft.",
+    waiver: {
+      version: "2026-10-26",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-26); per its own text, good through 3/26/27
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
+
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
+
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
+    },
+  },
+  {
+    id: "futureball-2026-11-07-open-play",
+    fieldId: "futureball",
+    fieldName: "Futureball",
+    title: "Open Play",
+    date: "2026-11-07",
+    startTime: "11:00 AM",
+    endTime: "3:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    imageUrl: "https://www.futureball.com/wp-content/uploads/2026/02/Futureball-Map-LOW-res-768x705.jpg",
+    description:
+      "Fall weekend Open Play \u2014 single public-play session (11am-3pm), paintball and airsoft.",
+    waiver: {
+      version: "2026-10-26",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-26); per its own text, good through 3/26/27
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
+
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
+
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
+    },
+  },
+  {
+    id: "futureball-2026-11-14-open-play",
+    fieldId: "futureball",
+    fieldName: "Futureball",
+    title: "Open Play",
+    date: "2026-11-14",
+    startTime: "11:00 AM",
+    endTime: "3:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    imageUrl: "https://www.futureball.com/wp-content/uploads/2026/02/Futureball-Map-LOW-res-768x705.jpg",
+    description:
+      "Fall weekend Open Play \u2014 single public-play session (11am-3pm), paintball and airsoft.",
+    waiver: {
+      version: "2026-10-26",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-26); per its own text, good through 3/26/27
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
+
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
+
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
+    },
+  },
+  {
+    id: "futureball-2026-11-15-open-play",
+    fieldId: "futureball",
+    fieldName: "Futureball",
+    title: "Open Play",
+    date: "2026-11-15",
+    startTime: "11:00 AM",
+    endTime: "3:00 PM",
+    price: "$25",
+    type: "OUTDOOR",
+    imageUrl: "https://www.futureball.com/wp-content/uploads/2026/02/Futureball-Map-LOW-res-768x705.jpg",
+    description:
+      "Fall weekend Open Play \u2014 single public-play session (11am-3pm), paintball and airsoft.",
+    waiver: {
+      version: "2026-10-26",
+      isDemo: false, // real waiver text, supplied directly by Michael (2026-10-26); per its own text, good through 3/26/27
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
+
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
+
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
+    },
+  },
+  {
     id: "futureball-2026-09-19-armageddon",
     fieldId: "futureball",
     fieldName: "Futureball",
@@ -6828,20 +6983,21 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     description: "Large-scale airsoft big game.",
     sourceUrl: "https://www.futureball.com/armageddon-4/",
     waiver: {
-      version: "2026-08-01",
+      version: "2026-10-26",
+      isDemo: false, // swapped 2026-10-26 from the generic placeholder to Futureball's real waiver text (supplied by Michael); per its own text, good through 3/26/27
       text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
 
-By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
 
-I certify that:
-- I am voluntarily participating and am physically able to do so.
-- I will wear full-seal eye protection at all times while on the field.
-- I will follow all posted field rules and staff instructions.
-- I understand that replicas will be chronographed and must meet posted FPS limits.
-- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
-- I am at least 18 years of age, or have a parent/guardian's consent on file.
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
 
-This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
     },
   },
   {
@@ -6854,20 +7010,21 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     description: "Themed airsoft big game.",
     sourceUrl: "https://www.futureball.com/zombie-apocalypse/",
     waiver: {
-      version: "2026-08-01",
+      version: "2026-10-26",
+      isDemo: false, // swapped 2026-10-26 from the generic placeholder to Futureball's real waiver text (supplied by Michael); per its own text, good through 3/26/27
       text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
 
-By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
 
-I certify that:
-- I am voluntarily participating and am physically able to do so.
-- I will wear full-seal eye protection at all times while on the field.
-- I will follow all posted field rules and staff instructions.
-- I understand that replicas will be chronographed and must meet posted FPS limits.
-- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
-- I am at least 18 years of age, or have a parent/guardian's consent on file.
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
 
-This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
     },
   },
   {
@@ -6881,20 +7038,21 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     sourceUrl: "https://www.futureball.com/",
     imageUrl: "https://www.futureball.com/wp-content/uploads/2025/02/Customer-day-2025.jpg",
     waiver: {
-      version: "2026-08-01",
+      version: "2026-10-26",
+      isDemo: false, // swapped 2026-10-26 from the generic placeholder to Futureball's real waiver text (supplied by Michael); per its own text, good through 3/26/27
       text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
 
-By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+IN CONSIDERATION of being permitted to participate in any Paintball, Airsoft, and/or Gellyball activities including, but not limited to, playing, using the premises of, renting and operating equipment leased, sanctioned and/or operated by the above named vendor, I acknowledge and agree that:
 
-I certify that:
-- I am voluntarily participating and am physically able to do so.
-- I will wear full-seal eye protection at all times while on the field.
-- I will follow all posted field rules and staff instructions.
-- I understand that replicas will be chronographed and must meet posted FPS limits.
-- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
-- I am at least 18 years of age, or have a parent/guardian's consent on file.
+I fully understand and acknowledge that; (a) risks and dangers exist in my use of Paintball, Airsoft, and/or Gellyball equipment and my participation in Paintball, Airsoft, and/or Gellyball activities; (b) my participation in such activities and/or use of such equipment may result in my injury or illness including but not limited to bodily injury, disease strains, fractures, partial and/or total paralysis, eye injury, blindness, heat stroke, heart attack, death or other ailments that could cause serious disability; (c) these risks and dangers may be caused by the negligence of the owners, employees, officers or agents of FP; the negligence of the participants, the negligence of others, accidents, breaches of contract, the forces of nature or other causes. These risks and dangers may arise from foreseeable or unforeseeable causes; and (d) by my participation in these activities and/or use of equipment, I hereby assume all risks and dangers and all responsibility for any losses and/or damages, whether caused in whole or in part by the negligence or other conduct of the owners, agents, officers, employees of FP, or by any other person.
 
-This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+I, on behalf of myself, my personal representatives and my heirs, hereby voluntarily agree to release, waive, discharge, hold harmless, defend and indemnify FP and it's owners, agents, officers and employees from any and all claims, actions or losses for bodily injury, property damage (including, but not limited to, arising out of the actual or alleged transmission of a communicable disease), wrongful death, loss of services or otherwise which may arise out of my use of Paintball, Airsoft, and/or Gellyball equipment or my participation in Paintball, Airsoft, and/or Gellyball activities. I specifically understand that I am releasing, discharging and waiving any claims or actions that I may have presently or in the future for the negligent acts or other conduct by the owners, agents, officers or employees of FP. This Waiver is good through 3/26/27.
+
+MEDICAL PERMISSION AUTHORIZATION
+
+If the participant is of minority age, the undersigned parent or guardian hereby gives permission for FP to authorize emergency medical treatment as may be deemed necessary for the child named below while participating in Paintball, Airsoft, and/or Gellyball games.
+
+I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENTION TO EXEMPT AND RELIEVE FP FROM LIABILITY FOR PERSONAL INJURY, PROPERTY DAMAGE OR WRONGFUL DEATH CAUSED BY NEGLIGENCE OR ANY OTHER CAUSE.`,
     },
   },
   {
