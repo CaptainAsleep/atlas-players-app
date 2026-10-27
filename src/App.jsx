@@ -8807,6 +8807,44 @@ function AppShell() {
   const pop = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   const goTab = (tab) => setStack([tab]);
 
+  // Android hardware/gesture back button support. Navigation here is pure
+  // React state (the `stack` above), so the browser had no history entries
+  // of its own — pressing Android's back button found nothing to go back to
+  // and closed the installed PWA outright. Fix: whenever the player is
+  // anywhere other than the Home tab root, keep exactly ONE "guard" history
+  // entry on top of the browser history. Back consumes that guard (firing
+  // popstate) and we translate it into an in-app back: pop the stack, or
+  // from the root of another tab, return to Home. Only from Home root does
+  // back fall through to the OS and leave the app, as Android users expect.
+  // The guard is re-added after each pop while still off-root, and quietly
+  // removed (ignored popstate) when the in-app back arrow / goTab("home")
+  // returns to root, so no extra dead back-presses build up.
+  const historyGuardRef = useRef(false);
+  const ignoreNextPopRef = useRef(false);
+  useEffect(() => {
+    const atRoot = stack.length === 1 && stack[0] === "home";
+    if (!atRoot && !historyGuardRef.current) {
+      window.history.pushState({ atlasGuard: true }, "");
+      historyGuardRef.current = true;
+    } else if (atRoot && historyGuardRef.current) {
+      historyGuardRef.current = false;
+      ignoreNextPopRef.current = true;
+      window.history.back();
+    }
+  }, [stack]);
+  useEffect(() => {
+    const onPop = () => {
+      if (ignoreNextPopRef.current) {
+        ignoreNextPopRef.current = false;
+        return;
+      }
+      historyGuardRef.current = false; // the guard entry was just consumed
+      setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev[0] !== "home" ? ["home"] : prev));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   const activeEvent = events.find((e) => e.id === activeEventId) || null;
   const { signature, signedDependentIds, signedAbsentDependentIds, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
   const { booking: myBooking, bookingLoading: myBookingLoading } = useMyBooking(user?.uid, activeEvent?.id);
