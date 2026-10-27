@@ -187,6 +187,26 @@ export function patchTriggers(patch) {
   return patch.trigger ? [patch.trigger] : [];
 }
 
+// Child profiles (2026-10-27) earn patches from the games they play, but
+// they're not accounts: no sign-up date, no referrals, no team membership of
+// their own, no walk-on sign-up. These trigger types describe an account, so
+// they're dropped for a child — account_created would otherwise be "always
+// earned" and team_threshold would read the parent's team.
+export const ACCOUNT_ONLY_TRIGGER_TYPES = new Set([
+  "account_created",
+  "signup_window",
+  "walkon_flagged_booking",
+  "team_joined",
+  "referral_count",
+  "team_threshold_any_event",
+]);
+
+// The same patch with only the rules a child can meet (as a `rules` array,
+// which patchTriggers prefers). No rules left = never unlocks for a child.
+export function childEligiblePatch(patch) {
+  return { ...patch, rules: patchTriggers(patch).filter((t) => t && !ACCOUNT_ONLY_TRIGGER_TYPES.has(t.type)) };
+}
+
 function buildContext({ myBookings, events, fields }) {
   const checkedIn = myBookings
     .filter((b) => b.checkedIn)

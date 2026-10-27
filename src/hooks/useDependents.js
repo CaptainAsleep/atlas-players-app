@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../lib/firebase";
 
 // A guardian can book themselves plus up to 4 children onto one event.
 // Enforced for real server-side (functions/index.js resolveAttendees) —
@@ -58,8 +59,14 @@ export function ageOnDate(dob, onDate) {
 // taken at booking time, never this live record. dob is set once at
 // creation and the rules refuse any later change to it.
 export function useDependents(uid) {
-  const [dependents, setDependents] = useState([]);
+  // Every child profile, including ones already handed over to the child's
+  // own account (graduatedAt, set by claimChildProfile). `dependents`
+  // returned below is only the active ones, so booking, the picker and the
+  // per-child limit never see a graduated profile.
+  const [allDependents, setDependents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const dependents = allDependents.filter((d) => !d.graduatedAt);
+  const graduatedDependents = allDependents.filter((d) => !!d.graduatedAt);
 
   useEffect(() => {
     if (!uid) {
@@ -111,5 +118,42 @@ export function useDependents(uid) {
     await deleteDoc(doc(db, "users", uid, "dependents", id));
   }
 
-  return { dependents, dependentsLoading: loading, addDependent, updateDependent, deleteDependent };
+  return { dependents, graduatedDependents, dependentsLoading: loading, addDependent, updateDependent, deleteDependent };
+}
+
+// Hand-over status per child (users/{uid}/childGraduations/{depId}, written
+// only by the graduation functions): { [depId]: { status: "pending" |
+// "claimed", emailLower, expiresAtMs, ... } }.
+export function useChildGraduations(uid) {
+  const [byDep, setByDep] = useState({});
+  useEffect(() => {
+    if (!uid) {
+      setByDep({});
+      return;
+    }
+    return onSnapshot(
+      collection(db, "users", uid, "childGraduations"),
+      (snap) => setByDep(Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]))),
+      (err) => console.error("useChildGraduations error:", err)
+    );
+  }, [uid]);
+  return byDep;
+}
+
+// Server-only: the function checks the child is 18+ today, emails them a
+// single-use link and records the pending hand-over.
+export async function startChildGraduation(dependentId, email) {
+  const res = await httpsCallable(functions, "startChildGraduation")({ dependentId, email });
+  return res.data;
+}
+
+export async function cancelChildGraduation(dependentId) {
+  await httpsCallable(functions, "cancelChildGraduation")({ dependentId });
+}
+
+// Called from the child's own (new or existing) account with the token from
+// their email link. Errors carry details.reason — see claimChildProfile.
+export async function claimChildProfile(token) {
+  const res = await httpsCallable(functions, "claimChildProfile")({ token });
+  return res.data;
 }

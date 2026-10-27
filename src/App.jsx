@@ -19,11 +19,12 @@ import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfile
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
 import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
-import { evaluateAchievements, achievementProgress, fieldPatchToEnginePatch } from "./achievementEngine";
+import { evaluateAchievements, achievementProgress, fieldPatchToEnginePatch, childEligiblePatch } from "./achievementEngine";
 import { useFieldPatches } from "./hooks/useFieldPatches";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useBookingCode, formatBookingCode } from "./hooks/useBookingCode";
-import { useDependents, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
+import { useDependents, useChildGraduations, startChildGraduation, cancelChildGraduation, claimChildProfile, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
+import { useChildPatches, useChildHistory, grantChildPatch, markChildPatchSeen } from "./hooks/useChildPatches";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs } from "./lib/eventClose";
@@ -6835,9 +6836,13 @@ function ChildAvatar({ id, size = 40 }) {
 // for them. Birthdate is set once and can't be edited afterward (the rules
 // enforce it too), so a guardian can't change a child's age to get past a
 // field's minimum age.
-function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDependent, updateDependent, deleteDependent, onBack, onOpenAccount }) {
+function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDependent, updateDependent, deleteDependent, onBack, onOpenAccount, graduatedDependents = [], childGraduations = {}, childPatchesByDep = {}, childHistoryByDep = {}, events = [] }) {
   const { T, display, body, mono } = useTheme();
   const [editingId, setEditingId] = useState(null); // null = list, "new" = creating, else a dependent id
+  // A child's own page (patches, games, hand-over). Editing opens on top of
+  // it and returns to it.
+  const [viewingId, setViewingId] = useState(null);
+  const viewingDep = viewingId ? dependents.find((d) => d.id === viewingId) : null;
   const [fullName, setFullName] = useState("");
   const [callsign, setCallsign] = useState("");
   const [dob, setDob] = useState("");
@@ -6895,6 +6900,7 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
     try {
       await deleteDependent(editingId);
       closeForm();
+      setViewingId(null);
     } catch (err) {
       console.error("delete child profile failed:", err);
       setError("Couldn't delete — try again.");
@@ -6908,15 +6914,24 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
   return (
     <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
-        <button onClick={editingId ? closeForm : onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+        <button onClick={editingId ? closeForm : viewingDep ? () => setViewingId(null) : onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
         </button>
         <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>
-          {isNew ? "New Child Profile" : editingId ? "Edit Child Profile" : "Child Profiles"}
+          {isNew ? "New Child Profile" : editingId ? "Edit Child Profile" : viewingDep ? viewingDep.callsign : "Child Profiles"}
         </h1>
       </div>
 
-      {!editingId ? (
+      {!editingId && viewingDep ? (
+        <ChildProfileDetail
+          dep={viewingDep}
+          patches={childPatchesByDep[viewingDep.id] || []}
+          history={childHistoryByDep[viewingDep.id] || []}
+          events={events}
+          graduation={childGraduations[viewingDep.id] || null}
+          onEdit={() => startEdit(viewingDep)}
+        />
+      ) : !editingId ? (
         <div className="px-6 pt-5 flex flex-col gap-3">
           <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
             A child profile isn't a separate account — you book, sign waivers, and manage everything from yours. Your child's legal name and avatar are only visible to you and the field you book with.
@@ -6939,17 +6954,33 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
           ) : (
             dependents.map((d) => {
               const age = ageOnDate(d.dob, today);
+              const patchCount = (childPatchesByDep[d.id] || []).length;
               return (
-                <button key={d.id} onClick={() => startEdit(d)} className="w-full flex items-center gap-3 p-3 text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                <button key={d.id} onClick={() => setViewingId(d.id)} className="w-full flex items-center gap-3 p-3 text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                   <ChildAvatar id={d.avatar} size={44} />
                   <div className="flex-1 min-w-0">
                     <div className="text-[14px] font-semibold truncate" style={{ ...display, color: T.ash }}>{d.callsign}</div>
-                    <div className="text-[11px] truncate" style={{ ...mono, color: T.ashDim }}>{d.fullName}{age !== null ? ` · Age ${age}` : ""}</div>
+                    <div className="text-[11px] truncate" style={{ ...mono, color: T.ashDim }}>{d.fullName}{age !== null ? ` · Age ${age}` : ""}{` · ${patchCount} ${patchCount === 1 ? "patch" : "patches"}`}</div>
                   </div>
                   <ChevronRight size={15} color={T.ashFaint} />
                 </button>
               );
             })
+          )}
+
+          {!dependentsLoading && graduatedDependents.length > 0 && (
+            <>
+              <div className="text-[10px] font-semibold uppercase mt-2" style={labelStyle}>Moved to their own account</div>
+              {graduatedDependents.map((d) => (
+                <div key={d.id} className="w-full flex items-center gap-3 p-3" style={{ background: T.panel, borderRadius: T.rCard, opacity: 0.75 }}>
+                  <ChildAvatar id={d.avatar} size={36} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{d.callsign}</div>
+                    <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>Their patches and games are on their own Atlas account now.</div>
+                  </div>
+                </div>
+              ))}
+            </>
           )}
 
           {hasPhone && (
@@ -7031,6 +7062,264 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// One child's page (Child Patches + Graduation, 2026-10-27): the patches they
+// earned, the games they checked in to, and — once they're 18 — the hand-over
+// of all of it to their own Atlas account (startChildGraduation emails them a
+// single-use link; claimChildProfile moves everything when they use it).
+function ChildProfileDetail({ dep, patches, history, events, graduation, onEdit }) {
+  const { T, display, body, mono } = useTheme();
+  const today = localDateStr();
+  const age = ageOnDate(dep.dob, today);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const games = history
+    .filter((b) => b.checkedIn)
+    .map((b) => {
+      const ev = events.find((e) => e.id === b.eventId);
+      return { id: b.eventId, title: ev?.title || b.eventTitle || "Game", fieldName: ev?.fieldName || b.fieldName || "", date: ev?.date || b.date || "" };
+    })
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const sortedPatches = [...patches].sort((a, b) => (b.addedAt?.toMillis?.() || 0) - (a.addedAt?.toMillis?.() || 0));
+  const pending = graduation?.status === "pending" && graduation.expiresAtMs > Date.now() ? graduation : null;
+  const fmtDate = (d) => (d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
+
+  const send = async (addr) => {
+    setMessage(""); setError("");
+    const clean = (addr || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+      setError("Enter the email address your child will sign in with.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await startChildGraduation(dep.id, clean);
+      if (res?.throttled) setMessage("A link was just sent. Give it a minute before resending.");
+      else if (!res?.emailSent) setError("The link was saved, but the email didn't send. Tap Resend.");
+      else { setMessage(`Link sent to ${clean}.`); setEmail(""); }
+    } catch (err) {
+      console.error("startChildGraduation failed:", err);
+      setError(err?.message || "Couldn't send the link. Try again.");
+    }
+    setBusy(false);
+  };
+
+  const cancel = async () => {
+    setMessage(""); setError(""); setBusy(true);
+    try {
+      await cancelChildGraduation(dep.id);
+      setMessage("Link canceled. It won't work anymore.");
+    } catch (err) {
+      console.error("cancelChildGraduation failed:", err);
+      setError("Couldn't cancel. Try again.");
+    }
+    setBusy(false);
+  };
+
+  const labelStyle = { ...mono, color: T.ashFaint, letterSpacing: "0.04em" };
+  const cardStyle = { background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd };
+
+  return (
+    <div className="px-6 pt-5 flex flex-col gap-4">
+      <div className="flex items-center gap-3 p-3" style={cardStyle}>
+        <ChildAvatar id={dep.avatar} size={52} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[16px] font-semibold truncate" style={{ ...display, color: T.ash }}>{dep.callsign}</div>
+          <div className="text-[11px] truncate" style={{ ...mono, color: T.ashDim }}>{dep.fullName}{age !== null ? ` · Age ${age}` : ""}</div>
+        </div>
+        <button onClick={onEdit} className="px-3 py-1.5 text-[12px] font-semibold flex-shrink-0" style={{ ...display, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>
+          Edit
+        </button>
+      </div>
+
+      <div>
+        <div className="text-[10px] font-semibold uppercase mb-2" style={labelStyle}>Patches ({sortedPatches.length})</div>
+        {sortedPatches.length === 0 ? (
+          <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>
+            No patches yet. {dep.callsign} earns them by checking in to games, the same way you do. Only you can see them.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {sortedPatches.map((patch) => (
+              <div key={patch.id} className="flex flex-col items-center p-2 text-center" style={cardStyle}>
+                <img src={patch.imageUrl} alt={patch.name} className="w-14 h-14 mb-1" style={{ objectFit: "contain" }} />
+                <div className="text-[11px] font-semibold leading-tight" style={{ ...display, color: T.ash }}>{splitPatchDisplay(patch).title}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="text-[10px] font-semibold uppercase mb-2" style={labelStyle}>Games Played ({games.length})</div>
+        {games.length === 0 ? (
+          <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>
+            Games show here once {dep.callsign} is checked in at the gate.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {games.map((g) => (
+              <div key={g.id} className="p-3" style={cardStyle}>
+                <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{g.title}</div>
+                <div className="text-[11px] truncate" style={{ ...mono, color: T.ashDim }}>{[g.fieldName, fmtDate(g.date)].filter(Boolean).join(" · ")}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="p-4" style={cardStyle}>
+        <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Move to their own account</div>
+        {age === null || age < ADULT_AGE ? (
+          <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+            When {dep.callsign} turns 18, you can move their patches and games to their own Atlas account, so their record starts from their first game.
+          </p>
+        ) : pending ? (
+          <>
+            <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+              Link sent to <span style={{ color: T.ash }}>{pending.emailLower}</span>. It works until {new Date(pending.expiresAtMs).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}. When {dep.callsign} opens it and signs in with that email, their patches and games move to their account and this profile is locked.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={cancel} disabled={busy} className="flex-1 py-2.5 text-[12px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill, opacity: busy ? 0.5 : 1 }}>
+                Cancel Link
+              </button>
+              <button onClick={() => send(pending.emailLower)} disabled={busy} className="flex-1 py-2.5 text-[12px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, opacity: busy ? 0.5 : 1 }}>
+                Resend
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+              {dep.callsign} is 18. Send them a link to claim their patches and games on their own Atlas account (a new one, or one they already have). Once they claim it, this profile is locked and can't be booked from your account.
+            </p>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Their email address"
+              autoComplete="off"
+              className="w-full px-3 py-2.5 text-[14px] bg-transparent outline-none mb-2"
+              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
+            />
+            <button onClick={() => send(email)} disabled={busy} className="w-full py-2.5 text-[13px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, opacity: busy ? 0.6 : 1 }}>
+              {busy ? "Sending…" : "Send Link"}
+            </button>
+          </>
+        )}
+        {message && <p className="text-[12px] mt-2" style={{ ...body, color: T.good }}>{message}</p>}
+        {error && <p className="text-[12px] mt-2" style={{ ...body, color: T.alert }}>{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Shown in the child's own account when they arrive from the hand-over email
+// (?graduate=<token>, kept in localStorage so it survives sign-up and
+// onboarding). Everything is checked server-side in claimChildProfile; this
+// only explains what happens and handles the fixable errors (unconfirmed
+// email, signed in with the wrong address).
+function ClaimChildProfileModal({ token, user, onClose, onDismiss, sendVerificationEmail, syncEmailVerification, onSignOut }) {
+  const { T, display, body, mono } = useTheme();
+  const [phase, setPhase] = useState("intro"); // intro | working | done | error
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null); // { message, reason }
+  const [note, setNote] = useState("");
+
+  const claim = async () => {
+    setPhase("working"); setNote("");
+    try {
+      const r = await claimChildProfile(token);
+      setResult(r);
+      setPhase("done");
+    } catch (err) {
+      console.error("claimChildProfile failed:", err);
+      setError({ message: err?.message || "Couldn't claim. Try again.", reason: err?.details?.reason || null });
+      setPhase("error");
+    }
+  };
+  const resendVerify = async () => {
+    try {
+      await sendVerificationEmail();
+      setNote(`Sent. Check ${user?.email}.`);
+    } catch {
+      setNote("Couldn't send. Try again in a minute.");
+    }
+  };
+  const confirmedTryAgain = async () => {
+    await syncEmailVerification().catch(() => {});
+    claim();
+  };
+  const finalError = phase === "error" && ["used", "expired", "invalid", "own-parent", "too-young", "too-large"].includes(error?.reason);
+
+  const primary = { ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill };
+  const secondary = { ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill };
+  const patchWord = (n) => `${n} ${n === 1 ? "patch" : "patches"}`;
+  const gameWord = (n) => `${n} ${n === 1 ? "game" : "games"}`;
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.55)", zIndex: 3100 }}>
+      <div className="w-full max-w-sm p-5" style={{ background: T.void, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+        <div className="text-[11px] font-semibold mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.1em" }}>YOUR ATLAS RECORD</div>
+        {phase === "intro" || phase === "working" ? (
+          <>
+            <div className="text-[18px] font-semibold mb-2" style={{ ...display, color: T.ash }}>Claim your patches</div>
+            <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>
+              Your parent is moving the patches and games from your child profile to an Atlas account of your own. They'll be added to this account (<span style={{ color: T.ash }}>{user?.email}</span>). Make sure it's the one you want to keep.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={onDismiss} disabled={phase === "working"} className="flex-1 py-2.5 text-[12px] font-medium" style={secondary}>Not Now</button>
+              <button onClick={claim} disabled={phase === "working"} className="flex-1 py-2.5 text-[13px] font-semibold" style={{ ...primary, opacity: phase === "working" ? 0.6 : 1 }}>
+                {phase === "working" ? "Moving…" : "Claim"}
+              </button>
+            </div>
+          </>
+        ) : phase === "done" ? (
+          <>
+            <div className="text-[18px] font-semibold mb-2" style={{ ...display, color: T.ash }}>Welcome to your record{result?.childCallsign ? `, ${result.childCallsign}` : ""}</div>
+            <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>
+              {result?.patchesMoved || result?.gamesMoved
+                ? `${patchWord(result.patchesMoved || 0)} and ${gameWord(result.gamesMoved || 0)} moved to your account.`
+                : "Everything from your child profile was already on this account."}
+              {(result?.skippedPatches || result?.skippedGames) ? " Anything you already had here was kept as is." : ""}
+            </p>
+            <button onClick={onClose} className="w-full py-2.5 text-[13px] font-semibold" style={primary}>Done</button>
+          </>
+        ) : (
+          <>
+            <div className="text-[18px] font-semibold mb-2" style={{ ...display, color: T.ash }}>
+              {error?.reason === "verify" ? "Confirm your email first" : error?.reason === "wrong-email" ? "Different account needed" : "Couldn't claim"}
+            </div>
+            <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>{error?.message}</p>
+            {note && <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>{note}</p>}
+            {error?.reason === "verify" ? (
+              <div className="flex flex-col gap-2">
+                <button onClick={confirmedTryAgain} className="w-full py-2.5 text-[13px] font-semibold" style={primary}>I've Confirmed It, Try Again</button>
+                <button onClick={resendVerify} className="w-full py-2.5 text-[12px] font-medium" style={secondary}>Resend Confirmation Email</button>
+                <button onClick={onDismiss} className="w-full py-2 text-[12px]" style={{ ...body, color: T.ashFaint }}>Not Now</button>
+              </div>
+            ) : error?.reason === "wrong-email" ? (
+              <div className="flex gap-2">
+                <button onClick={onDismiss} className="flex-1 py-2.5 text-[12px] font-medium" style={secondary}>Not Now</button>
+                <button onClick={onSignOut} className="flex-1 py-2.5 text-[13px] font-semibold" style={primary}>Sign Out</button>
+              </div>
+            ) : finalError ? (
+              <button onClick={onClose} className="w-full py-2.5 text-[13px] font-semibold" style={primary}>Close</button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={onDismiss} className="flex-1 py-2.5 text-[12px] font-medium" style={secondary}>Not Now</button>
+                <button onClick={claim} className="flex-1 py-2.5 text-[13px] font-semibold" style={primary}>Try Again</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -8578,7 +8867,8 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
   const handleNext = async () => {
     setAdvancing(true);
     try {
-      await markPatchSeen(user.uid, current.id);
+      // Child Patches: a child's unlock is marked seen in their childPatches.
+      await markPatchSeen(user.uid, current.id, current);
       setIndex((i) => i + 1);
     } catch (err) {
       console.error("markPatchSeen failed:", err);
@@ -8603,14 +8893,14 @@ function PatchUnlockedOverlay({ unseenPatches, user, markPatchSeen }) {
       <div className="relative mb-7" style={{ animation: "patchGlow 2.4s ease-in-out infinite" }}>
         <div style={{ position: "absolute", inset: -40, background: "radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 70%)", borderRadius: "50%" }} />
         <img
-          key={current.id}
+          key={`${current._depId || ""}:${current.id}`}
           src={current.imageUrl}
           alt={current.name}
           style={{ width: 180, height: 180, objectFit: "contain", position: "relative", animation: "patchPop 0.55s cubic-bezier(0.34,1.56,0.64,1)" }}
         />
       </div>
 
-      <div className="text-[13px] font-bold mb-2" style={{ ...mono, color: "#F2C94C", letterSpacing: "0.14em" }}>✦ PATCH UNLOCKED ✦</div>
+      <div className="text-[13px] font-bold mb-2 text-center" style={{ ...mono, color: "#F2C94C", letterSpacing: "0.14em" }}>{current._childCallsign ? `✦ ${current._childCallsign.toUpperCase()} UNLOCKED A PATCH ✦` : "✦ PATCH UNLOCKED ✦"}</div>
       <div className="text-[24px] font-bold text-center px-2" style={{ ...display, color: "#FFFFFF", lineHeight: 1.3 }}>{splitPatchDisplay(current).title}</div>
       {splitPatchDisplay(current).subtitle && (
         <div className="text-[14px] text-center mb-9 px-6 mt-2" style={{ ...body, color: "rgba(255,255,255,0.75)" }}>{splitPatchDisplay(current).subtitle}</div>
@@ -8711,7 +9001,9 @@ function AppShell() {
   const { events, loading: eventsLoading } = useEvents();
   const { user, profile, authLoading, signUp, signIn, signInWithGoogle, sendPasswordReset, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
-  const { dependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
+  const { dependents, graduatedDependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
+  const childGraduations = useChildGraduations(user?.uid);
+  const activeDependentIds = useMemo(() => dependents.map((d) => d.id), [dependents]);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
   const {
@@ -8759,6 +9051,27 @@ function AppShell() {
   // (those gates render ahead of any screen check, so this just waits
   // quietly behind them rather than needing a separate redirect effect).
   const [fieldDeepLinkId] = useState(() => new URLSearchParams(window.location.search).get("field"));
+
+  // Child-profile hand-over link (?graduate=<token>, Child Patches +
+  // Graduation 2026-10-27). Kept like the referral code so it survives
+  // sign-up and onboarding; the claim prompt shows once the child is in.
+  const [graduateToken, setGraduateToken] = useState(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("graduate");
+    try {
+      if (fromUrl) {
+        localStorage.setItem("atlas_graduate", fromUrl);
+        return fromUrl;
+      }
+      return localStorage.getItem("atlas_graduate") || null;
+    } catch {
+      return fromUrl || null;
+    }
+  });
+  const [graduatePromptHidden, setGraduatePromptHidden] = useState(false);
+  const clearGraduateToken = () => {
+    try { localStorage.removeItem("atlas_graduate"); } catch { /* storage blocked */ }
+    setGraduateToken(null);
+  };
 
   // Team event invite link (?team=<teamId>&event=<eventId>) — opens that
   // team's page on the shared event. Same wait-behind-the-gates behavior as
@@ -8998,6 +9311,65 @@ function AppShell() {
       });
     }).catch((err) => console.error("achievement evaluation failed:", err));
   }, [user, myBookings, myBookingsLoading, events, fields, patches, patchesLoading, profile, achievementCatalog, achievementCatalogLoading, playedFieldEnginePatches, fieldPatchesLoading, ownsPatch]);
+
+  // ── Child Patches (2026-10-27) ──────────────────────────────────────────
+  // Each active child profile earns patches from the games it was checked in
+  // to, granted from the parent's session with the same self-heal idiom as
+  // the two effects above (a child can't sign in to grant their own). Their
+  // games come from the parent's family bookings + each booking's private
+  // attendeeDetails, so kids who've played since Child Profiles launched
+  // earn retroactively. Account-only triggers are dropped (childEligiblePatch).
+  // Field patches: the parent's playedFieldIds already includes every field
+  // a child played at (it reads all checked-in bookings, child-only ones too).
+  const { childPatchesByDep, childPatchesLoading } = useChildPatches(user?.uid, activeDependentIds);
+  const { childHistoryByDep, childHistoryLoading } = useChildHistory(user?.uid, myBookings, activeDependentIds, myBookingsLoading);
+  const childCatalog = useMemo(
+    () => [...achievementCatalog, ...playedFieldEnginePatches].map(childEligiblePatch).filter((p) => p.rules.length > 0),
+    [achievementCatalog, playedFieldEnginePatches]
+  );
+  const grantingChildRef = useRef(new Set());
+  useEffect(() => {
+    if (!user || activeDependentIds.length === 0) return;
+    if (childPatchesLoading || childHistoryLoading || achievementCatalogLoading || fieldPatchesLoading) return;
+    activeDependentIds.forEach((depId) => {
+      const owned = childPatchesByDep[depId] || [];
+      const history = childHistoryByDep[depId] || [];
+      if (history.length === 0) return;
+      const ownsChild = (patch) => (patch.grantDocId ? owned.some((p) => p.id === patch.grantDocId) : owned.some((p) => p.name === patch.name));
+      const tryGrant = (patch) => {
+        const key = `${depId}:${patch.grantDocId || patch.name}`;
+        if (ownsChild(patch) || grantingChildRef.current.has(key)) return;
+        grantingChildRef.current.add(key);
+        const opts = patch.grantDocId
+          ? { docId: patch.grantDocId, extra: { fieldId: patch.fieldId, fieldPatchId: patch.fieldPatchId } }
+          : {};
+        grantChildPatch(user.uid, depId, patch.name, patch.imageUrl, patch.details || null, opts)
+          .catch((err) => console.error("child patch grant failed:", err))
+          .finally(() => grantingChildRef.current.delete(key));
+      };
+      history.forEach((b) => {
+        if (!b.checkedIn) return;
+        const event = events.find((e) => e.id === b.eventId);
+        if (event?.checkInPatch?.imageUrl) tryGrant({ name: event.checkInPatch.name, imageUrl: event.checkInPatch.imageUrl });
+      });
+      evaluateAchievements({ catalog: childCatalog, myBookings: history, events, fields, profile: {}, US_STATES })
+        .then((earned) => earned.forEach(tryGrant))
+        .catch((err) => console.error("child achievement evaluation failed:", err));
+    });
+  }, [user, activeDependentIds, childPatchesByDep, childPatchesLoading, childHistoryByDep, childHistoryLoading, achievementCatalogLoading, fieldPatchesLoading, childCatalog, events, fields]);
+
+  // A child's new unlocks share the parent's unlock overlay, labeled with
+  // the child's callsign.
+  const unseenForOverlay = useMemo(() => [
+    ...patches.filter((p) => p.seen === false),
+    ...dependents.flatMap((d) => (childPatchesByDep[d.id] || [])
+      .filter((p) => p.seen === false)
+      .map((p) => ({ ...p, _depId: d.id, _childCallsign: d.callsign || "Your child" }))),
+  ], [patches, dependents, childPatchesByDep]);
+  const markOverlaySeen = useCallback(
+    (uid, patchId, item) => (item?._depId ? markChildPatchSeen(uid, item._depId, patchId) : markPatchSeen(uid, patchId)),
+    [markPatchSeen]
+  );
 
   // featuredPatch is denormalized onto users/{uid} and publicProfiles/{uid},
   // which only the player can write. If an admin removes the patch it points
@@ -9342,6 +9714,11 @@ function AppShell() {
         deleteDependent={deleteDependent}
         onBack={pop}
         onOpenAccount={openAccount}
+        graduatedDependents={graduatedDependents}
+        childGraduations={childGraduations}
+        childPatchesByDep={childPatchesByDep}
+        childHistoryByDep={childHistoryByDep}
+        events={events}
       />
     );
   } else if (screen === "patches") {
@@ -9386,7 +9763,18 @@ function AppShell() {
         {content}
       </div>
       {user && profile && !installGate && (
-        <PatchUnlockedOverlay unseenPatches={patches.filter((p) => p.seen === false)} user={user} markPatchSeen={markPatchSeen} />
+        <PatchUnlockedOverlay unseenPatches={unseenForOverlay} user={user} markPatchSeen={markOverlaySeen} />
+      )}
+      {user && profile && !installGate && graduateToken && !graduatePromptHidden && (
+        <ClaimChildProfileModal
+          token={graduateToken}
+          user={user}
+          onClose={clearGraduateToken}
+          onDismiss={() => setGraduatePromptHidden(true)}
+          sendVerificationEmail={sendVerificationEmail}
+          syncEmailVerification={syncEmailVerification}
+          onSignOut={async () => { setGraduatePromptHidden(false); await signOut(); }}
+        />
       )}
       {user && profile && !installGate && noticeToShow && (
         <CancellationNoticeModal notice={noticeToShow} onDismiss={() => acknowledgeNotice(noticeToShow.id)} />
