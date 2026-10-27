@@ -1038,7 +1038,12 @@ service cloud.firestore {
             // field errors (= deny). Absent = open, so existing teams are
             // unchanged. Approval teams are joined via an officer creating
             // the member doc (the officer clause below).
-            && get(/databases/$(database)/documents/teams/$(teamId)).data.get('joinPolicy', 'open') == 'open')
+            && (get(/databases/$(database)/documents/teams/$(teamId)).data.get('joinPolicy', 'open') == 'open'
+              // Officer Team Invites (2026-10-27): accepting an officer's
+              // invite is a self-join, allowed on approval teams too (the
+              // invite is the officer's approval). The invite is deleted in
+              // the same batch; exists() sees the pre-batch state.
+              || exists(/databases/$(database)/documents/teamInvites/$(teamId + '_' + request.auth.uid))))
           ||
           // Founding officer — only the team's own creator, only for their
           // own uid, only at the moment the team itself is created (checked
@@ -1056,9 +1061,15 @@ service cloud.firestore {
           (memberUid == request.auth.uid && request.resource.data.role == "officer"
             && getAfter(/databases/$(database)/documents/teams/$(teamId)).data.createdBy == request.auth.uid)
           ||
-          // An existing officer adding/promoting someone.
+          // An officer approving a join request. Tightened 2026-10-27: before,
+          // any officer could create a member doc for ANY uid with ANY role
+          // (no request, no consent). Now only for a player who has a pending
+          // join request on this team, and only as a regular member.
+          // Promotions are updates (allow update below), unaffected.
           (exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
-            && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer")
+            && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == "officer"
+            && request.resource.data.role == "member"
+            && exists(/databases/$(database)/documents/joinRequests/$(teamId + '_' + memberUid)))
         );
         allow update: if request.auth != null
           && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
@@ -1198,6 +1209,42 @@ service cloud.firestore {
     // own users/publicProfiles docs, so approval creates the member doc and
     // marks this request approved:true; the player's own app sees that,
     // finishes their profile (teamId/teamName) and deletes the request.
+    // Officer Team Invites (2026-10-27). Team Join Approval in reverse: an
+    // officer invites a player by callsign, the player accepts (a self-join
+    // the members rule allows while this doc exists) or declines (delete).
+    // Id {teamId}_{uid}, so one pending invite per player per team. No
+    // updates. No expiry: it stays until accepted, declined or revoked.
+    match /teamInvites/{inviteId} {
+      allow read: if request.auth != null && (
+        resource == null
+          ? inviteId.matches('.*_' + request.auth.uid)
+          : (request.auth.uid == resource.data.uid
+             || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+                 && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer"))
+      );
+      // Officer of that team only; can't invite yourself or an existing
+      // member; invitee must be a real player (users doc); teamName pinned to
+      // the team's real name so an invite can't pose as another team.
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['teamId', 'teamName', 'uid', 'invitedBy', 'createdAt'])
+        && inviteId == request.resource.data.teamId + '_' + request.resource.data.uid
+        && request.resource.data.invitedBy == request.auth.uid
+        && request.resource.data.uid != request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer"
+        && request.resource.data.teamName == get(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.name
+        && !exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/members/$(request.resource.data.uid))
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.uid));
+      allow update: if false;
+      // The invitee declining or finishing an accept, or an officer revoking.
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.uid
+        || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer")
+      );
+    }
+
     match /joinRequests/{requestId} {
       // Same missing-doc handling as officerRequests (resource == null on a
       // doc that doesn't exist yet), plus the player's own-uid query.

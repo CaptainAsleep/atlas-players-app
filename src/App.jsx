@@ -14,7 +14,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useFavorites, useEventInterested } from "./hooks/useFavorites";
 import { usePatches } from "./hooks/usePatches";
 import { useSWUpdate } from "./hooks/useSWUpdate";
-import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useMyTeamMemberships, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks, useTeamPatchLibrary, addTeamPatch, deleteTeamPatch, fetchPatchHolders, grantTeamPatch } from "./hooks/useTeams";
+import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useMyTeamMemberships, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks, useTeamPatchLibrary, addTeamPatch, deleteTeamPatch, fetchPatchHolders, grantTeamPatch, useMyTeamInvites, useTeamInvites, sendTeamInvite, deleteTeamInvite, acceptTeamInvite } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
@@ -422,8 +422,14 @@ function Eyebrow({ children }) {
   );
 }
 
+// Count shown on the Social tab icon: pending team invites + incoming friend
+// requests (Officer Team Invites, 2026-10-27). Provided in AppShell, so the
+// many BottomNav call sites don't each need a new prop.
+const SocialBadgeContext = React.createContext(0);
+
 function BottomNav({ active, onNavigate }) {
   const { T, display, body, mono } = useTheme();
+  const socialBadge = React.useContext(SocialBadgeContext);
   const tabs = [
     { key: "home", label: "Explore", icon: Compass },
     { key: "favorites", label: "Favorites", icon: Heart },
@@ -439,8 +445,17 @@ function BottomNav({ active, onNavigate }) {
           const isActive = active === t.key;
           return (
             <button key={t.key} onClick={() => onNavigate(t.key)} className="flex flex-col items-center gap-1 flex-1 transition-transform duration-100 active:scale-90">
-              <div className="flex items-center justify-center" style={{ width: 38, height: 26, borderRadius: T.rPill, background: isActive ? T.navActive : "transparent" }}>
+              <div className="relative flex items-center justify-center" style={{ width: 38, height: 26, borderRadius: T.rPill, background: isActive ? T.navActive : "transparent" }}>
                 <Icon size={18} strokeWidth={isActive ? 2.1 : 1.6} color={isActive ? T.ash : T.ashFaint} />
+                {t.key === "inbox" && socialBadge > 0 && (
+                  <span
+                    className="absolute flex items-center justify-center text-[9px] font-bold"
+                    style={{ ...body, top: -3, right: 0, minWidth: 15, height: 15, padding: "0 4px", borderRadius: 999, background: T.alert, color: "#fff" }}
+                    aria-label={`${socialBadge} pending`}
+                  >
+                    {socialBadge > 9 ? "9+" : socialBadge}
+                  </span>
+                )}
               </div>
               <span className="text-[9px] font-medium" style={{ ...body, color: isActive ? T.ash : T.ashFaint }}>
                 {t.label}
@@ -3778,7 +3793,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
 
 function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, teams, teamsLoading, createTeam,
   allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend,
-  tab, setTab }) {
+  tab, setTab, teamInvites = [] }) {
   const { T, display, body, mono } = useTheme();
   // tab (friends | teams) now lives in AppShell as socialTab, passed down
   // as a prop — same fix as scheduleTab/homeSearch etc. above: this
@@ -3788,6 +3803,7 @@ function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, tea
   return (
     <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <ScreenHeader title="Social" />
+      <TeamInvitesBlock invites={teamInvites} teams={teams} allProfiles={allProfiles} user={user} profile={profile} onOpenTeam={onOpenTeam} />
       <div className="px-6 pt-3 pb-1 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
         {[["friends", "Friends"], ["teams", "Teams"]].map(([key, label]) => (
           <button
@@ -3822,6 +3838,189 @@ function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, tea
 
       <BottomNav active="inbox" onNavigate={onNavigate} />
     </div>
+  );
+}
+
+/* ---------- Officer Team Invites (2026-10-27) ---------- */
+// Invitee side: pending invites at the top of Social, on either tab.
+// Accepting joins straight away, even on an approval team (the invite is
+// the officer's approval). Declining just deletes the invite.
+function TeamInvitesBlock({ invites, teams, allProfiles, user, profile, onOpenTeam }) {
+  const { T, display, body } = useTheme();
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+  if (!invites || invites.length === 0) return null;
+
+  const handle = async (inv, accept) => {
+    setBusyId(inv.id);
+    setError("");
+    try {
+      if (accept) await acceptTeamInvite(user.uid, profile, inv);
+      else await deleteTeamInvite(inv.teamId, user.uid);
+    } catch (err) {
+      console.error("team invite action failed:", err);
+      setError(accept ? "Couldn't join that team — try again." : "Couldn't decline — try again.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="px-6 pt-4">
+      <Eyebrow>Team Invites</Eyebrow>
+      <div className="mb-2 flex flex-col gap-2">
+        {invites.map((inv) => {
+          const team = (teams || []).find((t) => t.id === inv.teamId);
+          const name = team?.name || inv.teamName || "A team";
+          const inviter = (allProfiles || []).find((p) => p.uid === inv.invitedBy);
+          const busy = busyId === inv.id;
+          return (
+            <div key={inv.id} className="p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: `1.5px solid ${T.accent}`, outlineOffset: -1 }}>
+              <button onClick={() => onOpenTeam(inv.teamId)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
+                <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center" style={{ background: T.panelAlt, borderRadius: 4 }}>
+                  {team?.patchUrl ? (
+                    <img src={team.patchUrl} alt={name} className="w-full h-full" style={{ objectFit: "contain" }} />
+                  ) : (
+                    <Shield size={18} color={T.ashDim} />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{name}</div>
+                  <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>
+                    Invited by {inviter?.callsign || "an officer"}
+                  </div>
+                </div>
+              </button>
+              <button disabled={busy} onClick={() => handle(inv, false)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill, opacity: busy ? 0.6 : 1 }}>
+                Decline
+              </button>
+              <button disabled={busy} onClick={() => handle(inv, true)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...display, background: T.good, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: busy ? 0.6 : 1 }}>
+                {busy ? "…" : "Join"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {error && <p className="text-[12px] mb-2" style={{ ...body, color: T.alert }}>{error}</p>}
+    </div>
+  );
+}
+
+// Officer side, on the team page: search any player by callsign (same
+// client-side publicProfiles search as Social > Friends), invite, and see /
+// revoke what's pending.
+function TeamInviteSection({ team, user, members, allProfiles }) {
+  const { T, display, body } = useTheme();
+  const { teamInvites } = useTeamInvites(team?.id, true);
+  const [search, setSearch] = useState("");
+  const [busyUid, setBusyUid] = useState(null);
+  const [error, setError] = useState("");
+  const memberUids = new Set(members.map((m) => m.uid));
+  const invitedUids = new Set(teamInvites.map((i) => i.uid));
+  const q = search.trim().toLowerCase();
+  const results = q.length >= 2
+    ? (allProfiles || [])
+        .filter((p) => p.uid !== user?.uid && (p.callsign || "").toLowerCase().includes(q))
+        .slice(0, 8)
+    : [];
+
+  const invite = async (p) => {
+    setBusyUid(p.uid);
+    setError("");
+    try {
+      await sendTeamInvite(team.id, user.uid, p.uid);
+    } catch (err) {
+      console.error("sendTeamInvite failed:", err);
+      setError(`Couldn't invite ${p.callsign || "that player"} — try again.`);
+    } finally {
+      setBusyUid(null);
+    }
+  };
+  const revoke = async (uid) => {
+    setBusyUid(uid);
+    setError("");
+    try {
+      await deleteTeamInvite(team.id, uid);
+    } catch (err) {
+      console.error("revoke invite failed:", err);
+      setError("Couldn't revoke that invite — try again.");
+    } finally {
+      setBusyUid(null);
+    }
+  };
+
+  const avatar = (p) => p?.avatarUrl ? (
+    <div className="w-9 h-9 flex-shrink-0" style={{ backgroundImage: `url("${p.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+  ) : (
+    <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center text-[12px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+      {(p?.callsign || "?").charAt(0).toUpperCase()}
+    </div>
+  );
+
+  return (
+    <>
+      <Eyebrow>Invite Players</Eyebrow>
+      <div className="mb-2 flex items-center gap-2 px-4 py-2.5" style={{ background: T.panel, borderRadius: T.rPill, boxShadow: T.shadowMd }}>
+        <Search size={15} color={T.ashFaint} />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search any Atlas player by callsign"
+          className="flex-1 text-[13px] bg-transparent outline-none"
+          style={{ ...body, color: T.ash }}
+        />
+      </div>
+      {q.length >= 2 && results.length === 0 && (
+        <p className="text-[12px] mb-3 px-1" style={{ ...body, color: T.ashFaint }}>No players match "{search.trim()}".</p>
+      )}
+      {results.length > 0 && (
+        <div className="flex flex-col gap-2 mb-3">
+          {results.map((p) => {
+            const status = memberUids.has(p.uid) ? "member" : invitedUids.has(p.uid) ? "invited" : "none";
+            return (
+              <div key={p.uid} className="p-2.5 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                {avatar(p)}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{p.callsign}</div>
+                  {p.teamName && <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>{p.teamName}</div>}
+                </div>
+                {status === "none" ? (
+                  <button disabled={busyUid === p.uid} onClick={() => invite(p)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, background: T.cta, color: T.inverse, borderRadius: T.rPill, opacity: busyUid === p.uid ? 0.6 : 1 }}>
+                    {busyUid === p.uid ? "Inviting…" : "Invite"}
+                  </button>
+                ) : (
+                  <span className="text-[11px] font-semibold px-2" style={{ ...body, color: T.ashFaint }}>{status === "member" ? "Member" : "Invited"}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {teamInvites.length > 0 && (
+        <>
+          <div className="text-[11px] font-semibold mb-2 px-1" style={{ ...body, color: T.ashDim }}>Pending invites ({teamInvites.length})</div>
+          <div className="flex flex-col gap-2 mb-3">
+            {teamInvites.map((inv) => {
+              const p = (allProfiles || []).find((x) => x.uid === inv.uid);
+              return (
+                <div key={inv.id} className="p-2.5 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                  {avatar(p)}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{p?.callsign || "Player"}</div>
+                    <div className="text-[11px]" style={{ ...body, color: T.ashFaint }}>Invite sent — waiting on them</div>
+                  </div>
+                  <button disabled={busyUid === inv.uid} onClick={() => revoke(inv.uid)} className="px-2.5 py-1.5 text-[11px] font-semibold" style={{ ...body, border: `1px solid ${T.alert}`, color: T.alert, borderRadius: T.rPill, opacity: busyUid === inv.uid ? 0.6 : 1 }}>
+                    Revoke
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {error && <p className="text-[12px] mb-3" style={{ ...body, color: T.alert }}>{error}</p>}
+      <div className="mb-5" />
+    </>
   );
 }
 
@@ -5518,7 +5717,8 @@ function TeamPatchesSection({ team, members, isOfficer, user }) {
 
 function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, myJoinRequest, joinRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, setDisplayedTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
-  requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, atlasEvents, onOpenEvent, highlightEventId }) {
+  requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, atlasEvents, onOpenEvent, highlightEventId,
+  allProfiles = [] }) {
   const { T, display, body, mono } = useTheme();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -5975,6 +6175,10 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
               ))}
             </div>
           </>
+        )}
+
+        {isOfficer && team && (
+          <TeamInviteSection team={team} user={user} members={members} allProfiles={allProfiles} />
         )}
 
         {isOfficer && joinRequests.length > 0 && (
@@ -9423,6 +9627,7 @@ function AppShell() {
   const { myJoinRequest: activeTeamMyJoinRequest } = useMyJoinRequest(activeTeamId, user?.uid);
   const { joinRequests: activeTeamJoinRequests } = useJoinRequests(activeTeamId);
   const { myJoinRequests } = useMyJoinRequests(user?.uid);
+  const { myTeamInvites } = useMyTeamInvites(user?.uid);
 
   // Team join approval: an officer's approval creates the member doc and
   // flags the request approved, but can't touch this player's own profile
@@ -9614,6 +9819,7 @@ function AppShell() {
         cancelOrUnfriend={cancelOrUnfriend}
         tab={socialTab}
         setTab={setSocialTab}
+        teamInvites={myTeamInvites}
       />
     );
   } else if (screen === "player" && activePlayerId) {
@@ -9664,6 +9870,7 @@ function AppShell() {
         atlasEvents={events}
         onOpenEvent={openEvent}
         highlightEventId={eventDeepLinkId}
+        allProfiles={allPublicProfiles}
       />
     );
   } else if (screen === "profile") {
@@ -9757,6 +9964,7 @@ function AppShell() {
 
   return (
     <ClaimedFieldsContext.Provider value={claimedFieldIds}>
+    <SocialBadgeContext.Provider value={myTeamInvites.length + incomingRequests.length}>
     <div className="w-full flex flex-col app-shell-height" style={{ background: T.void }}>
       <style>{FONTS}</style>
       <div key={`${screen}:${activeEventId}:${activeFieldId}:${activeTeamId}:${activePlayerId}`} className="flex-1 min-h-0 relative screen-transition">
@@ -9781,6 +9989,7 @@ function AppShell() {
       )}
       {needRefresh && <UpdateAvailableToast onRefresh={refreshNow} />}
     </div>
+    </SocialBadgeContext.Provider>
     </ClaimedFieldsContext.Provider>
   );
 }

@@ -258,6 +258,106 @@ export function useJoinRequests(teamId) {
   return { joinRequests: requests };
 }
 
+// ── Officer Team Invites (2026-10-27) ──────────────────────────────────
+// teamInvites/{teamId}_{uid}: an officer invites a player, the player
+// accepts (their own self-join, allowed while the invite exists) or
+// declines (delete). See firestore.rules teamInvites.
+
+// Every pending invite for this player, across teams. App-level, for the
+// Social tab's Team Invites block and the nav badge.
+export function useMyTeamInvites(uid) {
+  const [invites, setInvites] = useState([]);
+
+  useEffect(() => {
+    if (!uid) {
+      setInvites([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      query(collection(db, "teamInvites"), where("uid", "==", uid)),
+      (snap) => setInvites(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("useMyTeamInvites error:", err)
+    );
+    return unsub;
+  }, [uid]);
+
+  return { myTeamInvites: invites };
+}
+
+// Every pending invite a team has sent — officer-side. Pass enabled=false
+// for non-officers (the rules only let officers list them).
+export function useTeamInvites(teamId, enabled) {
+  const [invites, setInvites] = useState([]);
+
+  useEffect(() => {
+    if (!teamId || !enabled) {
+      setInvites([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      query(collection(db, "teamInvites"), where("teamId", "==", teamId)),
+      (snap) => setInvites(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("useTeamInvites error:", err)
+    );
+    return unsub;
+  }, [teamId, enabled]);
+
+  return { teamInvites: invites };
+}
+
+// Officer inviting a player. teamName must match the team doc exactly (the
+// rules pin it), so it's read fresh rather than trusted from the caller.
+export async function sendTeamInvite(teamId, officerUid, inviteeUid) {
+  const teamSnap = await getDoc(doc(db, "teams", teamId));
+  await setDoc(doc(db, "teamInvites", `${teamId}_${inviteeUid}`), {
+    teamId,
+    teamName: teamSnap.exists() ? teamSnap.data().name || "" : "",
+    uid: inviteeUid,
+    invitedBy: officerUid,
+    createdAt: serverTimestamp(),
+  });
+}
+
+// Invitee declining, or an officer revoking. Same write; rules gate who.
+export async function deleteTeamInvite(teamId, uid) {
+  await deleteDoc(doc(db, "teamInvites", `${teamId}_${uid}`));
+}
+
+// Invitee accepting: their own member doc + clearing the invite in one
+// batch, and showing this team on their profile only if they don't show
+// one yet (same rule as joinTeam). If they're already on the team (joined
+// some other way meanwhile), just clear the invite — re-setting an existing
+// member doc is an update, which only officers may do.
+export async function acceptTeamInvite(uid, profile, invite) {
+  const memberRef = doc(db, "teams", invite.teamId, "members", uid);
+  const inviteRef = doc(db, "teamInvites", `${invite.teamId}_${uid}`);
+  if ((await getDoc(memberRef)).exists()) {
+    await deleteDoc(inviteRef);
+    return;
+  }
+  const teamSnap = await getDoc(doc(db, "teams", invite.teamId));
+  const teamName = teamSnap.exists() ? teamSnap.data().name || "" : invite.teamName || "";
+  // A join request they'd also sent to this team is now moot. Only delete it
+  // if it exists: deleting a missing doc fails the rule and the whole batch.
+  const joinRequestRef = doc(db, "joinRequests", `${invite.teamId}_${uid}`);
+  const joinRequestSnap = await getDoc(joinRequestRef).catch(() => null);
+  const batch = writeBatch(db);
+  if (joinRequestSnap?.exists()) batch.delete(joinRequestRef);
+  batch.set(memberRef, {
+    uid,
+    callsign: profile?.callsign || "Player",
+    avatarUrl: profile?.avatarUrl || null,
+    role: "member",
+    joinedAt: serverTimestamp(),
+  });
+  batch.delete(inviteRef);
+  if (!profile?.teamId) {
+    batch.update(doc(db, "users", uid), { teamId: invite.teamId, teamName });
+    batch.update(doc(db, "publicProfiles", uid), { teamId: invite.teamId, teamName });
+  }
+  await batch.commit();
+}
+
 // ── Team event calendar (2026-10-06) ───────────────────────────────────
 // Public read, officer-only write. Events are the team's own "we're
 // attending this" posts, stored under the team rather than in the bookable
