@@ -58,6 +58,7 @@ import { isEventClosed, stateFromCity } from "./eventClose.js";
 import { RENTAL_HOLD_MS, stockOf, maxPerPersonOf, qtyOf, normalizeRentalPicks, countBookedRentals, countHeldRentals, assertRentalStock, samePicks } from "./rentalInventory.js";
 import { GIFT_MONTHLY_CAP, monthStartUtc, capResetLabel, parseExpiresAtMs, cleanGiftNote, callsignVariants, restoredFreeEntryExpiry } from "./voucherGift.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
+import { profileChanged, todayInDetroit, collectProfileCopyUpdates, applyProfileCopyUpdates } from "./profileSync.js";
 
 // Plain [token] -> value substitution, same style already proven in
 // atlas-email-sender/send.mjs (html.split(token).join(value)) — no
@@ -3606,3 +3607,24 @@ export const submitPlayerFeedback = onCall(
     return { ok: true };
   }
 );
+
+// Profile copy sync (2026-10-27) — see profileSync.js. When a player changes
+// their callsign or photo, push it onto every doc that keeps its own copy
+// (team rosters, RSVPs, interested lists, requests, friend requests,
+// upcoming bookings). Reads the profile fresh rather than trusting the
+// event payload, so two quick edits landing out of order still end on the
+// latest values. Writes never touch publicProfiles, so this can't re-fire
+// itself; the only trigger on the docs it writes (sendTeamOfficerWelcomeEmail)
+// returns early unless role changed.
+export const syncProfileCopies = onDocumentUpdated("publicProfiles/{uid}", async (event) => {
+  const before = event.data?.before?.data() || {};
+  const after = event.data?.after?.data() || {};
+  if (!profileChanged(before, after)) return;
+  const { uid } = event.params;
+  const db = getFirestore();
+  const fresh = await db.collection("publicProfiles").doc(uid).get();
+  if (!fresh.exists) return;
+  const updates = await collectProfileCopyUpdates(db, uid, fresh.data(), todayInDetroit());
+  await applyProfileCopyUpdates(db, updates);
+  console.log(`syncProfileCopies: ${uid} -> ${updates.length} copies updated`);
+});
