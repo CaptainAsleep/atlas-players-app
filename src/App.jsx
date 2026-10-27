@@ -25,6 +25,7 @@ import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useBookingCode, formatBookingCode } from "./hooks/useBookingCode";
 import { useDependents, useChildGraduations, startChildGraduation, cancelChildGraduation, claimChildProfile, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
 import { useChildPatches, useChildHistory, grantChildPatch, markChildPatchSeen } from "./hooks/useChildPatches";
+import { useChildPublicPointers, useAllChildPublicProfiles, useChildPublicProfile, useChildPublicPatches, useChildTeamStatus, setChildProfilePublic, childTeamAction, fetchChildTeams } from "./hooks/useChildPublic";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs } from "./lib/eventClose";
@@ -3792,7 +3793,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
 
 
 function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, teams, teamsLoading, createTeam,
-  allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend,
+  allProfiles, childProfiles = [], friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend,
   tab, setTab, teamInvites = [] }) {
   const { T, display, body, mono } = useTheme();
   // tab (friends | teams) now lives in AppShell as socialTab, passed down
@@ -3822,6 +3823,7 @@ function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, tea
           onOpenPlayer={onOpenPlayer}
           user={user}
           allProfiles={allProfiles}
+          childProfiles={childProfiles}
           friends={friends}
           friendsLoading={friendsLoading}
           incomingRequests={incomingRequests}
@@ -4024,14 +4026,19 @@ function TeamInviteSection({ team, user, members, allProfiles }) {
   );
 }
 
-function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLoading, incomingRequests, outgoingRequestUids,
+function FriendsTabContent({ onOpenPlayer, user, allProfiles, childProfiles = [], friends, friendsLoading, incomingRequests, outgoingRequestUids,
   sendRequest, acceptRequest, declineRequest, cancelOrUnfriend, profile }) {
   const { T, display, body, mono } = useTheme();
   const [search, setSearch] = useState("");
   const friendUids = new Set(friends.map((f) => f.uid));
 
+  // Public child profiles are listed like any player (Public Child Profiles,
+  // 2026-10-27) but can't be friended — no Add Friend button on their rows.
   const searchResults = search.trim()
-    ? allProfiles.filter((p) => p.uid !== user?.uid && p.callsign.toLowerCase().includes(search.toLowerCase()))
+    ? [
+        ...allProfiles.filter((p) => p.uid !== user?.uid && p.callsign.toLowerCase().includes(search.toLowerCase())),
+        ...childProfiles.filter((p) => (p.callsign || "").toLowerCase().includes(search.toLowerCase())).map((p) => ({ ...p, _child: true })),
+      ]
     : [];
 
   const relationshipBadge = (otherUid) => {
@@ -4067,7 +4074,9 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
               return (
                 <div key={p.uid} className="mb-2 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                   <button onClick={() => onOpenPlayer(p.uid)} className="flex-1 flex items-center gap-3 text-left">
-                    {p.avatarUrl ? (
+                    {p._child ? (
+                      <ChildAvatar id={p.avatarPreset} size={40} />
+                    ) : p.avatarUrl ? (
                       <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${p.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
                     ) : (
                       <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
@@ -4076,7 +4085,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, friends, friendsLo
                     )}
                     <span className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{p.callsign}</span>
                   </button>
-                  {rel === "friends" ? (
+                  {p._child ? null : rel === "friends" ? (
                     <span className="text-[11px] font-medium" style={{ ...body, color: T.good }}>Friends</span>
                   ) : rel === "pending" ? (
                     <span className="text-[11px] font-medium" style={{ ...body, color: T.ashFaint }}>Request Sent</span>
@@ -5718,8 +5727,14 @@ function TeamPatchesSection({ team, members, isOfficer, user }) {
 function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerRequests, myJoinRequest, joinRequests, profile, user, onBack, onNavigate, fields, onOpenPlayer,
   joinTeam, leaveTeam, setDisplayedTeam, updateTeamInfo, setHomeField, updateTeamPatch, setMemberRole, removeMember,
   requestOfficer, deleteOfficerRequest, approveOfficerRequest, requestToJoin, deleteJoinRequest, approveJoinRequest, atlasEvents, onOpenEvent, highlightEventId,
-  allProfiles = [] }) {
+  allProfiles = [], publicChildren = [], onChildTeamAction }) {
   const { T, display, body, mono } = useTheme();
+  // Public Child Profiles: the parent's public kids and where they stand on
+  // this team, for the "Who's joining?" sheet.
+  const hasPublicKids = publicChildren.length > 0;
+  const childTeamStatus = useChildTeamStatus(team?.id, publicChildren.map((k) => k.publicId));
+  const kidsHere = publicChildren.filter((k) => (childTeamStatus[k.publicId] || "none") !== "none").length;
+  const [showWhosJoining, setShowWhosJoining] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -6032,9 +6047,24 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
       <div className="px-6 pt-2">
         {actionError && <p className="text-[12px] mb-3 text-center" style={{ ...body, color: T.alert }}>{actionError}</p>}
 
+        {showWhosJoining && (
+          <WhosJoiningSheet
+            team={team}
+            profile={profile}
+            isMember={isMember}
+            myJoinRequest={myJoinRequest}
+            onJoinSelf={handleJoin}
+            onRequestSelf={handleRequestToJoin}
+            onCancelSelf={handleCancelJoinRequest}
+            publicChildren={publicChildren}
+            childStatus={childTeamStatus}
+            onChildAction={onChildTeamAction}
+            onClose={() => setShowWhosJoining(false)}
+          />
+        )}
         {!isMember && team.joinPolicy !== "approval" && (
           <button
-            onClick={handleJoin}
+            onClick={hasPublicKids ? () => setShowWhosJoining(true) : handleJoin}
             className="w-full py-3 font-semibold text-[14px] mb-5"
             style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}
           >
@@ -6043,7 +6073,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
         )}
         {!isMember && team.joinPolicy === "approval" && !myJoinRequest && (
           <button
-            onClick={handleRequestToJoin}
+            onClick={hasPublicKids ? () => setShowWhosJoining(true) : handleRequestToJoin}
             disabled={joinBusy}
             className="w-full py-3 font-semibold text-[14px] mb-5"
             style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: joinBusy ? 0.6 : 1 }}
@@ -6066,6 +6096,15 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
             )}
           </div>
         )}
+        {hasPublicKids && (isMember || myJoinRequest) && (
+          <button
+            onClick={() => setShowWhosJoining(true)}
+            className="w-full py-3 font-medium text-[14px] mb-5"
+            style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}
+          >
+            {kidsHere > 0 ? "Your kids on this team" : publicChildren.length === 1 ? `Add ${publicChildren[0].callsign} to this team` : "Add your kids to this team"}
+          </button>
+        )}
         {isMember && (shownOnProfile ? (
           <div className="mb-5 flex items-center justify-center gap-1.5 text-[12px] font-medium" style={{ ...body, color: T.accent }}>
             <Check size={14} color={T.accent} /> Shown on your profile
@@ -6083,7 +6122,8 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
 
         <TeamLinksSection team={team} isOfficer={isOfficer} />
 
-        <TeamPatchesSection team={team} members={members} isOfficer={isOfficer} user={user} />
+        {/* Children have no account to hold team patches (Public Child Profiles). */}
+        <TeamPatchesSection team={team} members={members.filter((m) => m.kind !== "child")} isOfficer={isOfficer} user={user} />
 
         <Eyebrow>Home Field</Eyebrow>
         {team.homeFieldName ? (
@@ -6230,7 +6270,9 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
             <div key={m.uid} className="p-3 relative" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="flex items-center gap-3">
               <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
-                {m.avatarUrl ? (
+                {m.kind === "child" && m.avatarPreset ? (
+                  <ChildAvatar id={m.avatarPreset} size={40} />
+                ) : m.avatarUrl ? (
                   <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
                 ) : (
                   <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
@@ -6283,6 +6325,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                       )}
                       {m.uid !== user?.uid && (
                         <>
+                          {m.kind !== "child" && (
                           <button
                             onClick={() => { setMemberRole(team.id, m.uid, m.role === "officer" ? "member" : "officer"); setMenuUid(null); }}
                             className="px-3 py-2 text-left text-[12px] font-semibold"
@@ -6290,6 +6333,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
                           >
                             {m.role === "officer" ? "Demote to member" : "Promote to officer"}
                           </button>
+                          )}
                           <button
                             onClick={() => {
                               setMenuUid(null);
@@ -7040,7 +7084,7 @@ function ChildAvatar({ id, size = 40 }) {
 // for them. Birthdate is set once and can't be edited afterward (the rules
 // enforce it too), so a guardian can't change a child's age to get past a
 // field's minimum age.
-function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDependent, updateDependent, deleteDependent, onBack, onOpenAccount, graduatedDependents = [], childGraduations = {}, childPatchesByDep = {}, childHistoryByDep = {}, events = [] }) {
+function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDependent, updateDependent, deleteDependent, onBack, onOpenAccount, graduatedDependents = [], childGraduations = {}, childPatchesByDep = {}, childHistoryByDep = {}, events = [], publicIds = {} }) {
   const { T, display, body, mono } = useTheme();
   const [editingId, setEditingId] = useState(null); // null = list, "new" = creating, else a dependent id
   // A child's own page (patches, games, hand-over). Editing opens on top of
@@ -7134,6 +7178,7 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
           events={events}
           graduation={childGraduations[viewingDep.id] || null}
           onEdit={() => startEdit(viewingDep)}
+          publicId={publicIds[viewingDep.id] || null}
         />
       ) : !editingId ? (
         <div className="px-6 pt-5 flex flex-col gap-3">
@@ -7274,7 +7319,7 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
 // earned, the games they checked in to, and — once they're 18 — the hand-over
 // of all of it to their own Atlas account (startChildGraduation emails them a
 // single-use link; claimChildProfile moves everything when they use it).
-function ChildProfileDetail({ dep, patches, history, events, graduation, onEdit }) {
+function ChildProfileDetail({ dep, patches, history, events, graduation, onEdit, publicId = null }) {
   const { T, display, body, mono } = useTheme();
   const today = localDateStr();
   const age = ageOnDate(dep.dob, today);
@@ -7378,6 +7423,8 @@ function ChildProfileDetail({ dep, patches, history, events, graduation, onEdit 
         )}
       </div>
 
+      <ChildPublicProfileCard dep={dep} publicId={publicId} />
+
       <div className="p-4" style={cardStyle}>
         <div className="text-[13px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Move to their own account</div>
         {age === null || age < ADULT_AGE ? (
@@ -7422,6 +7469,261 @@ function ChildProfileDetail({ dep, patches, history, events, graduation, onEdit 
       </div>
     </div>
   );
+}
+
+// Public Child Profiles (2026-10-27): the one toggle that turns a child
+// profile into a public player profile (callsign, avatar icon, team,
+// patches — never name, age, birthdate, games or the parent link). Once on,
+// the parent adds the child to teams from any team page ("Who's joining?").
+// Turning it off takes the child off every team; the confirm names them.
+function ChildPublicProfileCard({ dep, publicId }) {
+  const { T, display, body, mono } = useTheme();
+  const [confirm, setConfirm] = useState(null); // null | "on" | "off"
+  const [teams, setTeams] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const isPublic = !!publicId;
+  const name = dep.callsign || "Your child";
+
+  useEffect(() => {
+    if (!publicId) {
+      setTeams(null);
+      return undefined;
+    }
+    let cancelled = false;
+    fetchChildTeams(publicId)
+      .then((t) => { if (!cancelled) setTeams(t); })
+      .catch(() => { if (!cancelled) setTeams([]); });
+    return () => { cancelled = true; };
+  }, [publicId, confirm]);
+
+  const apply = async (on) => {
+    setBusy(true); setError("");
+    try {
+      await setChildProfilePublic(dep.id, on);
+      setConfirm(null);
+    } catch (err) {
+      console.error("setChildProfilePublic failed:", err);
+      setError(err?.message || "Couldn't update. Try again.");
+    }
+    setBusy(false);
+  };
+
+  const teamNames = (teams || []).map((t) => t.teamName).filter(Boolean);
+  const listNames = (names) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+  const cardStyle = { background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd };
+  const primary = { ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill };
+  const secondary = { ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill };
+
+  return (
+    <div className="p-4" style={cardStyle}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>Public profile</div>
+        <span className="text-[10px] font-semibold px-2 py-0.5" style={{ ...mono, color: isPublic ? T.inverse : T.ashDim, background: isPublic ? T.good : T.panelAlt, borderRadius: T.rPill }}>
+          {isPublic ? "ON" : "OFF"}
+        </span>
+      </div>
+      {!isPublic && confirm !== "on" && (
+        <>
+          <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+            {name} is private. Only you, and fields you book with, can see them. Make the profile public to add {name} to teams.
+          </p>
+          <button onClick={() => setConfirm("on")} className="w-full py-2.5 text-[13px] font-semibold" style={primary}>Make Public</button>
+        </>
+      )}
+      {!isPublic && confirm === "on" && (
+        <>
+          <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+            {name} will appear to everyone on Atlas like any player, in player search and on team rosters: <span style={{ color: T.ash }}>callsign, avatar icon, team and patches</span>. Their name, age, birthdate, games and your link to them stay private. You'll add {name} to teams from each team's page.
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setConfirm(null)} disabled={busy} className="flex-1 py-2.5 text-[12px] font-medium" style={secondary}>Cancel</button>
+            <button onClick={() => apply(true)} disabled={busy} className="flex-1 py-2.5 text-[13px] font-semibold" style={{ ...primary, opacity: busy ? 0.6 : 1 }}>
+              {busy ? "…" : `Make ${name} Public`}
+            </button>
+          </div>
+        </>
+      )}
+      {isPublic && confirm !== "off" && (
+        <>
+          <p className="text-[12px] mb-1" style={{ ...body, color: T.ashDim }}>
+            Everyone on Atlas can see {name}'s callsign, avatar icon, team and patches.
+          </p>
+          <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+            {teams === null ? "" : teamNames.length ? `On ${listNames(teamNames)}.` : "Not on any teams yet. Open a team's page and tap Join to add them."}
+          </p>
+          <button onClick={() => setConfirm("off")} className="w-full py-2.5 text-[12px] font-medium" style={secondary}>Make Private</button>
+        </>
+      )}
+      {isPublic && confirm === "off" && (
+        <>
+          <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
+            {teamNames.length
+              ? `${name} will leave ${listNames(teamNames)} and disappear from player search. Their rank and roles on ${teamNames.length === 1 ? "that team" : "those teams"} are lost.`
+              : `${name} will disappear from player search.`}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setConfirm(null)} disabled={busy} className="flex-1 py-2.5 text-[12px] font-medium" style={secondary}>Cancel</button>
+            <button onClick={() => apply(false)} disabled={busy} className="flex-1 py-2.5 text-[13px] font-semibold" style={{ ...display, background: T.alert, color: T.inverse, borderRadius: T.rPill, opacity: busy ? 0.6 : 1 }}>
+              {busy ? "…" : "Make Private"}
+            </button>
+          </div>
+        </>
+      )}
+      {error && <p className="text-[12px] mt-2" style={{ ...body, color: T.alert }}>{error}</p>}
+    </div>
+  );
+}
+
+// "Who's joining?" — opened from a team page's Join / Request to Join (or
+// "Add your child") when the parent has public child profiles. One row for
+// the parent (unless already on the team) and one per public child, each
+// with its own action. Children follow the team's own rules: open team =
+// joined now, approval team = a request officers approve as usual.
+function WhosJoiningSheet({ team, profile, isMember, myJoinRequest, onJoinSelf, onRequestSelf, onCancelSelf, publicChildren, childStatus, onChildAction, onClose }) {
+  const { T, display, body, mono } = useTheme();
+  const approval = team.joinPolicy === "approval";
+  const [busyKey, setBusyKey] = useState(null);
+  const [error, setError] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(null);
+
+  const run = async (key, fn) => {
+    setBusyKey(key); setError("");
+    try {
+      await fn();
+    } catch (err) {
+      console.error("team action failed:", err);
+      setError(err?.message || "Something went wrong. Try again.");
+    }
+    setBusyKey(null);
+  };
+
+  const pill = (label, onClick, kind, key) => (
+    <button
+      onClick={onClick}
+      disabled={!!busyKey}
+      className="px-3 py-1.5 text-[12px] font-semibold flex-shrink-0"
+      style={kind === "primary"
+        ? { ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, opacity: busyKey === key ? 0.6 : 1 }
+        : kind === "danger"
+        ? { ...display, background: T.alert, color: T.inverse, borderRadius: T.rPill, opacity: busyKey === key ? 0.6 : 1 }
+        : { ...body, border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill, opacity: busyKey === key ? 0.6 : 1 }}
+    >
+      {busyKey === key ? "…" : label}
+    </button>
+  );
+  const status = (text) => <span className="text-[11px]" style={{ ...mono, color: T.ashFaint }}>{text}</span>;
+  const rowStyle = { borderTop: `1px solid ${T.line}` };
+  const kidCanJoin = publicChildren.some((k) => (childStatus[k.publicId] || "none") === "none");
+
+  return (
+    <div className="fixed inset-0 flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.55)", zIndex: 2500 }} onClick={onClose}>
+      <div className="w-full max-w-md p-5 pb-8" style={{ background: T.void, borderTopLeftRadius: 16, borderTopRightRadius: 16 }} onClick={(e) => e.stopPropagation()}>
+        <div className="text-[17px] font-semibold" style={{ ...display, color: T.ash }}>Who's joining {team.name}?</div>
+        {approval && <p className="text-[12px] mt-1" style={{ ...body, color: T.ashDim }}>This team approves new members. An officer reviews each request.</p>}
+
+        <div className="mt-3">
+          {!isMember && (
+            <div className="py-3 flex items-center gap-3" style={rowStyle}>
+              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                {(profile?.callsign || "Y").charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>You</div>
+                {myJoinRequest && status(myJoinRequest.approved ? "Approved, joining…" : "Request pending")}
+              </div>
+              {myJoinRequest
+                ? (!myJoinRequest.approved && pill("Cancel", () => run("self", onCancelSelf), "secondary", "self"))
+                : pill(approval ? "Request" : "Join", () => run("self", approval ? onRequestSelf : onJoinSelf), "primary", "self")}
+            </div>
+          )}
+          {publicChildren.map((k) => {
+            const st = childStatus[k.publicId] || "none";
+            return (
+              <div key={k.publicId} className="py-3 flex items-center gap-3" style={rowStyle}>
+                <ChildAvatar id={k.avatar} size={36} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{k.callsign}</div>
+                  {st === "member" && status("On this team")}
+                  {st === "pending" && status("Request pending")}
+                </div>
+                {st === "none" && pill(approval ? "Request" : "Join", () => run(k.publicId, () => onChildAction(k.depId, team.id, "join")), "primary", k.publicId)}
+                {st === "pending" && pill("Cancel", () => run(k.publicId, () => onChildAction(k.depId, team.id, "cancel")), "secondary", k.publicId)}
+                {st === "member" && (confirmRemove === k.publicId
+                  ? pill("Tap to remove", () => run(k.publicId, async () => { await onChildAction(k.depId, team.id, "leave"); setConfirmRemove(null); }), "danger", k.publicId)
+                  : pill("Remove", () => setConfirmRemove(k.publicId), "secondary", k.publicId))}
+              </div>
+            );
+          })}
+        </div>
+
+        {kidCanJoin && (
+          <p className="text-[11px] mt-2" style={{ ...body, color: T.ashFaint }}>
+            Adding a child puts their callsign, avatar icon and patches on {team.name}'s public roster. Their name, age and your link to them stay private.
+          </p>
+        )}
+        {confirmRemove && (
+          <p className="text-[11px] mt-2" style={{ ...body, color: T.ashFaint }}>
+            Removing them drops their rank and roles on this team.
+          </p>
+        )}
+        {error && <p className="text-[12px] mt-2" style={{ ...body, color: T.alert }}>{error}</p>}
+        <button onClick={onClose} className="w-full mt-4 py-2.5 text-[13px] font-medium" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>Done</button>
+      </div>
+    </div>
+  );
+}
+
+// A public child profile as other players see it: avatar icon, callsign,
+// team and patches. No events, bookings or friend button.
+function ChildPublicProfileScreen({ publicId, profile, onBack, onOpenTeam }) {
+  const { T, display, body, mono } = useTheme();
+  const patches = useChildPublicPatches(publicId);
+  const sorted = [...patches].sort((a, b) => (b.addedAt?.toMillis?.() || 0) - (a.addedAt?.toMillis?.() || 0));
+  return (
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9 truncate" style={{ ...display, color: T.ash }}>{profile.callsign}</h1>
+      </div>
+      <div className="px-6 pt-6 flex flex-col items-center">
+        <ChildAvatar id={profile.avatarPreset} size={84} />
+        <div className="text-[20px] font-semibold mt-3" style={{ ...display, color: T.ash }}>{profile.callsign}</div>
+        {profile.teamId && (
+          <button onClick={() => onOpenTeam?.(profile.teamId)} className="text-[13px] mt-1 font-medium" style={{ ...body, color: T.accent }}>
+            {profile.teamName || "Team"}
+          </button>
+        )}
+      </div>
+      <div className="px-6 pt-6">
+        <Eyebrow>Patches ({sorted.length})</Eyebrow>
+        {sorted.length === 0 ? (
+          <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>No patches yet.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {sorted.map((patch) => (
+              <div key={patch.id} className="flex flex-col items-center p-2 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+                <img src={patch.imageUrl} alt={patch.name} className="w-14 h-14 mb-1" style={{ objectFit: "contain" }} />
+                <div className="text-[11px] font-semibold leading-tight" style={{ ...display, color: T.ash }}>{splitPatchDisplay(patch).title}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Player ids opened from rosters and search can be an adult uid or a public
+// child id; this picks the right screen.
+function PlayerOrChildProfileScreen(props) {
+  const { T } = useTheme();
+  const { profile: childProfile, loading } = useChildPublicProfile(props.uid);
+  if (loading) return <div className="h-full" style={{ backgroundColor: T.void }} />;
+  if (childProfile) return <ChildPublicProfileScreen publicId={props.uid} profile={childProfile} onBack={props.onBack} onOpenTeam={props.onOpenTeam} />;
+  return <PlayerProfileScreen {...props} />;
 }
 
 // Shown in the child's own account when they arrive from the hand-over email
@@ -7492,6 +7794,7 @@ function ClaimChildProfileModal({ token, user, onClose, onDismiss, sendVerificat
                 ? `${patchWord(result.patchesMoved || 0)} and ${gameWord(result.gamesMoved || 0)} moved to your account.`
                 : "Everything from your child profile was already on this account."}
               {(result?.skippedPatches || result?.skippedGames) ? " Anything you already had here was kept as is." : ""}
+              {result?.teamsJoined ? ` You're on ${result.teamsJoined} ${result.teamsJoined === 1 ? "team" : "teams"} now, with the same rank and roles.` : ""}
             </p>
             <button onClick={onClose} className="w-full py-2.5 text-[13px] font-semibold" style={primary}>Done</button>
           </>
@@ -9207,6 +9510,13 @@ function AppShell() {
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { dependents, graduatedDependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
   const childGraduations = useChildGraduations(user?.uid);
+  // Public Child Profiles: { depId: publicId } for this parent's public kids.
+  const childPublicIds = useChildPublicPointers(user?.uid);
+  const publicChildren = useMemo(
+    () => dependents.filter((d) => childPublicIds[d.id]).map((d) => ({ depId: d.id, publicId: childPublicIds[d.id], callsign: d.callsign, avatar: d.avatar })),
+    [dependents, childPublicIds]
+  );
+  const { childProfiles: allChildPublicProfiles } = useAllChildPublicProfiles();
   const activeDependentIds = useMemo(() => dependents.map((d) => d.id), [dependents]);
   const { patches, patchesLoading, grantPatch, markPatchSeen, setFeaturedPatch } = usePatches(user?.uid);
   const { teams: allTeams, teamsLoading: allTeamsLoading } = useAllTeams();
@@ -9809,6 +10119,7 @@ function AppShell() {
         teamsLoading={allTeamsLoading}
         createTeam={createTeam}
         allProfiles={allPublicProfiles}
+        childProfiles={allChildPublicProfiles}
         friends={friends}
         friendsLoading={friendsLoading}
         incomingRequests={incomingRequests}
@@ -9824,8 +10135,9 @@ function AppShell() {
     );
   } else if (screen === "player" && activePlayerId) {
     content = (
-      <PlayerProfileScreen
+      <PlayerOrChildProfileScreen
         uid={activePlayerId}
+        onOpenTeam={openTeam}
         onBack={pop}
         currentUser={user}
         currentProfile={profile}
@@ -9871,6 +10183,8 @@ function AppShell() {
         onOpenEvent={openEvent}
         highlightEventId={eventDeepLinkId}
         allProfiles={allPublicProfiles}
+        publicChildren={publicChildren}
+        onChildTeamAction={childTeamAction}
       />
     );
   } else if (screen === "profile") {
@@ -9926,6 +10240,7 @@ function AppShell() {
         childPatchesByDep={childPatchesByDep}
         childHistoryByDep={childHistoryByDep}
         events={events}
+        publicIds={childPublicIds}
       />
     );
   } else if (screen === "patches") {

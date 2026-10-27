@@ -123,7 +123,20 @@ service cloud.firestore {
         && d.granted == true && d.seen == false && d.addedAt == request.time
         && isTeamOfficerOf(d.teamId)
         && exists(/databases/$(database)/documents/teams/$(d.teamId)/members/$(userId))
+        // Public Child Profiles (2026-10-27): a child's member doc is keyed by
+        // their public id, which is not an account — nothing may be written
+        // under users/{publicId}.
+        && !exists(/databases/$(database)/documents/childPublicLinks/$(userId))
         && lib.grantDocId == patchId && lib.name == d.name && lib.imageUrl == d.imageUrl;
+    }
+
+    // Public Child Profiles (2026-10-27): is the caller the parent behind
+    // this public child id? childPublicLinks is server-only (no client can
+    // read it), but rules can.
+    function isGuardianOfPublicChild(publicId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/childPublicLinks/$(publicId))
+        && get(/databases/$(database)/documents/childPublicLinks/$(publicId)).data.guardianUid == request.auth.uid;
     }
 
     // Child Patches (2026-10-27): the same field-owner grant, but into a
@@ -158,6 +171,25 @@ service cloud.firestore {
     // Child-profile hand-over tokens (2026-10-27), keyed by sha256 of the
     // emailed token. Cloud Functions only — no client ever reads or writes.
     match /childGraduations/{tokenHash} {
+      allow read, write: if false;
+    }
+
+    // Public Child Profiles (2026-10-27). A parent can make a child profile
+    // a public player profile (setChildProfilePublic). Public: callsign,
+    // preset avatar, team, and a mirror of the child's patches — kept apart
+    // from publicProfiles (adult accounts) and keyed by a random public id.
+    // Written only by Cloud Functions. publicPatches is deliberately not
+    // named "patches" (see the {path=**}/patches rule and admin counts).
+    match /childPublicProfiles/{publicId} {
+      allow read: if true;
+      allow write: if false;
+      match /publicPatches/{patchId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+    // The only record of which parent/child a public id belongs to.
+    match /childPublicLinks/{publicId} {
       allow read, write: if false;
     }
 
@@ -773,6 +805,14 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // { publicId } for each child profile the parent has made public, so
+      // their app knows which kids appear in the "Who's joining?" picker.
+      // Written only by setChildProfilePublic.
+      match /childPublic/{depId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+
       // Loosened to public read — favorited events/fields carry no PII,
       // and being viewable is the whole point once other players can look
       // at a profile (their Interested/Past events). Write stays owner-only.
@@ -1250,11 +1290,17 @@ service cloud.firestore {
       // doc that doesn't exist yet), plus the player's own-uid query.
       allow read: if request.auth != null && (
         resource == null
-          ? requestId.matches('.*_' + request.auth.uid)
+          ? (requestId.matches('.*_' + request.auth.uid)
+             // A parent watching their public child's request ({teamId}_{publicId}).
+             || isGuardianOfPublicChild(requestId.split('_')[requestId.split('_').size() - 1]))
           : (request.auth.uid == resource.data.uid
+             || isGuardianOfPublicChild(resource.data.uid)
              || (exists(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid))
                  && get(/databases/$(database)/documents/teams/$(resource.data.teamId)/members/$(request.auth.uid)).data.role == "officer"))
       );
+      // Children's requests (kind:"child") are created and canceled only by
+      // the childTeamAction function; an officer still approves/denies them
+      // through the clauses below like any other request.
       // Only for yourself, under your own {teamId}_{uid} id, only on a team
       // that actually requires approval, and only if you're not already in
       // it. A second request while one is pending hits an existing doc,

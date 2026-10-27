@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Resend } from "resend";
-import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { SelectionError, resolveSelections, normalizeSelectionGroups, assertCapacity, snapshotSelections, selectionPairs } from "./selections.js";
 
 initializeApp();
@@ -4059,6 +4059,12 @@ export const claimChildProfile = onCall(async (request) => {
   const depRef = guardianRef.collection("dependents").doc(dependentId);
   const statusRef = guardianRef.collection("childGraduations").doc(dependentId);
   const nowMs = Date.now();
+  // Public Child Profiles: if the child was public, their team spots become
+  // real memberships on the new account (keeping rank/roles), and the public
+  // child profile goes away.
+  const publicPtrRef = guardianRef.collection("childPublic").doc(dependentId);
+  const publicPtr = await publicPtrRef.get();
+  const publicId = publicPtr.exists ? publicPtr.data().publicId : null;
 
   const result = await db.runTransaction(async (t) => {
     const [tokSnap, depSnap, childPatchesSnap, myPatchesSnap, myBookingsSnap] = await Promise.all([
@@ -4068,6 +4074,18 @@ export const claimChildProfile = onCall(async (request) => {
       t.get(userRef.collection("patches")),
       t.get(userRef.collection("bookings")),
     ]);
+    const pub = publicId
+      ? await Promise.all([
+          t.get(db.collectionGroup("members").where("uid", "==", publicId)),
+          t.get(db.collection("joinRequests").where("uid", "==", publicId)),
+          t.get(db.collection("childPublicProfiles").doc(publicId).collection("publicPatches")),
+          t.get(db.collectionGroup("members").where("uid", "==", uid)),
+          t.get(userRef),
+          t.get(db.collection("publicProfiles").doc(uid)),
+        ])
+      : null;
+    const childTeamDocs = pub ? pub[0].docs : [];
+    const teamSnaps = await Promise.all(childTeamDocs.map((d) => t.get(d.ref.parent.parent)));
     const tok = tokSnap.data();
     if (!tok || tok.status !== "pending") throw claimError("failed-precondition", "This link has already been used or was replaced.", "used");
     if (nowMs > tok.expiresAtMs) throw claimError("deadline-exceeded", "This link has expired. Ask your parent to send a new one.", "expired");
@@ -4084,7 +4102,8 @@ export const claimChildProfile = onCall(async (request) => {
       existingBookingIds: new Set(myBookingsSnap.docs.map((d) => d.id)),
       inheritedAt: FieldValue.serverTimestamp(),
     });
-    const writeCount = plan.patchCopies.length + plan.mirrorWrites.length + childPatchesSnap.size + 3;
+    const writeCount = plan.patchCopies.length + plan.mirrorWrites.length + childPatchesSnap.size + 3
+      + (pub ? childTeamDocs.length * 2 + pub[1].size + pub[2].size + 5 : 0);
     if (writeCount > GRADUATION_MAX_WRITES) {
       console.error(`claimChildProfile: ${writeCount} writes for ${guardianUid}/${dependentId} — over the single-transaction limit`);
       throw claimError("resource-exhausted", "This record is too large to move automatically. Reply to your email and we'll move it by hand.", "too-large");
@@ -4099,7 +4118,43 @@ export const claimChildProfile = onCall(async (request) => {
     t.update(depRef, { graduatedAt: FieldValue.serverTimestamp(), graduatedToUid: uid });
     t.update(tokRef, { status: "claimed", claimedUid: uid, claimedAtMs: nowMs });
     t.set(statusRef, { status: "claimed", emailLower: tok.emailLower, claimedAtMs: nowMs });
-    return { ...plan, childCallsign: dep.callsign || "" };
+
+    let teamsJoined = 0;
+    if (pub) {
+      const [, reqSnap, pubPatchSnap, myMembersSnap, mySnap, myPubSnap] = pub;
+      const alreadyOn = new Set(myMembersSnap.docs.map((d) => d.ref.parent.parent.id));
+      const me = { ...(myPubSnap.data() || {}), ...(mySnap.data() || {}) };
+      let firstTeam = null;
+      childTeamDocs.forEach((m, i) => {
+        const teamRef = m.ref.parent.parent;
+        if (!alreadyOn.has(teamRef.id) && teamSnaps[i].exists) {
+          const cm = m.data();
+          t.set(teamRef.collection("members").doc(uid), {
+            uid,
+            callsign: me.callsign || cm.callsign || "Player",
+            avatarUrl: me.avatarUrl || null,
+            role: "member",
+            rankId: cm.rankId || null,
+            roleIds: cm.roleIds || [],
+            joinedAt: cm.joinedAt || FieldValue.serverTimestamp(),
+          });
+          teamsJoined += 1;
+          if (!firstTeam) firstTeam = { teamId: teamRef.id, teamName: teamSnaps[i].data().name || "" };
+        }
+        t.delete(m.ref);
+      });
+      // Show the first carried-over team on their profile if they show none.
+      if (firstTeam && !me.teamId) {
+        t.set(userRef, firstTeam, { merge: true });
+        t.set(db.collection("publicProfiles").doc(uid), firstTeam, { merge: true });
+      }
+      reqSnap.docs.forEach((d) => t.delete(d.ref));
+      pubPatchSnap.docs.forEach((d) => t.delete(d.ref));
+      t.delete(db.collection("childPublicProfiles").doc(publicId));
+      t.delete(db.collection("childPublicLinks").doc(publicId));
+      t.delete(publicPtrRef);
+    }
+    return { ...plan, childCallsign: dep.callsign || "", teamsJoined };
   });
 
   return {
@@ -4109,5 +4164,234 @@ export const claimChildProfile = onCall(async (request) => {
     gamesMoved: result.mirrorWrites.length,
     skippedPatches: result.skippedPatches,
     skippedGames: result.skippedGames,
+    teamsJoined: result.teamsJoined,
   };
+});
+
+// ===========================================================================
+// Public Child Profiles (2026-10-27)
+// ===========================================================================
+// A parent can turn a child profile into a public player profile: callsign,
+// preset avatar, team and a mirror of the child's patches (no events, no
+// bookings, no friends). The parent then joins the child to teams from the
+// normal team page ("Who's joining?"). Scope: project doc
+// claude/atlas-public-child-profiles-scope.md.
+//   childPublicProfiles/{publicId}                public, functions-only
+//   childPublicProfiles/{publicId}/publicPatches  public, functions-only
+//   childPublicLinks/{publicId}                   server-only parent link
+//   users/{uid}/childPublic/{depId}               parent-readable { publicId }
+// Children's team writes all go through childTeamAction, so the members
+// rules need no parent clause.
+function newPublicChildId() {
+  return "c" + randomBytes(12).toString("hex"); // no "_" — joinRequests ids are {teamId}_{publicId}
+}
+
+function childPublicFields(dep) {
+  return { callsign: dep.callsign || "Player", avatarPreset: dep.avatar || null };
+}
+
+function publicPatchFields(p) {
+  return { name: p.name || "", imageUrl: p.imageUrl || null, details: p.details || null, addedAt: p.addedAt || null };
+}
+
+async function commitInChunks(db, ops) {
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = db.batch();
+    ops.slice(i, i + 400).forEach((op) => op(batch));
+    await batch.commit();
+  }
+}
+
+// Turn a child profile back to private: leaves every team, drops pending
+// join requests, deletes the public profile, patch mirror, link and pointer.
+// Safe to call when the child isn't public. Returns how many teams it left.
+async function makeChildPrivate(db, guardianUid, dependentId) {
+  const ptrRef = db.collection("users").doc(guardianUid).collection("childPublic").doc(dependentId);
+  const ptr = await ptrRef.get();
+  if (!ptr.exists) return 0;
+  const publicId = ptr.data().publicId;
+  const profRef = db.collection("childPublicProfiles").doc(publicId);
+  const [members, requests, patches] = await Promise.all([
+    db.collectionGroup("members").where("uid", "==", publicId).get(),
+    db.collection("joinRequests").where("uid", "==", publicId).get(),
+    profRef.collection("publicPatches").get(),
+  ]);
+  const refs = [
+    ...members.docs.map((d) => d.ref),
+    ...requests.docs.map((d) => d.ref),
+    ...patches.docs.map((d) => d.ref),
+    profRef,
+    ptrRef,
+    db.collection("childPublicLinks").doc(publicId),
+  ];
+  await commitInChunks(db, refs.map((r) => (b) => b.delete(r)));
+  return members.size;
+}
+
+// { dependentId, public: boolean } → { ok, public, publicId?, removedTeams? }
+export const setChildProfilePublic = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const dependentId = request.data?.dependentId;
+  if (!isValidDependentId(dependentId)) throw new HttpsError("invalid-argument", "Missing child profile.");
+  const makePublic = request.data?.public === true;
+  const db = getFirestore();
+  const depRef = db.collection("users").doc(uid).collection("dependents").doc(dependentId);
+  const depSnap = await depRef.get();
+  if (!makePublic) {
+    const removedTeams = await makeChildPrivate(db, uid, dependentId);
+    return { ok: true, public: false, removedTeams };
+  }
+  if (!depSnap.exists) throw new HttpsError("not-found", "That child profile no longer exists.");
+  const dep = depSnap.data();
+  if (dep.graduatedAt) throw new HttpsError("failed-precondition", `${dep.callsign || "This profile"} has moved to their own account.`);
+
+  const ptrRef = db.collection("users").doc(uid).collection("childPublic").doc(dependentId);
+  const publicId = await db.runTransaction(async (t) => {
+    const ptr = await t.get(ptrRef);
+    if (ptr.exists) return ptr.data().publicId; // already public — idempotent
+    const id = newPublicChildId();
+    t.set(db.collection("childPublicProfiles").doc(id), { ...childPublicFields(dep), teamId: null, teamName: null, createdAt: FieldValue.serverTimestamp() });
+    t.set(db.collection("childPublicLinks").doc(id), { guardianUid: uid, dependentId, createdAt: FieldValue.serverTimestamp() });
+    t.set(ptrRef, { publicId: id, enabledAt: FieldValue.serverTimestamp() });
+    return id;
+  });
+  // Mirror the patches the child already has (onChildPatchWritten keeps it
+  // current from here on).
+  const patches = await depRef.collection("childPatches").get();
+  const pubPatches = db.collection("childPublicProfiles").doc(publicId).collection("publicPatches");
+  await commitInChunks(db, patches.docs.map((p) => (b) => b.set(pubPatches.doc(p.id), publicPatchFields(p.data()))));
+  return { ok: true, public: true, publicId };
+});
+
+// { dependentId, teamId, action: "join" | "cancel" | "leave" } → { ok, status }
+// status: "member" | "pending" | "none". "join" follows the team's own rules:
+// open team = member now; approval team = a join request officers see in
+// their normal queue (approving it is the officer's ordinary approve).
+export const childTeamAction = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const { dependentId, teamId, action } = request.data || {};
+  if (!isValidDependentId(dependentId)) throw new HttpsError("invalid-argument", "Missing child profile.");
+  if (typeof teamId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(teamId)) throw new HttpsError("invalid-argument", "Missing team.");
+  if (!["join", "cancel", "leave"].includes(action)) throw new HttpsError("invalid-argument", "Unknown action.");
+  const db = getFirestore();
+  const guardianRef = db.collection("users").doc(uid);
+  const [ptr, depSnap] = await Promise.all([
+    guardianRef.collection("childPublic").doc(dependentId).get(),
+    guardianRef.collection("dependents").doc(dependentId).get(),
+  ]);
+  if (!depSnap.exists) throw new HttpsError("not-found", "That child profile no longer exists.");
+  const dep = depSnap.data();
+  if (!ptr.exists) throw new HttpsError("failed-precondition", `Turn on ${dep.callsign || "your child"}'s public profile first.`);
+  const publicId = ptr.data().publicId;
+  const teamRef = db.collection("teams").doc(teamId);
+  const memberRef = teamRef.collection("members").doc(publicId);
+  const reqRef = db.collection("joinRequests").doc(`${teamId}_${publicId}`);
+
+  if (action === "leave") {
+    await memberRef.delete();
+    return { ok: true, status: "none" };
+  }
+  if (action === "cancel") {
+    await db.runTransaction(async (t) => {
+      const r = await t.get(reqRef);
+      if (r.exists && r.data().approved !== true) t.delete(reqRef);
+    });
+    return { ok: true, status: "none" };
+  }
+  if (dep.graduatedAt) throw new HttpsError("failed-precondition", `${dep.callsign || "This profile"} has moved to their own account.`);
+  const status = await db.runTransaction(async (t) => {
+    const [teamSnap, memberSnap, reqSnap] = await Promise.all([t.get(teamRef), t.get(memberRef), t.get(reqRef)]);
+    if (!teamSnap.exists) throw new HttpsError("not-found", "That team no longer exists.");
+    if (memberSnap.exists) return "member";
+    if (reqSnap.exists) return "pending";
+    const fields = childPublicFields(dep);
+    if ((teamSnap.data().joinPolicy || "open") === "approval") {
+      t.set(reqRef, { teamId, uid: publicId, callsign: fields.callsign, avatarUrl: null, avatarPreset: fields.avatarPreset, kind: "child", requestedAt: FieldValue.serverTimestamp(), approved: false });
+      return "pending";
+    }
+    t.set(memberRef, { uid: publicId, callsign: fields.callsign, avatarUrl: null, avatarPreset: fields.avatarPreset, kind: "child", role: "member", joinedAt: FieldValue.serverTimestamp() });
+    return "member";
+  });
+  return { ok: true, status };
+});
+
+// Callsign/avatar edits flow to the public profile, team rosters and
+// pending requests. A deleted child profile is made private (leaves teams).
+export const onChildDependentWritten = onDocumentWritten("users/{uid}/dependents/{depId}", async (event) => {
+  const { uid, depId } = event.params;
+  const before = event.data?.before?.exists ? event.data.before.data() : null;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  const db = getFirestore();
+  if (!after) {
+    await makeChildPrivate(db, uid, depId);
+    return;
+  }
+  if (after.graduatedAt) return; // claimChildProfile cleans up itself
+  if (before && before.callsign === after.callsign && before.avatar === after.avatar) return;
+  const ptr = await db.collection("users").doc(uid).collection("childPublic").doc(depId).get();
+  if (!ptr.exists) return;
+  const publicId = ptr.data().publicId;
+  const fields = childPublicFields(after);
+  const [members, requests] = await Promise.all([
+    db.collectionGroup("members").where("uid", "==", publicId).get(),
+    db.collection("joinRequests").where("uid", "==", publicId).get(),
+  ]);
+  await commitInChunks(db, [
+    (b) => b.set(db.collection("childPublicProfiles").doc(publicId), fields, { merge: true }),
+    ...members.docs.map((d) => (b) => b.update(d.ref, fields)),
+    ...requests.docs.map((d) => (b) => b.update(d.ref, fields)),
+  ]);
+});
+
+// Keeps the public patch mirror in step with the child's private patches.
+export const onChildPatchWritten = onDocumentWritten("users/{uid}/dependents/{depId}/childPatches/{patchId}", async (event) => {
+  const { uid, depId, patchId } = event.params;
+  const db = getFirestore();
+  const ptr = await db.collection("users").doc(uid).collection("childPublic").doc(depId).get();
+  if (!ptr.exists) return;
+  const profRef = db.collection("childPublicProfiles").doc(ptr.data().publicId);
+  if (!(await profRef.get()).exists) return;
+  const ref = profRef.collection("publicPatches").doc(patchId);
+  if (event.data?.after?.exists) await ref.set(publicPatchFields(event.data.after.data()));
+  else await ref.delete();
+});
+
+// Any write to a team member doc. For a public child (checked against the
+// server-only link, not a client-set flag — an officer on an older app build
+// approving a child's request writes a plain member doc):
+//   • tags it kind:"child" and keeps role "member" (a child can't be an
+//     officer: nobody can sign in as them)
+//   • clears the approved join request
+//   • recomputes which team the child's public profile shows (earliest joined)
+export const onChildMemberWritten = onDocumentWritten("teams/{teamId}/members/{memberId}", async (event) => {
+  const { teamId, memberId } = event.params;
+  if (!/^c[0-9a-f]{24}$/.test(memberId)) return; // only public child ids; skips every adult write without a read
+  const db = getFirestore();
+  const link = await db.collection("childPublicLinks").doc(memberId).get();
+  if (!link.exists) return;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  const profRef = db.collection("childPublicProfiles").doc(memberId);
+  const prof = await profRef.get();
+  if (after) {
+    const fixes = {};
+    if (after.kind !== "child") fixes.kind = "child";
+    if (after.role !== "member") fixes.role = "member";
+    if (after.avatarPreset === undefined && prof.exists) fixes.avatarPreset = prof.data().avatarPreset || null;
+    if (Object.keys(fixes).length) await event.data.after.ref.update(fixes);
+    await db.collection("joinRequests").doc(`${teamId}_${memberId}`).delete().catch(() => {});
+  }
+  if (!prof.exists) return;
+  const memberships = await db.collectionGroup("members").where("uid", "==", memberId).get();
+  const first = memberships.docs
+    .map((d) => ({ teamId: d.ref.parent.parent.id, at: d.data().joinedAt?.toMillis?.() || 0 }))
+    .sort((a, b) => a.at - b.at)[0];
+  let display = { teamId: null, teamName: null };
+  if (first) {
+    const team = await db.collection("teams").doc(first.teamId).get();
+    display = { teamId: first.teamId, teamName: team.data()?.name || "" };
+  }
+  const cur = prof.data();
+  if (cur.teamId !== display.teamId || cur.teamName !== display.teamName) await profRef.update(display);
 });
