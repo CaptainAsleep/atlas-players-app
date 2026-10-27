@@ -53,12 +53,18 @@ const ownerClaimVerifyTemplate = readFileSync(path.join(templatesDir, "owner-cla
 const fieldClaimCodeTemplate = readFileSync(path.join(templatesDir, "field-claim-code.html"), "utf-8");
 const playerVerifyEmailTemplate = readFileSync(path.join(templatesDir, "player-verify-email.html"), "utf-8");
 const passwordResetTemplate = readFileSync(path.join(templatesDir, "password-reset.html"), "utf-8");
+// Field Staff Logins (2026-10-27).
+const staffInviteTemplate = readFileSync(path.join(templatesDir, "staff-invite.html"), "utf-8");
+const childGraduationTemplate = readFileSync(path.join(templatesDir, "child-graduation.html"), "utf-8");
+const staffVerifyEmailTemplate = readFileSync(path.join(templatesDir, "staff-verify-email.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
 import { isEventClosed, stateFromCity } from "./eventClose.js";
 import { RENTAL_HOLD_MS, stockOf, maxPerPersonOf, qtyOf, normalizeRentalPicks, countBookedRentals, countHeldRentals, assertRentalStock, samePicks } from "./rentalInventory.js";
 import { GIFT_MONTHLY_CAP, monthStartUtc, capResetLabel, parseExpiresAtMs, cleanGiftNote, callsignVariants, restoredFreeEntryExpiry } from "./voucherGift.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
 import { profileChanged, todayInDetroit, collectProfileCopyUpdates, applyProfileCopyUpdates } from "./profileSync.js";
+import { STAFF_CAP, STAFF_INVITE_COOLDOWN_MS, STAFF_VERIFY_COOLDOWN_MS, normalizeStaffEmail, isValidEmail, cleanStaffName, staffWindowOpen } from "./staff.js";
+import { GRADUATION_TTL_MS, GRADUATION_RESEND_COOLDOWN_MS, GRADUATION_MAX_WRITES, newGraduationToken, hashGraduationToken, isWellFormedToken, isValidDependentId, maskEmail, formatGraduationExpiry, mirrorHasChildren, planChildClaim } from "./childGraduation.js";
 
 // Plain [token] -> value substitution, same style already proven in
 // atlas-email-sender/send.mjs (html.split(token).join(value)) — no
@@ -464,6 +470,11 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
       throw new HttpsError("invalid-argument", "One of the selected child profiles no longer exists.");
     }
     const d = snap.data();
+    // Handed over to the child's own account (claimChildProfile) — they
+    // book themselves now.
+    if (d.graduatedAt) {
+      throw new HttpsError("failed-precondition", `${d.callsign || "A child"} has moved to their own Atlas account and books from there now.`);
+    }
     const age = ageOnDateServer(d.dob, eventData.date);
     if (age === null) {
       throw new HttpsError("failed-precondition", `${d.callsign || "A child"}'s birthdate is missing or invalid.`);
@@ -3460,7 +3471,21 @@ export const checkInByCode = onCall(async (request) => {
   if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
   const eventData = eventSnap.data();
   const { ownerId } = await resolveEventHost(db, eventData);
-  if (!ownerId || ownerId !== callerUid) throw new HttpsError("permission-denied", "You don't run this event.");
+  if (!ownerId || ownerId !== callerUid) {
+    // Field Staff Logins (2026-10-27): the field's staff may check in too —
+    // field events only (not organizer-hosted), agreement accepted, and only
+    // inside the event-day window. Same three checks as canStaffCheckIn() in
+    // firestore.rules; staffWindowOpen is the same date math.
+    const staffSnap = !eventData.hostOwnerId && eventData.fieldId
+      ? await db.collection("fields").doc(eventData.fieldId).collection("staff").doc(callerUid).get()
+      : null;
+    if (!staffSnap?.exists || !staffSnap.data().agreementVersion) {
+      throw new HttpsError("permission-denied", "You don't run this event.");
+    }
+    if (!staffWindowOpen(eventData.date, eventData.endDate)) {
+      throw new HttpsError("failed-precondition", "Staff check-in only works around the event day.");
+    }
+  }
 
   const indexSnap = await db.collection("bookingCodeIndex").doc(bookingCodeIndexId(eventId, code)).get();
   if (!indexSnap.exists) return { ok: false, reason: "no-match" };
@@ -3498,7 +3523,7 @@ export const checkInByCode = onCall(async (request) => {
   if (request.data?.confirm !== true) return { ...result, ok: true, preview: true };
 
   const now = new Date();
-  const fields = { checkedIn: true, checkedInAt: now, checkInMethod: "code" };
+  const fields = { checkedIn: true, checkedInAt: now, checkInMethod: "code", checkedInBy: callerUid };
   // update, never set/merge on the mirror: creating a missing mirror doc
   // would fire sendBookingConfirmationEmail.
   const mirrorRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
@@ -3509,6 +3534,235 @@ export const checkInByCode = onCall(async (request) => {
   await batch.commit();
   return { ...result, ok: true, preview: false };
 });
+
+// ===========================================================================
+// Field Staff Logins (2026-10-27)
+// ===========================================================================
+// A field owner invites staff by email (owners app → Settings → Staff). The
+// invite lives at fields/{fieldId}/staffInvites/{inviteId} until the invitee
+// signs in to the owners app with that VERIFIED email, when
+// acceptStaffInvites turns it into fields/{fieldId}/staff/{uid}. Staff can
+// only check players in, around the event day (see firestore.rules).
+// Cap: 20 per field, counting pending invites. Invites never expire.
+// Scope: project doc claude/atlas-staff-logins-scope.md.
+
+function staffHttpsMessage(code, message) {
+  return new HttpsError(code, message);
+}
+
+async function sendStaffInviteEmail({ toEmail, staffName, inviterName, fieldName }) {
+  const html = fillTemplate(staffInviteTemplate, {
+    "[STAFF NAME]": escapeHtml(staffName || "there"),
+    "[INVITER NAME]": escapeHtml(inviterName || "The field owner"),
+    "[FIELD NAME]": escapeHtml(fieldName || "their field"),
+    "[STAFF EMAIL]": escapeHtml(toEmail),
+    "[APP_LINK]": escapeHtml(OWNER_APP_URL),
+  });
+  const resend = new Resend(resendApiKey.value());
+  const { error } = await resend.emails.send({
+    from: ATLAS_EMAIL_FROM,
+    to: toEmail,
+    subject: `You've been added as staff at ${fieldName || "a field"} on Atlas`,
+    html,
+  });
+  if (error) throw new Error(JSON.stringify(error));
+}
+
+// { fieldId, name, email }            → new invite
+// { fieldId, resendInviteId }         → resend a pending invite's email
+// Returns { ok, inviteId, emailSent, throttled? }. An invite is saved even if
+// the email fails (emailSent:false) so the owner can tap Resend.
+export const inviteStaff = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth) throw staffHttpsMessage("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const fieldId = request.data?.fieldId;
+    if (typeof fieldId !== "string" || !fieldId) throw staffHttpsMessage("invalid-argument", "Missing fieldId.");
+
+    const db = getFirestore();
+    const fieldRef = db.collection("fields").doc(fieldId);
+    const fieldSnap = await fieldRef.get();
+    if (!fieldSnap.exists || fieldSnap.data().ownerId !== uid) {
+      throw staffHttpsMessage("permission-denied", "Only this field's owner can add staff.");
+    }
+    const field = fieldSnap.data();
+    const fieldName = field.name || "your field";
+    const [ownerAuth, ownerSnap] = await Promise.all([getAuth().getUser(uid), db.collection("owners").doc(uid).get()]);
+    const inviterName = ownerSnap.data()?.name || ownerAuth.displayName || "The field owner";
+    const nowMs = Date.now();
+
+    let inviteRef;
+    let invite;
+
+    if (typeof request.data?.resendInviteId === "string" && request.data.resendInviteId) {
+      inviteRef = fieldRef.collection("staffInvites").doc(request.data.resendInviteId);
+      const outcome = await db.runTransaction(async (t) => {
+        const s = await t.get(inviteRef);
+        if (!s.exists || s.data().status !== "pending") return { missing: true };
+        const last = s.data().lastSentAtMs;
+        if (typeof last === "number" && nowMs - last < STAFF_INVITE_COOLDOWN_MS) return { throttled: true };
+        t.update(inviteRef, { lastSentAtMs: nowMs });
+        return { invite: s.data() };
+      });
+      if (outcome.missing) throw staffHttpsMessage("not-found", "That invite is no longer pending.");
+      if (outcome.throttled) return { ok: true, inviteId: inviteRef.id, emailSent: false, throttled: true };
+      invite = outcome.invite;
+    } else {
+      const name = cleanStaffName(request.data?.name);
+      const emailLower = normalizeStaffEmail(request.data?.email);
+      if (!name) throw staffHttpsMessage("invalid-argument", "Add the staff member's name.");
+      if (!isValidEmail(emailLower)) throw staffHttpsMessage("invalid-argument", "That email address doesn't look right.");
+      if (emailLower === normalizeStaffEmail(ownerAuth.email)) {
+        throw staffHttpsMessage("invalid-argument", "That's your own email — you already have full access.");
+      }
+      inviteRef = fieldRef.collection("staffInvites").doc();
+      invite = {
+        name,
+        emailLower,
+        fieldId,
+        fieldName,
+        invitedBy: uid,
+        invitedByName: inviterName,
+        createdAt: FieldValue.serverTimestamp(),
+        status: "pending",
+        lastSentAtMs: nowMs,
+      };
+      await db.runTransaction(async (t) => {
+        const [staffSnap, pendingSnap] = await Promise.all([
+          t.get(fieldRef.collection("staff")),
+          t.get(fieldRef.collection("staffInvites").where("status", "==", "pending")),
+        ]);
+        if (staffSnap.docs.some((d) => normalizeStaffEmail(d.data().email) === emailLower)) {
+          throw staffHttpsMessage("already-exists", "That person is already on your staff.");
+        }
+        if (pendingSnap.docs.some((d) => d.data().emailLower === emailLower)) {
+          throw staffHttpsMessage("already-exists", "That email already has a pending invite. Tap Resend on it instead.");
+        }
+        if (staffSnap.size + pendingSnap.size >= STAFF_CAP) {
+          throw staffHttpsMessage("resource-exhausted", `${STAFF_CAP} of ${STAFF_CAP} staff. Remove someone to add another.`);
+        }
+        t.set(inviteRef, invite);
+      });
+    }
+
+    try {
+      await sendStaffInviteEmail({ toEmail: invite.emailLower, staffName: invite.name, inviterName, fieldName });
+      return { ok: true, inviteId: inviteRef.id, emailSent: true };
+    } catch (err) {
+      console.error(`inviteStaff: email failed for ${fieldId}/${inviteRef.id}:`, err);
+      // Let the owner retry right away instead of waiting out the cooldown.
+      await inviteRef.update({ lastSentAtMs: FieldValue.delete() }).catch(() => {});
+      return { ok: true, inviteId: inviteRef.id, emailSent: false };
+    }
+  }
+);
+
+// Called by the owners app on every sign-in. Finds pending invites for the
+// caller's email; if there are any and the email isn't verified yet, sends a
+// branded verification link (60s cooldown) and returns { status: "verify" }.
+// Once verified, turns each invite into a staff grant. { status: "none" }
+// means this account has no pending invites (the normal owner case).
+// data.sendVerification === false → check only, never send (used by the
+// app's "I've confirmed it" button so a not-yet-clicked link isn't re-sent).
+export const acceptStaffInvites = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth) throw staffHttpsMessage("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const authUser = await getAuth().getUser(uid);
+    const emailLower = normalizeStaffEmail(authUser.email);
+    if (!emailLower) return { status: "none" };
+
+    const db = getFirestore();
+    const snap = await db.collectionGroup("staffInvites").where("emailLower", "==", emailLower).get();
+    const pending = snap.docs.filter((d) => d.data().status === "pending");
+    if (pending.length === 0) return { status: "none" };
+
+    if (!authUser.emailVerified) {
+      if (request.data?.sendVerification === false) return { status: "verify", email: authUser.email, sent: false };
+      const sendRef = db.collection("emailSends").doc(`staffVerify_${uid}`);
+      const nowMs = Date.now();
+      const allowed = await db.runTransaction(async (t) => {
+        const s = await t.get(sendRef);
+        const last = s.data()?.sentAtMs;
+        if (typeof last === "number" && nowMs - last < STAFF_VERIFY_COOLDOWN_MS) return false;
+        t.set(sendRef, { uid, sentAtMs: nowMs, sendCount: FieldValue.increment(1) }, { merge: true });
+        return true;
+      });
+      if (!allowed) return { status: "verify", email: authUser.email, sent: false, throttled: true };
+      try {
+        let verifyLink;
+        try {
+          verifyLink = await getAuth().generateEmailVerificationLink(authUser.email, { url: OWNER_APP_URL });
+        } catch (err) {
+          if (err?.code !== "auth/unauthorized-continue-uri" && err?.code !== "auth/invalid-continue-uri") throw err;
+          verifyLink = await getAuth().generateEmailVerificationLink(authUser.email);
+        }
+        const first = pending[0].data();
+        const html = fillTemplate(staffVerifyEmailTemplate, {
+          "[VERIFY_LINK]": escapeHtml(verifyLink),
+          "[STAFF NAME]": escapeHtml(first.name || authUser.displayName || "there"),
+          "[FIELD NAME]": escapeHtml(first.fieldName || "your field"),
+        });
+        const resend = new Resend(resendApiKey.value());
+        const { error } = await resend.emails.send({
+          from: ATLAS_EMAIL_FROM,
+          to: authUser.email,
+          subject: "Confirm your email to start as staff on Atlas",
+          html,
+        });
+        if (error) throw new Error(JSON.stringify(error));
+        return { status: "verify", email: authUser.email, sent: true };
+      } catch (err) {
+        console.error(`acceptStaffInvites: verification email failed for ${uid}:`, err);
+        await sendRef.update({ sentAtMs: FieldValue.delete() }).catch(() => {});
+        return { status: "verify", email: authUser.email, sent: false };
+      }
+    }
+
+    const accepted = [];
+    for (const inviteDoc of pending) {
+      const fieldRef = inviteDoc.ref.parent.parent;
+      try {
+        const result = await db.runTransaction(async (t) => {
+          const [fresh, fieldSnap, staffSnap] = await Promise.all([
+            t.get(inviteDoc.ref),
+            t.get(fieldRef),
+            t.get(fieldRef.collection("staff")),
+          ]);
+          if (!fresh.exists || fresh.data().status !== "pending") return null;
+          if (!fieldSnap.exists || fieldSnap.data().ownerId === uid) return null;
+          const inv = fresh.data();
+          const staffRef = fieldRef.collection("staff").doc(uid);
+          const already = staffSnap.docs.some((d) => d.id === uid);
+          // Defensive only: inviteStaff already counted this invite toward
+          // the cap, so accepting it never pushes a field past 20.
+          if (!already && staffSnap.size >= STAFF_CAP) return null;
+          if (!already) {
+            t.set(staffRef, {
+              uid,
+              name: inv.name || authUser.displayName || emailLower.split("@")[0],
+              email: authUser.email,
+              fieldId: fieldRef.id,
+              fieldName: fieldSnap.data().name || inv.fieldName || "",
+              permissions: { checkIn: true },
+              addedAt: FieldValue.serverTimestamp(),
+              invitedBy: inv.invitedBy || null,
+              agreementVersion: null,
+            });
+          }
+          t.update(inviteDoc.ref, { status: "accepted", acceptedUid: uid, acceptedAt: FieldValue.serverTimestamp() });
+          return { fieldId: fieldRef.id, fieldName: fieldSnap.data().name || "" };
+        });
+        if (result) accepted.push(result);
+      } catch (err) {
+        console.error(`acceptStaffInvites: couldn't accept ${inviteDoc.ref.path} for ${uid}:`, err);
+      }
+    }
+    return { status: "accepted", fields: accepted };
+  }
+);
 
 // ===========================================================================
 // In-app "Send Feedback" from the player Profile page (2026-10-25)
@@ -3627,4 +3881,233 @@ export const syncProfileCopies = onDocumentUpdated("publicProfiles/{uid}", async
   const updates = await collectProfileCopyUpdates(db, uid, fresh.data(), todayInDetroit());
   await applyProfileCopyUpdates(db, updates);
   console.log(`syncProfileCopies: ${uid} -> ${updates.length} copies updated`);
+});
+
+// ===========================================================================
+// Child Patches + Graduation (2026-10-27)
+// ===========================================================================
+// A parent hands a child profile (18+ today) over to the child's own Atlas
+// account. The parent names the child's email; the child gets a single-use
+// link (14 days), signs in with that exact, verified email, and
+// claimChildProfile moves the child profile's patches and checked-in games
+// to their account, then locks the profile. Scope: project doc
+// claude/atlas-child-patches-graduation-scope.md. Pure helpers + tests in
+// childGraduation.js / childGraduation.test.mjs.
+const PLAYER_APP_URL = "https://playerapp.airsoftatlas.app/";
+
+function guardianDisplayName(profile) {
+  return [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || profile?.callsign || "Your parent";
+}
+
+// { dependentId, email } → { ok, emailSent, emailMasked, expiresAtMs, throttled? }
+export const startChildGraduation = onCall(
+  { invoker: "public", secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const dependentId = request.data?.dependentId;
+    if (!isValidDependentId(dependentId)) throw new HttpsError("invalid-argument", "Missing child profile.");
+    const emailLower = normalizeStaffEmail(request.data?.email);
+    if (!isValidEmail(emailLower)) throw new HttpsError("invalid-argument", "That email address doesn't look right.");
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const depRef = userRef.collection("dependents").doc(dependentId);
+    const statusRef = userRef.collection("childGraduations").doc(dependentId);
+    const [authUser, profileSnap, depSnap] = await Promise.all([getAuth().getUser(uid), userRef.get(), depRef.get()]);
+    if (!depSnap.exists) throw new HttpsError("not-found", "That child profile no longer exists.");
+    const dep = depSnap.data();
+    if (dep.graduatedAt) throw new HttpsError("failed-precondition", `${dep.callsign || "This profile"} has already moved to their own account.`);
+    const age = ageOnDateServer(dep.dob, todayInDetroit());
+    if (age === null || age < ADULT_AGE) {
+      throw new HttpsError("failed-precondition", `${dep.callsign || "Your child"} can move to their own account on their 18th birthday.`);
+    }
+    if (emailLower === normalizeStaffEmail(authUser.email)) {
+      throw new HttpsError("invalid-argument", "That's your own email. Use the email your child will sign in with.");
+    }
+
+    const nowMs = Date.now();
+    const token = newGraduationToken();
+    const tokenHash = hashGraduationToken(token);
+    const expiresAtMs = nowMs + GRADUATION_TTL_MS;
+    const outcome = await db.runTransaction(async (t) => {
+      const s = await t.get(statusRef);
+      const prev = s.exists ? s.data() : null;
+      if (prev?.status === "pending" && prev.emailLower === emailLower
+          && typeof prev.sentAtMs === "number" && nowMs - prev.sentAtMs < GRADUATION_RESEND_COOLDOWN_MS) {
+        return { throttled: true, expiresAtMs: prev.expiresAtMs };
+      }
+      // A new send replaces any earlier link — only the newest one works.
+      if (prev?.status === "pending" && prev.tokenHash) {
+        t.set(db.collection("childGraduations").doc(prev.tokenHash), { status: "replaced", endedAtMs: nowMs }, { merge: true });
+      }
+      t.set(db.collection("childGraduations").doc(tokenHash), {
+        guardianUid: uid,
+        dependentId,
+        emailLower,
+        childCallsign: dep.callsign || "",
+        createdAtMs: nowMs,
+        expiresAtMs,
+        status: "pending",
+      });
+      t.set(statusRef, { status: "pending", emailLower, tokenHash, createdAtMs: nowMs, expiresAtMs, sentAtMs: null });
+      return { throttled: false };
+    });
+    if (outcome.throttled) {
+      return { ok: true, emailSent: false, throttled: true, emailMasked: maskEmail(emailLower), expiresAtMs: outcome.expiresAtMs };
+    }
+
+    try {
+      const html = fillTemplate(childGraduationTemplate, {
+        "[CHILD CALLSIGN]": escapeHtml(dep.callsign || "there"),
+        "[PARENT NAME]": escapeHtml(guardianDisplayName(profileSnap.data())),
+        "[CHILD EMAIL]": escapeHtml(emailLower),
+        "[EXPIRES]": escapeHtml(formatGraduationExpiry(expiresAtMs)),
+        "[CLAIM_LINK]": escapeHtml(`${PLAYER_APP_URL}?graduate=${token}`),
+      });
+      const resend = new Resend(resendApiKey.value());
+      const { error } = await resend.emails.send({
+        from: ATLAS_EMAIL_FROM,
+        to: emailLower,
+        subject: `${dep.callsign ? dep.callsign + ", your" : "Your"} Atlas patches are ready for your own account`,
+        html,
+      });
+      if (error) throw new Error(JSON.stringify(error));
+      await statusRef.update({ sentAtMs: Date.now() }).catch(() => {});
+      return { ok: true, emailSent: true, emailMasked: maskEmail(emailLower), expiresAtMs };
+    } catch (err) {
+      console.error(`startChildGraduation: email failed for ${uid}/${dependentId}:`, err);
+      return { ok: true, emailSent: false, emailMasked: maskEmail(emailLower), expiresAtMs };
+    }
+  }
+);
+
+// { dependentId } → { ok }. Kills the pending link; the profile stays as is.
+export const cancelChildGraduation = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const dependentId = request.data?.dependentId;
+  if (!isValidDependentId(dependentId)) throw new HttpsError("invalid-argument", "Missing child profile.");
+  const db = getFirestore();
+  const statusRef = db.collection("users").doc(uid).collection("childGraduations").doc(dependentId);
+  await db.runTransaction(async (t) => {
+    const s = await t.get(statusRef);
+    if (!s.exists || s.data().status !== "pending") return;
+    if (s.data().tokenHash) {
+      t.set(db.collection("childGraduations").doc(s.data().tokenHash), { status: "canceled", endedAtMs: Date.now() }, { merge: true });
+    }
+    t.delete(statusRef);
+  });
+  return { ok: true };
+});
+
+function claimError(code, message, reason, extra = {}) {
+  return new HttpsError(code, message, { reason, ...extra });
+}
+
+// { token } → { ok, childCallsign, patchesMoved, gamesMoved, skippedPatches, skippedGames }
+// Errors carry details.reason: "invalid" | "used" | "expired" | "wrong-email"
+// (details.emailMasked) | "verify" | "own-parent" | "too-young" | "too-large".
+export const claimChildProfile = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to claim your patches.");
+  const uid = request.auth.uid;
+  const token = request.data?.token;
+  if (!isWellFormedToken(token)) throw claimError("invalid-argument", "That link isn't valid.", "invalid");
+  const db = getFirestore();
+  const tokRef = db.collection("childGraduations").doc(hashGraduationToken(token));
+
+  // Cheap pre-checks outside the transaction, so a wrong account gets a
+  // clear answer without the history reads. All of them are re-checked
+  // inside the transaction below.
+  const [authUser, preSnap] = await Promise.all([getAuth().getUser(uid), tokRef.get()]);
+  if (!preSnap.exists) throw claimError("not-found", "That link isn't valid.", "invalid");
+  const pre = preSnap.data();
+  if (pre.status !== "pending") {
+    throw claimError("failed-precondition", "This link has already been used or was replaced. Ask your parent to send a new one if you still need it.", "used");
+  }
+  if (Date.now() > pre.expiresAtMs) {
+    throw claimError("deadline-exceeded", "This link has expired. Ask your parent to send a new one.", "expired");
+  }
+  if (normalizeStaffEmail(authUser.email) !== pre.emailLower) {
+    throw claimError("permission-denied", `This link was sent to ${maskEmail(pre.emailLower)}. Sign in with that email to claim it.`, "wrong-email", { emailMasked: maskEmail(pre.emailLower) });
+  }
+  if (!authUser.emailVerified) {
+    throw claimError("failed-precondition", "Confirm your email address first, then tap Claim again.", "verify");
+  }
+  if (uid === pre.guardianUid) {
+    throw claimError("permission-denied", "This link is for your child's own account, not yours.", "own-parent");
+  }
+
+  const guardianUid = pre.guardianUid;
+  const dependentId = pre.dependentId;
+  const guardianRef = db.collection("users").doc(guardianUid);
+
+  // The child's games: the parent's bookings that had children on them and
+  // a private attendeeDetails doc for THIS child. Check-in state comes from
+  // the event-side booking (the one the owner's scan writes).
+  const guardianMirrors = await guardianRef.collection("bookings").get();
+  const candidates = guardianMirrors.docs.filter((d) => mirrorHasChildren(d.data()));
+  const history = (await Promise.all(candidates.map(async (m) => {
+    const eventId = m.id;
+    const bookingRef = db.collection("events").doc(eventId).collection("bookings").doc(guardianUid);
+    const [att, booking] = await Promise.all([bookingRef.collection("attendeeDetails").doc(dependentId).get(), bookingRef.get()]);
+    if (!att.exists || !booking.exists) return null;
+    return { eventId, mirror: m.data(), eventBooking: booking.data() };
+  }))).filter(Boolean);
+
+  const userRef = db.collection("users").doc(uid);
+  const depRef = guardianRef.collection("dependents").doc(dependentId);
+  const statusRef = guardianRef.collection("childGraduations").doc(dependentId);
+  const nowMs = Date.now();
+
+  const result = await db.runTransaction(async (t) => {
+    const [tokSnap, depSnap, childPatchesSnap, myPatchesSnap, myBookingsSnap] = await Promise.all([
+      t.get(tokRef),
+      t.get(depRef),
+      t.get(depRef.collection("childPatches")),
+      t.get(userRef.collection("patches")),
+      t.get(userRef.collection("bookings")),
+    ]);
+    const tok = tokSnap.data();
+    if (!tok || tok.status !== "pending") throw claimError("failed-precondition", "This link has already been used or was replaced.", "used");
+    if (nowMs > tok.expiresAtMs) throw claimError("deadline-exceeded", "This link has expired. Ask your parent to send a new one.", "expired");
+    if (!depSnap.exists) throw claimError("not-found", "This child profile no longer exists.", "invalid");
+    const dep = depSnap.data();
+    if (dep.graduatedAt) throw claimError("failed-precondition", "This profile has already moved to an account.", "used");
+    const age = ageOnDateServer(dep.dob, todayInDetroit());
+    if (age === null || age < ADULT_AGE) throw claimError("failed-precondition", "This profile can only move over once its owner is 18.", "too-young");
+
+    const plan = planChildClaim({
+      childPatches: childPatchesSnap.docs.map((d) => ({ id: d.id, data: d.data() })),
+      existingPatchIds: new Set(myPatchesSnap.docs.map((d) => d.id)),
+      history,
+      existingBookingIds: new Set(myBookingsSnap.docs.map((d) => d.id)),
+      inheritedAt: FieldValue.serverTimestamp(),
+    });
+    const writeCount = plan.patchCopies.length + plan.mirrorWrites.length + childPatchesSnap.size + 3;
+    if (writeCount > GRADUATION_MAX_WRITES) {
+      console.error(`claimChildProfile: ${writeCount} writes for ${guardianUid}/${dependentId} — over the single-transaction limit`);
+      throw claimError("resource-exhausted", "This record is too large to move automatically. Reply to your email and we'll move it by hand.", "too-large");
+    }
+
+    for (const p of plan.patchCopies) t.set(userRef.collection("patches").doc(p.id), p.data);
+    for (const w of plan.mirrorWrites) t.set(userRef.collection("bookings").doc(w.eventId), w.data);
+    // Move, not copy (Michael, 2026-10-27): one canonical set of patches.
+    childPatchesSnap.docs.forEach((d) => t.delete(d.ref));
+    // Locks the profile: the rules' update allow-list (hasOnly) no longer
+    // matches, and resolveAttendees refuses to book it.
+    t.update(depRef, { graduatedAt: FieldValue.serverTimestamp(), graduatedToUid: uid });
+    t.update(tokRef, { status: "claimed", claimedUid: uid, claimedAtMs: nowMs });
+    t.set(statusRef, { status: "claimed", emailLower: tok.emailLower, claimedAtMs: nowMs });
+    return { ...plan, childCallsign: dep.callsign || "" };
+  });
+
+  return {
+    ok: true,
+    childCallsign: result.childCallsign,
+    patchesMoved: result.patchCopies.length,
+    gamesMoved: result.mirrorWrites.length,
+    skippedPatches: result.skippedPatches,
+    skippedGames: result.skippedGames,
+  };
 });
