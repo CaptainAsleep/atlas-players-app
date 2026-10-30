@@ -16,6 +16,15 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // Child profile photos (2026-10-28). Uploaded only by the setChildAvatar
+    // Cloud Function under a random file name, so the public URL never
+    // carries the parent's uid or the child's private profile id (an
+    // avatars/{uid}/... path would put the family link in every image URL).
+    match /childAvatars/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /patches/{userId}/{fileName} {
       // Same rule shape as avatars — public read (a featured patch needs to
       // be visible next to a callsign), owner-only write.

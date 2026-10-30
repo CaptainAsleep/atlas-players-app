@@ -703,7 +703,7 @@ export function useTeamActions() {
       // A public child profile's request (Public Child Profiles, 2026-10-27).
       // The onChildMemberWritten function also tags it server-side, so an
       // officer on an older app build approving it still ends up correct.
-      ...(request.kind === "child" ? { kind: "child", avatarPreset: request.avatarPreset || null } : {}),
+      ...(request.kind === "child" ? { kind: "child" } : {}),
     });
     batch.update(doc(db, "joinRequests", `${teamId}_${request.uid}`), { approved: true });
     await batch.commit();

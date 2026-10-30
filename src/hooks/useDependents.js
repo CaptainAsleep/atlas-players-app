@@ -93,13 +93,14 @@ export function useDependents(uid) {
     if (dependents.length >= MAX_DEPENDENTS) {
       throw new Error(`You can add up to ${MAX_DEPENDENTS} child profiles.`);
     }
-    await addDoc(collection(db, "users", uid, "dependents"), {
+    const ref = await addDoc(collection(db, "users", uid, "dependents"), {
       fullName: fullName.trim(),
       callsign: callsign.trim(),
       dob, // YYYY-MM-DD, locked after this write
       avatar: avatar || CHILD_AVATAR_IDS[0],
       createdAt: serverTimestamp(),
     });
+    return ref.id;
   }
 
   // dob is deliberately not accepted here — and the rules would reject it
@@ -138,6 +139,24 @@ export function useChildGraduations(uid) {
     );
   }, [uid]);
   return byDep;
+}
+
+// Child profile photo (2026-10-28): uploaded through the setChildAvatar
+// function, which stores it under a random name so the public image URL
+// carries no family ids. blob = a resized JPEG (resizeImageFile), or null to
+// remove the photo. Returns the new avatarUrl (or null).
+export async function setChildAvatar(dependentId, blob) {
+  let imageBase64 = null;
+  if (blob) {
+    imageBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+      reader.onerror = () => reject(reader.error || new Error("Couldn't read the image."));
+      reader.readAsDataURL(blob);
+    });
+  }
+  const res = await httpsCallable(functions, "setChildAvatar")({ dependentId, imageBase64 });
+  return res.data?.avatarUrl || null;
 }
 
 // Server-only: the function checks the child is 18+ today, emails them a

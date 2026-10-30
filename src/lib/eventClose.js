@@ -115,3 +115,24 @@ export function isEventClosed(ev, state, nowMs = Date.now()) {
   const close = eventCloseMs(ev, state);
   return close != null && nowMs >= close;
 }
+
+// Prepay vs. day-of pricing (2026-10-30, per Michael — first used by The
+// Compound: $20 prepay, $25 on game day). `price` stays the prepay price;
+// an optional `dayOfPrice` (same free-text format) takes over at midnight
+// on the event's first day, in the field's time zone. No dayOfPrice (or one
+// with no digits) = one flat price, exactly as before. Applies to the base
+// ticket only — Price Options / selection-group add-ons don't change.
+export function dayOfPriceStartMs(ev, state) {
+  if (!ev?.date || !/\d/.test(String(ev?.dayOfPrice || ""))) return null;
+  return wallClockToUtcMs(ev.date, 0, timeZoneForState(state));
+}
+
+export function isDayOfPricing(ev, state, nowMs = Date.now()) {
+  const start = dayOfPriceStartMs(ev, state);
+  return start != null && nowMs >= start;
+}
+
+// The price text in effect right now (prepay price, or day-of once it starts).
+export function currentPriceText(ev, state, nowMs = Date.now()) {
+  return isDayOfPricing(ev, state, nowMs) ? ev.dayOfPrice : ev?.price;
+}

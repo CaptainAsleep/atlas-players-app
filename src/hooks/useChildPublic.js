@@ -28,8 +28,8 @@ export function useChildPublicPointers(uid) {
 }
 
 // Every public child profile, for player search. Shape matches the adult
-// directory entries ({ uid, callsign, ... }) with avatarPreset instead of a
-// photo.
+// directory entries ({ uid, callsign, avatarUrl, ... }), so a child row draws
+// exactly like an adult's.
 export function useAllChildPublicProfiles() {
   const [profiles, setProfiles] = useState([]);
   useEffect(() => onSnapshot(

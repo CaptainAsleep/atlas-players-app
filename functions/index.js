@@ -11,7 +11,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { Resend } from "resend";
-import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import { getStorage } from "firebase-admin/storage";
 import { SelectionError, resolveSelections, normalizeSelectionGroups, assertCapacity, snapshotSelections, selectionPairs } from "./selections.js";
 
 initializeApp();
@@ -58,7 +59,7 @@ const staffInviteTemplate = readFileSync(path.join(templatesDir, "staff-invite.h
 const childGraduationTemplate = readFileSync(path.join(templatesDir, "child-graduation.html"), "utf-8");
 const staffVerifyEmailTemplate = readFileSync(path.join(templatesDir, "staff-verify-email.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
-import { isEventClosed, stateFromCity } from "./eventClose.js";
+import { isEventClosed, stateFromCity, dayOfPriceStartMs, isDayOfPricing } from "./eventClose.js";
 import { RENTAL_HOLD_MS, stockOf, maxPerPersonOf, qtyOf, normalizeRentalPicks, countBookedRentals, countHeldRentals, assertRentalStock, samePicks } from "./rentalInventory.js";
 import { GIFT_MONTHLY_CAP, monthStartUtc, capResetLabel, parseExpiresAtMs, cleanGiftNote, callsignVariants, restoredFreeEntryExpiry } from "./voucherGift.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
@@ -255,10 +256,21 @@ export const checkPayoutsStatus = onCall(
 // resolves one choice per group from `selections` ({ groupId: choiceId }).
 // For grouped events `selectedChoice` is a compat object (labels joined,
 // prices summed) so callers written for the single choice keep working.
-function resolveEntryPrice(eventData, selectedChoiceId, selections) {
+//
+// Prepay vs. day-of pricing (2026-10-30): when the event has a dayOfPrice
+// and it's now game day in the field's time zone (see eventClose.js), that
+// price replaces the base `price` before anything else is resolved — so all
+// three booking paths charge whatever price is in effect at this moment.
+// Add-on choices are unaffected. fieldData is only used for the field's
+// state (time zone); pass it whenever it's known.
+function resolveEntryPrice(eventData, selectedChoiceId, selections, fieldData) {
+  const state = eventData.venueState || stateFromCity(fieldData?.city);
+  const dayOf = isDayOfPricing(eventData, state, Date.now());
+  const priced = dayOf ? { ...eventData, price: eventData.dayOfPrice } : eventData;
+  const priceTier = dayOfPriceStartMs(eventData, state) == null ? null : dayOf ? "day_of" : "prepay";
   try {
-    const r = resolveSelections(eventData, { selectedChoiceId, selections });
-    return { entryPriceCents: r.entryPriceCents, selectedChoice: r.selectedChoice, selections: r.selections, resolved: r };
+    const r = resolveSelections(priced, { selectedChoiceId, selections });
+    return { entryPriceCents: r.entryPriceCents, selectedChoice: r.selectedChoice, selections: r.selections, resolved: r, priceTier };
   } catch (err) {
     if (err instanceof SelectionError) throw new HttpsError(err.code, err.message);
     throw err;
@@ -506,6 +518,7 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
       callsign: d.callsign,
       dob: d.dob,
       avatar: d.avatar || null,
+      avatarUrl: d.avatarUrl || null,
       waiverSignatureId: sig ? sigSnaps[i].id : null,
       waiverVersion: sig?.waiverVersion || null,
       guardianNoticeVersion: sig?.guardianNoticeVersion || null,
@@ -580,6 +593,7 @@ function writeAttendeeDetails(t, bookingRef, uid, profileData, dependents, guard
       callsign: d.callsign,
       dob: d.dob,
       avatar: d.avatar,
+      avatarUrl: d.avatarUrl || null,
       guardianUid: uid,
       guardianName,
       guardianPhone: profileData.phone || null,
@@ -717,7 +731,7 @@ export const createBookingCheckout = onCall(
 
     const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
     const attendeeCount = attendees.attendeeCount;
-    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections);
+    const { entryPriceCents, selectedChoice, selections, resolved, priceTier } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections, fieldData);
     // Hard cap on team/role-style choices, checked before any Stripe call.
     // (The paid webhook can't reject, so two near-simultaneous checkouts for
     // the last seat can both land — a known, accepted 1–2 head overshoot.)
@@ -850,6 +864,8 @@ export const createBookingCheckout = onCall(
         // cancellation voucher (resolveVoucherAmountCents) never has to
         // reverse-engineer this out of amountPaidCents.
         entryPriceCents: String(entryPriceCents),
+        // "prepay" | "day_of" — only on events with a day-of price.
+        ...(priceTier ? { priceTier } : {}),
         ...(selectedChoice ? { selectedChoiceLabel: String(selectedChoice.label).slice(0, 450), selectedChoicePriceCents: String(selectedChoice.priceCents) } : {}),
         // Organizer events: ids only ({g,c} pairs) — the webhook re-derives
         // labels and prices from the event doc.
@@ -879,7 +895,9 @@ export const createBookingCheckout = onCall(
     // by retrying exactly once under a fresh key. A genuinely simultaneous
     // identical retry never reaches this catch at all, so the original
     // double-charge protection is untouched.
-    let idempotencyKey = `booking-checkout:${eventId}:${uid}`;
+    // The price tier is part of the key so a checkout opened before the
+    // day-of price kicks in can never be handed back after it does.
+    let idempotencyKey = `booking-checkout:${eventId}:${uid}${priceTier ? `:${priceTier}` : ""}`;
 
     // Rental inventory hold (2026-10-24). Only when a picked item has a
     // per-event stock count — every other checkout skips this block and is
@@ -939,6 +957,20 @@ export const createBookingCheckout = onCall(
       // Tied to this hold, so a re-tap with the same picks reuses the same
       // Stripe request, and new picks never collide with an old one.
       idempotencyKey = `${idempotencyKey}:rentals:${hold.expiresAtMs}`;
+    }
+
+    // Prepay checkouts expire at the day-of cutoff rather than Stripe's
+    // default 24h, so a session opened the night before can't be paid at
+    // the prepay price the next morning. Stripe's floor is 30 minutes out,
+    // so one opened in the last half hour before midnight can still be paid
+    // a few minutes past it (accepted). Rental-hold sessions already expire
+    // with their short hold and are left alone.
+    if (priceTier === "prepay" && sessionParams.expires_at == null) {
+      const cutoffMs = dayOfPriceStartMs(eventData, eventData.venueState || stateFromCity(fieldData?.city));
+      const nowMs = Date.now();
+      if (cutoffMs != null && cutoffMs < nowMs + 24 * 3600 * 1000) {
+        sessionParams.expires_at = Math.floor(Math.max(cutoffMs, nowMs + 31 * 60 * 1000) / 1000);
+      }
     }
 
     let session;
@@ -1017,7 +1049,9 @@ export const bookFreeEvent = onCall(
       }
     }
 
-    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections);
+    // Field resolved first — its state decides whether the day-of price applies.
+    const { fieldData, ownerId } = await resolveEventHost(db, eventData);
+    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections, fieldData);
     // The real backstop: if this event (plus whatever was picked) isn't
     // actually free, this is the wrong function to have called —
     // createBookingCheckout is. A well-behaved client never reaches this
@@ -1030,7 +1064,6 @@ export const bookFreeEvent = onCall(
     // unclaimed field has no owner on Atlas to see or honor this booking,
     // so it doesn't matter that this particular event happens to be free —
     // block it here too rather than only when money's involved.
-    const { fieldData, ownerId } = await resolveEventHost(db, eventData);
     assertEventStillOpen(eventData, fieldData);
     if (!ownerId) {
       throw new HttpsError("failed-precondition", "This field hasn't been claimed by an owner yet, so bookings aren't available.");
@@ -1782,7 +1815,9 @@ export const bookEventWithVoucher = onCall(
     // unlike createBookingCheckout, there's no fee lookup here at all —
     // no field/owner read, no computeStandardFee call — this is compared
     // and paid for in ticket-price terms only, start to finish.
-    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections);
+    // Field resolved first — its state decides whether the day-of price applies.
+    const { fieldData } = await resolveEventHost(db, eventData);
+    const { entryPriceCents, selectedChoice, selections, resolved } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections, fieldData);
     if (!entryPriceCents || entryPriceCents <= 0) {
       throw new HttpsError("failed-precondition", "This event doesn't have a valid price set — book it as a free event instead.");
     }
@@ -1793,7 +1828,6 @@ export const bookEventWithVoucher = onCall(
       ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label, selectedChoicePriceCents: selectedChoice.priceCents } : {}),
       ...(selections.length > 0 ? { selections } : {}),
     };
-    const { fieldData } = await resolveEventHost(db, eventData);
     assertEventStillOpen(eventData, fieldData);
     const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
     const attendeeCount = attendees.attendeeCount;
@@ -1955,7 +1989,7 @@ export const stripeWebhook = onRequest(
           const session = event.data.object;
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta, guardianPlaying: guardianPlayingMeta } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, priceTier, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta, guardianPlaying: guardianPlayingMeta } = session.metadata;
             // Written by createBookingCheckout as a JSON string (Stripe
             // metadata values are strings only) — parsed back out here the
             // same defensive way selectedChoiceLabel/Cents are trusted:
@@ -2075,6 +2109,8 @@ export const stripeWebhook = onRequest(
                 // creation) so cancellation vouchers never have to
                 // reconstruct it later from amountPaidCents.
                 entryPriceCents: entryPriceCents != null ? Number(entryPriceCents) : null,
+                // "prepay" | "day_of" on events with a day-of price, else null.
+                priceTier: priceTier || null,
                 // Which Price Options choice this player picked, if the
                 // event has that group — read straight off checkout
                 // metadata since it was already validated once, server-
@@ -3506,7 +3542,7 @@ export const checkInByCode = onCall(async (request) => {
   const attendees = detailsSnap ? detailsSnap.docs.map((d) => {
     const a = d.data();
     return {
-      id: d.id, fullName: a.fullName || "", callsign: a.callsign || "", waiverSignatureId: a.waiverSignatureId || null,
+      id: d.id, fullName: a.fullName || "", callsign: a.callsign || "", avatarUrl: a.avatarUrl || null, waiverSignatureId: a.waiverSignatureId || null,
       guardianName: a.guardianName || "", guardianPhone: a.guardianPhone || "", guardianPlaying: a.guardianPlaying !== false,
     };
   }) : [];
@@ -4186,8 +4222,12 @@ function newPublicChildId() {
   return "c" + randomBytes(12).toString("hex"); // no "_" — joinRequests ids are {teamId}_{publicId}
 }
 
+// What other players see of a child, in the same shape as an adult's
+// (callsign + avatarUrl). The preset icon is never public: a set of icons
+// only kids have would mark them as kids (Michael, 2026-10-28). No photo =
+// the same initial circle as any adult without one.
 function childPublicFields(dep) {
-  return { callsign: dep.callsign || "Player", avatarPreset: dep.avatar || null };
+  return { callsign: dep.callsign || "Player", avatarUrl: dep.avatarUrl || null };
 }
 
 function publicPatchFields(p) {
@@ -4308,10 +4348,10 @@ export const childTeamAction = onCall(async (request) => {
     if (reqSnap.exists) return "pending";
     const fields = childPublicFields(dep);
     if ((teamSnap.data().joinPolicy || "open") === "approval") {
-      t.set(reqRef, { teamId, uid: publicId, callsign: fields.callsign, avatarUrl: null, avatarPreset: fields.avatarPreset, kind: "child", requestedAt: FieldValue.serverTimestamp(), approved: false });
+      t.set(reqRef, { teamId, uid: publicId, callsign: fields.callsign, avatarUrl: fields.avatarUrl, kind: "child", requestedAt: FieldValue.serverTimestamp(), approved: false });
       return "pending";
     }
-    t.set(memberRef, { uid: publicId, callsign: fields.callsign, avatarUrl: null, avatarPreset: fields.avatarPreset, kind: "child", role: "member", joinedAt: FieldValue.serverTimestamp() });
+    t.set(memberRef, { uid: publicId, callsign: fields.callsign, avatarUrl: fields.avatarUrl, kind: "child", role: "member", joinedAt: FieldValue.serverTimestamp() });
     return "member";
   });
   return { ok: true, status };
@@ -4326,14 +4366,16 @@ export const onChildDependentWritten = onDocumentWritten("users/{uid}/dependents
   const db = getFirestore();
   if (!after) {
     await makeChildPrivate(db, uid, depId);
+    if (before?.avatarPath) await getStorage().bucket().file(before.avatarPath).delete().catch(() => {});
     return;
   }
   if (after.graduatedAt) return; // claimChildProfile cleans up itself
-  if (before && before.callsign === after.callsign && before.avatar === after.avatar) return;
+  if (before && before.callsign === after.callsign && (before.avatarUrl || null) === (after.avatarUrl || null)) return;
   const ptr = await db.collection("users").doc(uid).collection("childPublic").doc(depId).get();
   if (!ptr.exists) return;
   const publicId = ptr.data().publicId;
-  const fields = childPublicFields(after);
+  // avatarPreset: removed from anything written before photos (2026-10-28).
+  const fields = { ...childPublicFields(after), avatarPreset: FieldValue.delete() };
   const [members, requests] = await Promise.all([
     db.collectionGroup("members").where("uid", "==", publicId).get(),
     db.collection("joinRequests").where("uid", "==", publicId).get(),
@@ -4378,7 +4420,8 @@ export const onChildMemberWritten = onDocumentWritten("teams/{teamId}/members/{m
     const fixes = {};
     if (after.kind !== "child") fixes.kind = "child";
     if (after.role !== "member") fixes.role = "member";
-    if (after.avatarPreset === undefined && prof.exists) fixes.avatarPreset = prof.data().avatarPreset || null;
+    if (after.avatarUrl === undefined && prof.exists) fixes.avatarUrl = prof.data().avatarUrl || null;
+    if ("avatarPreset" in after) fixes.avatarPreset = FieldValue.delete();
     if (Object.keys(fixes).length) await event.data.after.ref.update(fixes);
     await db.collection("joinRequests").doc(`${teamId}_${memberId}`).delete().catch(() => {});
   }
@@ -4394,4 +4437,62 @@ export const onChildMemberWritten = onDocumentWritten("teams/{teamId}/members/{m
   }
   const cur = prof.data();
   if (cur.teamId !== display.teamId || cur.teamName !== display.teamName) await profRef.update(display);
+});
+
+// ===========================================================================
+// Child profile photos (2026-10-28)
+// ===========================================================================
+// { dependentId, imageBase64 } uploads (or { dependentId, imageBase64: null }
+// removes) the child's photo. Done server-side so the file lives at
+// childAvatars/{random}.{ext}: an avatars/{uid}/... path would put the
+// parent's uid in every public image URL and tie the child to the parent.
+// The app resizes to a small JPEG first (same helper as adult avatars).
+const CHILD_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+function sniffImageType(buf) {
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { type: "image/jpeg", ext: "jpg" };
+  if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return { type: "image/png", ext: "png" };
+  if (buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return { type: "image/webp", ext: "webp" };
+  return null;
+}
+
+export const setChildAvatar = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const dependentId = request.data?.dependentId;
+  if (!isValidDependentId(dependentId)) throw new HttpsError("invalid-argument", "Missing child profile.");
+  const raw = request.data?.imageBase64;
+  const db = getFirestore();
+  const depRef = db.collection("users").doc(uid).collection("dependents").doc(dependentId);
+  const depSnap = await depRef.get();
+  if (!depSnap.exists) throw new HttpsError("not-found", "That child profile no longer exists.");
+  const dep = depSnap.data();
+  if (dep.graduatedAt) throw new HttpsError("failed-precondition", `${dep.callsign || "This profile"} has moved to their own account.`);
+  const bucket = getStorage().bucket();
+  const oldPath = dep.avatarPath || null;
+
+  if (raw === null) {
+    await depRef.update({ avatarUrl: FieldValue.delete(), avatarPath: FieldValue.delete() });
+    if (oldPath) await bucket.file(oldPath).delete().catch(() => {});
+    return { ok: true, avatarUrl: null };
+  }
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > Math.ceil(CHILD_AVATAR_MAX_BYTES * 4 / 3) + 8) {
+    throw new HttpsError("invalid-argument", "That image is too large. Try a smaller one.");
+  }
+  const buf = Buffer.from(raw, "base64");
+  if (buf.length === 0 || buf.length > CHILD_AVATAR_MAX_BYTES) throw new HttpsError("invalid-argument", "That image is too large. Try a smaller one.");
+  const kind = sniffImageType(buf);
+  if (!kind) throw new HttpsError("invalid-argument", "That file isn't a JPEG, PNG or WebP image.");
+
+  const path = `childAvatars/${randomBytes(16).toString("hex")}.${kind.ext}`;
+  const token = randomUUID();
+  await bucket.file(path).save(buf, {
+    resumable: false,
+    contentType: kind.type,
+    metadata: { cacheControl: "public, max-age=31536000", metadata: { firebaseStorageDownloadTokens: token } },
+  });
+  const avatarUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
+  await depRef.update({ avatarUrl, avatarPath: path });
+  if (oldPath) await bucket.file(oldPath).delete().catch(() => {});
+  return { ok: true, avatarUrl };
 });

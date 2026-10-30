@@ -23,12 +23,12 @@ import { evaluateAchievements, achievementProgress, fieldPatchToEnginePatch, chi
 import { useFieldPatches } from "./hooks/useFieldPatches";
 import { useWaiverSignature } from "./hooks/useWaiverSignature";
 import { useBookingCode, formatBookingCode } from "./hooks/useBookingCode";
-import { useDependents, useChildGraduations, startChildGraduation, cancelChildGraduation, claimChildProfile, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
+import { useDependents, setChildAvatar, useChildGraduations, startChildGraduation, cancelChildGraduation, claimChildProfile, normalizeUSPhone, formatPhoneInput, ageOnDate, CHILD_AVATAR_IDS, MAX_DEPENDENTS, MAX_ATTENDEES_PER_BOOKING, ADULT_AGE } from "./hooks/useDependents";
 import { useChildPatches, useChildHistory, grantChildPatch, markChildPatchSeen } from "./hooks/useChildPatches";
 import { useChildPublicPointers, useAllChildPublicProfiles, useChildPublicProfile, useChildPublicPatches, useChildTeamStatus, setChildProfilePublic, childTeamAction, fetchChildTeams } from "./hooks/useChildPublic";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
-import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs } from "./lib/eventClose";
+import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
 import { functions as firebaseFunctions } from "./lib/firebase";
@@ -181,6 +181,19 @@ function isBlankPriceText(price) {
 function displayPrice(price) {
   if (isBlankPriceText(price)) return "Free";
   return price.trim().toLowerCase() === "varies" ? "Price varies" : price;
+}
+// Prepay vs. day-of pricing (2026-10-30, see lib/eventClose.js). The state
+// sets the time zone for the midnight switch; unknown falls back to the
+// latest mainland zone, so a card can show the prepay price a little late,
+// never early. The server decides what's actually charged.
+function eventStateFor(ev, field) {
+  return ev?.isMajor ? ev.venueState : (stateFromCity(field?.city) || ev?.venueState || null);
+}
+// "$20 · $25 day of" before game day, "$25" on game day, plain price otherwise.
+function eventPriceLabel(ev, state) {
+  if (!ev?.dayOfPrice || !/\d/.test(String(ev.dayOfPrice))) return displayPrice(ev?.price);
+  if (isDayOfPricing(ev, state)) return displayPrice(ev.dayOfPrice);
+  return `${displayPrice(ev.price)} · ${displayPrice(ev.dayOfPrice)} day of`;
 }
 // Haversine formula — straight-line distance between two lat/lng points,
 // accurate enough for "how far is this field" without needing a routing API.
@@ -673,7 +686,7 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, sendPasswordReset, refe
   );
 }
 
-function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick }) {
+function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick, priceState }) {
   const { T, display, body, mono } = useTheme();
   const isToday = ev.date === localDateStr();
   return (
@@ -692,7 +705,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick }) {
           className="absolute bottom-2.5 left-3 text-[13px] font-semibold px-2.5 py-1.5"
           style={{ ...mono, background: "rgba(21,84,184,0.85)", color: "#fff", borderRadius: T.rPill }}
         >
-          {displayPrice(ev.price)}
+          {eventPriceLabel(ev, priceState ?? eventStateFor(ev))}
         </div>
         {ev.checkInPatch?.imageUrl && (
           <div
@@ -856,7 +869,7 @@ function CommunitySpotlight({ events, fields, onOpenEvent }) {
                   {interested > 0 && <span className="flex items-center gap-1"><Heart size={11} /> {interested} interested</span>}
                   {booked === 0 && interested === 0 && <span style={{ color: T.ashFaint }}>Coming up soon</span>}
                 </div>
-                <div className="text-[12px] font-semibold" style={{ ...mono, color: T.ash }}>{displayPrice(ev.price)}</div>
+                <div className="text-[12px] font-semibold" style={{ ...mono, color: T.ash }}>{eventPriceLabel(ev, eventStateFor(ev, fields?.find((f) => f.id === ev.fieldId)))}</div>
               </div>
             </button>
           );
@@ -1537,7 +1550,7 @@ function HomeScreen({
     if (dateFrom && (ev.endDate || ev.date) < dateFrom) return false;
     if (dateTo && ev.date > dateTo) return false;
     if (maxPrice !== null) {
-      const p = parsePrice(ev.price);
+      const p = parsePrice(currentPriceText(ev, eventStateFor(ev, fields.find((f) => f.id === ev.fieldId))));
       if (p !== null && p > maxPrice) return false;
     }
     return true;
@@ -1585,7 +1598,7 @@ function HomeScreen({
     );
   } else if (sortBy === "price") {
     filteredEvents = [...filteredEvents].sort(
-      (a, b) => (parsePrice(a.price) ?? Infinity) - (parsePrice(b.price) ?? Infinity)
+      (a, b) => (parsePrice(currentPriceText(a, eventStateFor(a, fields.find((f) => f.id === a.fieldId)))) ?? Infinity) - (parsePrice(currentPriceText(b, eventStateFor(b, fields.find((f) => f.id === b.fieldId)))) ?? Infinity)
     );
   } else if (nearbyOnly) {
     // No explicit sort chosen, but Nearby is on — nearest-first is still the
@@ -2093,6 +2106,7 @@ function HomeScreen({
               fallbackImageUrl={fields.find((f) => f.id === ev.fieldId)?.imageUrl}
               distanceMi={nearbyOnly ? eventDistance(ev) ?? undefined : undefined}
               claimed={!!fields.find((f) => f.id === ev.fieldId)?.ownerId}
+              priceState={eventStateFor(ev, fields.find((f) => f.id === ev.fieldId))}
               onClick={() => onOpenEvent(ev)}
             />
           ))
@@ -2138,7 +2152,12 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // Still needed to determine whether this is a paid event at all (for
   // routing to the right booking flow) — the fee/total display itself
   // was removed from the button, so only this piece survives.
-  const basePriceCents = Math.round(parseFloat(String(ev.price || "").replace(/[^0-9.]/g, "")) * 100) || 0;
+  // Prepay vs. day-of (2026-10-30): the base price in effect right now —
+  // same rule the server uses in resolveEntryPrice. Add-ons are unaffected.
+  const priceState = ev.isMajor ? ev.venueState : stateFromCity(field?.city);
+  const nowPriceText = currentPriceText(ev, priceState);
+  const dayOfPending = !!ev.dayOfPrice && /\d/.test(String(ev.dayOfPrice)) && !isDayOfPricing(ev, priceState);
+  const basePriceCents = Math.round(parseFloat(String(nowPriceText || "").replace(/[^0-9.]/g, "")) * 100) || 0;
 
   const [showWaiver, setShowWaiver] = useState(false);
   // Which child profiles are coming. The guardian is always an attendee, so
@@ -2186,15 +2205,15 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // never touched it — doesn't count as ambiguous text; isBlankPriceText
   // treats it exactly like a genuinely blank price, so it falls through to
   // "Free" below instead of printing the bare "$".
-  const priceTextHasDigits = /\d/.test(String(ev.price || ""));
-  const priceIsAmbiguousText = !isBlankPriceText(ev.price) && !priceTextHasDigits;
+  const priceTextHasDigits = /\d/.test(String(nowPriceText || ""));
+  const priceIsAmbiguousText = !isBlankPriceText(nowPriceText) && !priceTextHasDigits;
   const formattedEntryPrice = entryPriceCents % 100 === 0 ? `$${entryPriceCents / 100}` : `$${(entryPriceCents / 100).toFixed(2)}`;
   const priceDisplayText = choiceMissing
-    ? (ev.price || field?.admission || "Choose an option above")
+    ? (nowPriceText || field?.admission || "Choose an option above")
     : entryPriceCents > 0
       ? formattedEntryPrice
       : priceIsAmbiguousText
-        ? ev.price
+        ? nowPriceText
         : "Free";
   // Rental gear selection — an owner-defined catalog on the field itself
   // (field.rentals), not the event. On/off only (no quantity): rentals
@@ -3033,6 +3052,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               </div>
               {attendeeCount > 1 && !myBooking && (
                 <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{attendeeCount} tickets</div>
+              )}
+              {dayOfPending && !usingVoucher && !myBooking && (
+                <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>Prepay price · {displayPrice(ev.dayOfPrice)} on game day</div>
               )}
               {typeof ev.maxCapacity === "number" && (
                 <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{ev.bookedCount || 0} / {ev.maxCapacity} reserved</div>
@@ -4074,9 +4096,7 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, childProfiles = []
               return (
                 <div key={p.uid} className="mb-2 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
                   <button onClick={() => onOpenPlayer(p.uid)} className="flex-1 flex items-center gap-3 text-left">
-                    {p._child ? (
-                      <ChildAvatar id={p.avatarPreset} size={40} />
-                    ) : p.avatarUrl ? (
+                    {p.avatarUrl ? (
                       <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${p.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />
                     ) : (
                       <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
@@ -4870,7 +4890,7 @@ function TeamEventCard({ team, event, user, profile, isMember, isOfficer, onEdit
         </div>
         {event._atlas && <div className="mt-1"><Tag tone="accent">ON ATLAS</Tag></div>}
         <div className="text-[12px] mt-1" style={{ ...body, color: T.ashDim }}>
-          {formatDate(event.date, event.endDate)}{timeLine ? ` · ${timeLine}` : ""}{event._atlas ? ` · ${displayPrice(event._atlas.price)}` : ""}
+          {formatDate(event.date, event.endDate)}{timeLine ? ` · ${timeLine}` : ""}{event._atlas ? ` · ${eventPriceLabel(event._atlas, eventStateFor(event._atlas))}` : ""}
         </div>
         {(location || event.regionalArea) && (
           <div className="flex items-center gap-1.5 mt-1">
@@ -6270,9 +6290,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
             <div key={m.uid} className="p-3 relative" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
             <div className="flex items-center gap-3">
               <button onClick={() => onOpenPlayer(m.uid)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
-                {m.kind === "child" && m.avatarPreset ? (
-                  <ChildAvatar id={m.avatarPreset} size={40} />
-                ) : m.avatarUrl ? (
+                {m.avatarUrl ? (
                   <div className="w-10 h-10 flex-shrink-0" style={{ backgroundImage: `url("${m.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
                 ) : (
                   <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[13px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
@@ -7069,8 +7087,14 @@ function YearInReviewScreen({ onBack, year, stats }) {
 // at all (everyone else gets the standard avatar icon).
 const CHILD_AVATAR_ICONS = { shield: Shield, target: Target, crosshair: Crosshair, compass: Compass, flag: Flag, star: Star, rocket: Rocket, medal: Medal };
 
-function ChildAvatar({ id, size = 40 }) {
+// url (2026-10-28): the child's uploaded photo, when there is one. The preset
+// icon is only ever drawn on the parent's own screens — public screens draw a
+// child exactly like an adult (photo or initial circle).
+function ChildAvatar({ id, size = 40, url = null }) {
   const { T } = useTheme();
+  if (url) {
+    return <div className="flex-shrink-0" style={{ width: size, height: size, borderRadius: size / 2, backgroundImage: `url("${url}")`, backgroundSize: "cover", backgroundPosition: "center", border: `1px solid ${T.line}` }} />;
+  }
   const Icon = CHILD_AVATAR_ICONS[id] || Shield;
   return (
     <div className="flex items-center justify-center flex-shrink-0" style={{ width: size, height: size, borderRadius: size / 2, background: T.panelAlt }}>
@@ -7095,6 +7119,10 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
   const [callsign, setCallsign] = useState("");
   const [dob, setDob] = useState("");
   const [avatar, setAvatar] = useState(CHILD_AVATAR_IDS[0]);
+  // Photo (2026-10-28): undefined = unchanged, a Blob = new photo, null = remove.
+  const [photoChange, setPhotoChange] = useState(undefined);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const photoInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -7106,10 +7134,12 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
 
   const startNew = () => {
     setFullName(""); setCallsign(""); setDob(""); setAvatar(CHILD_AVATAR_IDS[0]);
+    setPhotoChange(undefined); setPhotoPreview(null);
     setError(""); setConfirmDelete(false); setEditingId("new");
   };
   const startEdit = (d) => {
     setFullName(d.fullName || ""); setCallsign(d.callsign || ""); setDob(d.dob || ""); setAvatar(d.avatar || CHILD_AVATAR_IDS[0]);
+    setPhotoChange(undefined); setPhotoPreview(d.avatarUrl || null);
     setError(""); setConfirmDelete(false); setEditingId(d.id);
   };
   const closeForm = () => { setEditingId(null); setError(""); setConfirmDelete(false); };
@@ -7132,15 +7162,48 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
       }
     }
     setSaving(true);
+    let savedId = null;
     try {
-      if (isNew) await addDependent({ fullName, callsign, dob, avatar });
-      else await updateDependent(editingId, { fullName, callsign, avatar });
-      closeForm();
+      if (isNew) savedId = await addDependent({ fullName, callsign, dob, avatar });
+      else { await updateDependent(editingId, { fullName, callsign, avatar }); savedId = editingId; }
     } catch (err) {
       console.error("save child profile failed:", err);
       setError("Couldn't save — try again.");
+      setSaving(false);
+      return;
     }
+    if (savedId && photoChange !== undefined) {
+      try {
+        await setChildAvatar(savedId, photoChange);
+      } catch (err) {
+        console.error("setChildAvatar failed:", err);
+        // The profile itself saved; keep the form open on it so the photo can be retried.
+        if (isNew) setEditingId(savedId);
+        setError(err?.message ? `Saved, but the photo didn't upload: ${err.message}` : "Saved, but the photo didn't upload. Try again.");
+        setSaving(false);
+        return;
+      }
+    }
+    closeForm();
     setSaving(false);
+  };
+
+  const handlePhotoPicked = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    setError("");
+    try {
+      const resized = await resizeImageFile(file);
+      setPhotoChange(resized);
+      setPhotoPreview(URL.createObjectURL(resized));
+    } catch (err) {
+      setError(err?.message || "Couldn't read that image.");
+    }
   };
 
   const handleDelete = async () => {
@@ -7206,7 +7269,7 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
               const patchCount = (childPatchesByDep[d.id] || []).length;
               return (
                 <button key={d.id} onClick={() => setViewingId(d.id)} className="w-full flex items-center gap-3 p-3 text-left" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-                  <ChildAvatar id={d.avatar} size={44} />
+                  <ChildAvatar id={d.avatar} url={d.avatarUrl} size={44} />
                   <div className="flex-1 min-w-0">
                     <div className="text-[14px] font-semibold truncate" style={{ ...display, color: T.ash }}>{d.callsign}</div>
                     <div className="text-[11px] truncate" style={{ ...mono, color: T.ashDim }}>{d.fullName}{age !== null ? ` · Age ${age}` : ""}{` · ${patchCount} ${patchCount === 1 ? "patch" : "patches"}`}</div>
@@ -7270,7 +7333,33 @@ function ChildProfilesScreen({ profile, dependents, dependentsLoading, addDepend
             )}
           </div>
           <div>
-            <label className="text-[10px] font-semibold uppercase block mb-2" style={labelStyle}>Avatar</label>
+            <label className="text-[10px] font-semibold uppercase block mb-2" style={labelStyle}>Photo (optional)</label>
+            <div className="flex items-center gap-3">
+              {photoPreview ? (
+                <div className="w-14 h-14 flex-shrink-0" style={{ backgroundImage: `url("${photoPreview}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+              ) : (
+                <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center text-[18px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+                  {(callsign.trim() || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <button onClick={() => photoInputRef.current?.click()} className="px-3 py-1.5 text-[12px] font-semibold text-left" style={{ ...display, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>
+                  {photoPreview ? "Change Photo" : "Upload Photo"}
+                </button>
+                {photoPreview && (
+                  <button onClick={() => { setPhotoChange(null); setPhotoPreview(null); }} className="text-[12px] text-left" style={{ ...body, color: T.ashFaint }}>
+                    Remove photo
+                  </button>
+                )}
+              </div>
+              <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoPicked} className="hidden" />
+            </div>
+            <p className="text-[11px] mt-1" style={{ ...body, color: T.ashFaint }}>
+              Shown like any player's photo: to field staff at check-in, and to everyone if the profile is public. Without one, other players see a plain initial, the same as anyone without a photo.
+            </p>
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase block mb-2" style={labelStyle}>Icon (only you see this)</label>
             <div className="grid grid-cols-4 gap-3">
               {CHILD_AVATAR_IDS.map((id) => (
                 <button key={id} onClick={() => setAvatar(id)} className="flex items-center justify-center py-2" style={{ borderRadius: T.rCard, border: `2px solid ${avatar === id ? T.cta : "transparent"}`, background: T.panel }}>
@@ -7377,7 +7466,7 @@ function ChildProfileDetail({ dep, patches, history, events, graduation, onEdit,
   return (
     <div className="px-6 pt-5 flex flex-col gap-4">
       <div className="flex items-center gap-3 p-3" style={cardStyle}>
-        <ChildAvatar id={dep.avatar} size={52} />
+        <ChildAvatar id={dep.avatar} url={dep.avatarUrl} size={52} />
         <div className="flex-1 min-w-0">
           <div className="text-[16px] font-semibold truncate" style={{ ...display, color: T.ash }}>{dep.callsign}</div>
           <div className="text-[11px] truncate" style={{ ...mono, color: T.ashDim }}>{dep.fullName}{age !== null ? ` · Age ${age}` : ""}</div>
@@ -7641,7 +7730,7 @@ function WhosJoiningSheet({ team, profile, isMember, myJoinRequest, onJoinSelf, 
             const st = childStatus[k.publicId] || "none";
             return (
               <div key={k.publicId} className="py-3 flex items-center gap-3" style={rowStyle}>
-                <ChildAvatar id={k.avatar} size={36} />
+                <ChildAvatar id={k.avatar} url={k.avatarUrl} size={36} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold truncate" style={{ ...display, color: T.ash }}>{k.callsign}</div>
                   {st === "member" && status("On this team")}
@@ -7676,28 +7765,35 @@ function WhosJoiningSheet({ team, profile, isMember, myJoinRequest, onJoinSelf, 
 
 // A public child profile as other players see it: avatar icon, callsign,
 // team and patches. No events, bookings or friend button.
-function ChildPublicProfileScreen({ publicId, profile, onBack, onOpenTeam }) {
-  const { T, display, body, mono } = useTheme();
+function ChildPublicProfileScreen({ publicId, profile, onBack }) {
+  // Laid out like PlayerProfileScreen's header (same avatar, callsign, team
+  // line) so a public child reads as any player (Michael, 2026-10-28).
+  const { T, display, body } = useTheme();
   const patches = useChildPublicPatches(publicId);
   const sorted = [...patches].sort((a, b) => (b.addedAt?.toMillis?.() || 0) - (a.addedAt?.toMillis?.() || 0));
+  const callsign = profile.callsign || "Player";
   return (
-    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
+    <div className="h-full overflow-y-auto pb-6" style={{ backgroundColor: T.void }}>
       <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
         <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
         </button>
-        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9 truncate" style={{ ...display, color: T.ash }}>{profile.callsign}</h1>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>{callsign}</h1>
       </div>
-      <div className="px-6 pt-6 flex flex-col items-center">
-        <ChildAvatar id={profile.avatarPreset} size={84} />
-        <div className="text-[20px] font-semibold mt-3" style={{ ...display, color: T.ash }}>{profile.callsign}</div>
-        {profile.teamId && (
-          <button onClick={() => onOpenTeam?.(profile.teamId)} className="text-[13px] mt-1 font-medium" style={{ ...body, color: T.accent }}>
-            {profile.teamName || "Team"}
-          </button>
+      <div className="px-6 pt-5 flex flex-col items-center text-center">
+        {profile.avatarUrl ? (
+          <div className="w-20 h-20 mb-3" style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999, border: `1px solid ${T.line}` }} />
+        ) : (
+          <div className="w-20 h-20 mb-3 flex items-center justify-center text-[24px] font-semibold" style={{ ...display, background: T.panelAlt, borderRadius: 999, color: T.ash }}>
+            {callsign.charAt(0).toUpperCase()}
+          </div>
         )}
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{callsign}</span>
+        </div>
+        {profile.teamName && <div className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>{profile.teamName}</div>}
       </div>
-      <div className="px-6 pt-6">
+      <div className="px-6 pt-4">
         <Eyebrow>Patches ({sorted.length})</Eyebrow>
         {sorted.length === 0 ? (
           <p className="text-[12px]" style={{ ...body, color: T.ashFaint }}>No patches yet.</p>
@@ -7722,7 +7818,7 @@ function PlayerOrChildProfileScreen(props) {
   const { T } = useTheme();
   const { profile: childProfile, loading } = useChildPublicProfile(props.uid);
   if (loading) return <div className="h-full" style={{ backgroundColor: T.void }} />;
-  if (childProfile) return <ChildPublicProfileScreen publicId={props.uid} profile={childProfile} onBack={props.onBack} onOpenTeam={props.onOpenTeam} />;
+  if (childProfile) return <ChildPublicProfileScreen publicId={props.uid} profile={childProfile} onBack={props.onBack} />;
   return <PlayerProfileScreen {...props} />;
 }
 
@@ -9513,7 +9609,7 @@ function AppShell() {
   // Public Child Profiles: { depId: publicId } for this parent's public kids.
   const childPublicIds = useChildPublicPointers(user?.uid);
   const publicChildren = useMemo(
-    () => dependents.filter((d) => childPublicIds[d.id]).map((d) => ({ depId: d.id, publicId: childPublicIds[d.id], callsign: d.callsign, avatar: d.avatar })),
+    () => dependents.filter((d) => childPublicIds[d.id]).map((d) => ({ depId: d.id, publicId: childPublicIds[d.id], callsign: d.callsign, avatar: d.avatar, avatarUrl: d.avatarUrl || null })),
     [dependents, childPublicIds]
   );
   const { childProfiles: allChildPublicProfiles } = useAllChildPublicProfiles();

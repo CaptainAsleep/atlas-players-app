@@ -767,8 +767,14 @@ service cloud.firestore {
           && request.resource.data.dob is string && request.resource.data.dob.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
           && request.resource.data.avatar is string && request.resource.data.avatar.size() <= 40
           && request.resource.data.createdAt == request.time;
+        // avatarUrl/avatarPath (uploaded photo, 2026-10-28) are written only by
+        // the setChildAvatar function; the parent's own edits must leave them
+        // as they are. graduatedAt is still not allowed, so a handed-over
+        // profile stays locked.
         allow update: if request.auth != null && request.auth.uid == userId
-          && request.resource.data.keys().hasOnly(['fullName', 'callsign', 'dob', 'avatar', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['fullName', 'callsign', 'dob', 'avatar', 'createdAt', 'avatarUrl', 'avatarPath'])
+          && request.resource.data.get('avatarUrl', null) == resource.data.get('avatarUrl', null)
+          && request.resource.data.get('avatarPath', null) == resource.data.get('avatarPath', null)
           && request.resource.data.dob == resource.data.dob
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.fullName is string && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 80

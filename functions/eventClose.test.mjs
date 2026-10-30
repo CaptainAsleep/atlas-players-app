@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseFirstTime, stateFromCity, timeZoneForState, wallClockToUtcMs, eventCloseMs, isEventClosed } from "./eventClose.js";
+import { parseFirstTime, stateFromCity, timeZoneForState, wallClockToUtcMs, eventCloseMs, isEventClosed, dayOfPriceStartMs, isDayOfPricing, currentPriceText } from "./eventClose.js";
 
 const iso = (ms) => new Date(ms).toISOString();
 
@@ -46,4 +46,25 @@ test("end time, multi-day, overnight, no times, no date", () => {
   assert.equal(iso(eventCloseMs({ date: "2026-11-08" }, "MI")), "2026-11-09T05:00:00.000Z");
   assert.equal(eventCloseMs({}, "MI"), null);
   assert.equal(isEventClosed({}, "MI"), false);
+});
+
+test("prepay vs day-of pricing", () => {
+  const ev = { date: "2026-11-14", price: "$20", dayOfPrice: "$25" };
+  // Midnight Nov 14 in Detroit (EST after Nov 1) = 05:00 UTC.
+  assert.equal(iso(dayOfPriceStartMs(ev, "MI")), "2026-11-14T05:00:00.000Z");
+  const before = Date.parse("2026-11-14T04:59:59Z");
+  const after = Date.parse("2026-11-14T05:00:00Z");
+  assert.equal(isDayOfPricing(ev, "MI", before), false);
+  assert.equal(currentPriceText(ev, "MI", before), "$20");
+  assert.equal(isDayOfPricing(ev, "MI", after), true);
+  assert.equal(currentPriceText(ev, "MI", after), "$25");
+  // Multi-day: switches on the first day.
+  assert.equal(iso(dayOfPriceStartMs({ ...ev, endDate: "2026-11-15" }, "MI")), "2026-11-14T05:00:00.000Z");
+  // No day-of price (or no digits) = flat price, never switches.
+  for (const d of [undefined, null, "", "$", "TBD"]) {
+    const flat = { ...ev, dayOfPrice: d };
+    assert.equal(dayOfPriceStartMs(flat, "MI"), null);
+    assert.equal(currentPriceText(flat, "MI", after), "$20");
+  }
+  assert.equal(dayOfPriceStartMs({ price: "$20", dayOfPrice: "$25" }, "MI"), null);
 });
