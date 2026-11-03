@@ -5263,8 +5263,6 @@ const fields = [
     city: "Billings, MT",
     address: "21 Mile Rd, Billings, MT",
     indoorOutdoor: "outdoor",
-    about:
-      "Outdoor airsoft field on 21 Mile Rd, supplied directly by Michael -- this is the field he originally asked about by the name \"21 Mile Field,\" which an earlier research pass could not locate under that name.",
     status: "active",
     dataSource: "supplied directly by Michael -- no independent website, Facebook page, phone number, directory listing, or any other corroborating source could be found for this field anywhere in this research",
     lastScraped: "2026-09-20",
