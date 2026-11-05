@@ -7029,12 +7029,16 @@ I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENT
     id: "futureball-2026-11-08-customer-day",
     fieldId: "futureball",
     fieldName: "Futureball",
-    title: "Customer Day",
+    title: "Customer Appreciation Day",
     date: "2026-11-08",
+    startTime: "11:00 AM",
+    endTime: "3:00 PM",
+    price: "Free",
     type: "OUTDOOR",
-    description: "Combined paintball and airsoft open-play event.",
+    description:
+      "Paintball and airsoft. Free to play with your own gear. Half-off rentals, just $17.50. VIP Vengeance paint: 2-Skull $35, 3-Skull $40, Aged 4-Skull $25. Raffle tickets $1 each, with one free ticket with each entry. Prizes include a season pass, VIP passes, gear, accessories, Futureball merchandise and more. Chubz BBQ truck on-site.",
     sourceUrl: "https://www.futureball.com/",
-    imageUrl: "https://www.futureball.com/wp-content/uploads/2025/02/Customer-day-2025.jpg",
+    imageUrl: "https://airsoftatlas.app/assets/futureball-customer-appreciation-day-2026.jpg", // 2026 flyer supplied by Michael 2026-11-05, hosted on atlas-website GitHub Pages
     waiver: {
       version: "2026-10-26",
       isDemo: false, // swapped 2026-10-26 from the generic placeholder to Futureball's real waiver text (supplied by Michael); per its own text, good through 3/26/27
