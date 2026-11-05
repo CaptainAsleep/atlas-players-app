@@ -28,6 +28,8 @@ import { useChildPatches, useChildHistory, grantChildPatch, markChildPatchSeen }
 import { useChildPublicPointers, useAllChildPublicProfiles, useChildPublicProfile, useChildPublicPatches, useChildTeamStatus, setChildProfilePublic, childTeamAction, fetchChildTeams } from "./hooks/useChildPublic";
 import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEventBookingsOnce, isPlayedBooking } from "./hooks/useBookings";
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
+import { useMyTicketHoldings, useMyEventTeamTickets } from "./hooks/useTeamTickets";
+import { EventTeamTickets, TicketOffersCard, GiveVoucherSheet, canGiveVoucher } from "./TeamTickets";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
@@ -1333,6 +1335,8 @@ function formatCheckedInTime(ts) {
 
 function HomeScreen({
   onOpenEvent, onNavigate, events, eventsLoading, fields, profile, onOpenField, favorites, user, myBookings, onOpenYearInReview,
+  // Team Bookings (2026-11-05): "a ticket is waiting for you" countdown card.
+  ticketOffersSlot = null,
   // Filter/view state below is owned by AppShell, not local to this screen
   // — HomeScreen unmounts every time the player drills into a field/event
   // (screen leaves "home") and remounts fresh on the way back, so a local
@@ -1706,6 +1710,8 @@ function HomeScreen({
           <ChevronRight size={16} color="#FFFFFF" />
         </button>
       )}
+
+      {ticketOffersSlot}
 
       {nextGame ? (
         <div
@@ -2131,7 +2137,7 @@ const guardianAbsentNoticeText = (fieldName) =>
 
 function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver, dependents = [], signedDependentIds = [], signedAbsentDependentIds = [],
   myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout,
-  fieldVouchers, redeemVoucher }) {
+  fieldVouchers, redeemVoucher, teamTicketsSlot = null }) {
   const { T, display, body, mono, theme } = useTheme();
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
   // isPast (calendar date) still decides how long a booked player's check-in
@@ -2980,6 +2986,8 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               </div>
             )
           )}
+
+          {teamTicketsSlot}
 
           {ev.description && (
             <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -8251,6 +8259,9 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  // Team Bookings: an unused voucher from a ticket bought for others can be
+  // given, whole, to another player.
+  const [givingVoucher, setGivingVoucher] = useState(null);
 
   const referralUrl = user ? `${window.location.origin}${import.meta.env.BASE_URL}?ref=${user.uid}` : "";
 
@@ -8494,18 +8505,24 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
                         )}
                       </div>
                       <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>
-                        {v.kind === "freeEntry" && !v.sourceEventId ? "Gift from the field" : `From "${v.sourceEventTitle || "a canceled event"}"`}
+                        {v.givenByCallsign ? `Gift from ${v.givenByCallsign}` : v.source === "teamTicket" ? `Unused ticket, "${v.sourceEventTitle || "an event"}"` : v.kind === "freeEntry" && !v.sourceEventId ? "Gift from the field" : `From "${v.sourceEventTitle || "a canceled event"}"`}
                         {v.expiresAt?.toDate ? ` · ${isExpired ? "expired" : "expires"} ${v.expiresAt.toDate().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}` : ""}
                       </div>
                     </div>
                   </div>
-                  <div className="text-[14px] font-semibold flex-shrink-0" style={{ ...mono, color: isExpired ? T.ashFaint : T.good }}>
-                    {v.kind === "freeEntry" ? "FREE ENTRY" : v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-[14px] font-semibold" style={{ ...mono, color: isExpired ? T.ashFaint : T.good }}>
+                      {v.kind === "freeEntry" ? "FREE ENTRY" : v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
+                    </div>
+                    {canGiveVoucher(v) && (
+                      <button onClick={() => setGivingVoucher(v)} className="text-[11px] font-semibold" style={{ ...display, color: T.accent }}>Give</button>
+                    )}
                   </div>
                 </div>
                 );
               })}
             </div>
+            {givingVoucher && <GiveVoucherSheet voucher={givingVoucher} onClose={() => setGivingVoucher(null)} />}
           </>
         )}
 
@@ -9392,6 +9409,8 @@ function CancellationNoticeModal({ notice, onDismiss }) {
   // and deliberately nothing about why it can't be redeemed on the same
   // event it came from.
   const isGrant = notice.type === "voucher_granted";
+  // Team Bookings (2026-11-05) notices are written with their own copy.
+  const isTeamCopy = !!notice.title && !!notice.message;
   // Owner gave a free entry to someone not booked at all (2026-10-24).
   const isGift = notice.type === "voucher_gifted";
   const isFreeEntryBack = notice.voucherKind === "freeEntry" && !isGift;
@@ -9405,7 +9424,12 @@ function CancellationNoticeModal({ notice, onDismiss }) {
         <div className="w-10 h-10 mb-3 flex items-center justify-center" style={{ background: T.tint, borderRadius: T.rPill }}>
           <Ticket size={18} color={T.accent} />
         </div>
-        {isGift ? (
+        {isTeamCopy ? (
+          <>
+            <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>{notice.title}</div>
+            <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>{notice.message}</p>
+          </>
+        ) : isGift ? (
           <>
             <div className="text-[15px] font-semibold mb-1" style={{ ...display, color: T.ash }}>You've got a free entry!</div>
             <p className="text-[13px] mb-3 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
@@ -9436,6 +9460,10 @@ function CancellationNoticeModal({ notice, onDismiss }) {
             ) : amount != null ? (
               <p className="text-[13px] mb-4 px-3 py-2.5" style={{ ...body, color: T.ash, background: T.tintGood, borderRadius: T.rTight }}>
                 You've received a <strong>${amount % 1 === 0 ? amount : amount.toFixed(2)} voucher</strong>, good for a future event at {notice.fieldName || "this field"}.
+              </p>
+            ) : notice.teamTicket ? (
+              <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>
+                {notice.purchasedByCallsign || "The player"} bought this ticket for you, so the voucher went to them.
               </p>
             ) : (
               <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>
@@ -9690,8 +9718,11 @@ function AppShell() {
   const [teamDeepLinkId] = useState(() => new URLSearchParams(window.location.search).get("team"));
   const [eventDeepLinkId] = useState(() => new URLSearchParams(window.location.search).get("event"));
 
-  const [stack, setStack] = useState(() => (fieldDeepLinkId ? ["home", "field"] : teamDeepLinkId ? ["home", "team"] : ["home"]));
-  const [activeEventId, setActiveEventId] = useState(null);
+  // A plain ?event=<id> (no team) opens that event's page — used by the
+  // Team Bookings "a ticket is waiting for you" email (2026-11-05).
+  const soloEventDeepLinkId = !fieldDeepLinkId && !teamDeepLinkId ? eventDeepLinkId : null;
+  const [stack, setStack] = useState(() => (fieldDeepLinkId ? ["home", "field"] : teamDeepLinkId ? ["home", "team"] : soloEventDeepLinkId ? ["home", "event"] : ["home"]));
+  const [activeEventId, setActiveEventId] = useState(() => soloEventDeepLinkId || null);
   const [activeFieldId, setActiveFieldId] = useState(() => fieldDeepLinkId || null);
   const [activeTeamId, setActiveTeamId] = useState(() => (!fieldDeepLinkId && teamDeepLinkId) || null);
   const [activePlayerId, setActivePlayerId] = useState(null);
@@ -9771,6 +9802,10 @@ function AppShell() {
   const activeEvent = events.find((e) => e.id === activeEventId) || null;
   const { signature, signedDependentIds, signedAbsentDependentIds, signWaiver } = useWaiverSignature(user?.uid, activeEvent?.id);
   const { booking: myBooking, bookingLoading: myBookingLoading } = useMyBooking(user?.uid, activeEvent?.id);
+  // Team Bookings (2026-11-05): tickets waiting for / held by this player,
+  // and the ones they bought for the open event.
+  const { holdings: ticketHoldings } = useMyTicketHoldings(user?.uid);
+  const myEventTeamTickets = useMyEventTeamTickets(user?.uid, activeEvent?.id);
   const { bookings: whosGoing, bookingsLoading: whosGoingLoading } = useEventBookings(activeEvent?.id);
   const { interested: whosInterested, interestedLoading: whosInterestedLoading } = useEventInterested(activeEvent?.id);
   const { bookings: myBookings, bookingsLoading: myBookingsLoading } = useMyBookings(user?.uid);
@@ -10113,6 +10148,16 @@ function AppShell() {
         onOpenField={openField}
         onNavigate={goTab}
         onOpenYearInReview={openYearInReview}
+        ticketOffersSlot={
+          <TicketOffersCard
+            holdings={ticketHoldings}
+            onOpenEvent={(eventId) => {
+              setActiveEventId(eventId);
+              setActiveFieldId(null);
+              push("event");
+            }}
+          />
+        }
         search={homeSearch} setSearch={setHomeSearch}
         activeCat={homeActiveCat} setActiveCat={setHomeActiveCat}
         viewMode={homeViewMode} setViewMode={setHomeViewMode}
@@ -10166,6 +10211,24 @@ function AppShell() {
           v.excludedEventId !== activeEvent.id
         ) : []}
         redeemVoucher={redeemVoucher}
+        teamTicketsSlot={
+          <EventTeamTickets
+            ev={activeEvent}
+            field={activeField}
+            user={user}
+            profile={profile}
+            myBooking={myBooking}
+            holdings={ticketHoldings}
+            myTickets={myEventTeamTickets}
+            dependents={dependents}
+            signature={signature}
+            signedDependentIds={signedDependentIds}
+            signedAbsentDependentIds={signedAbsentDependentIds}
+            signWaiver={signWaiver}
+            guardianNoticeText={GUARDIAN_NOTICE_TEXT}
+            guardianAbsentNoticeText={guardianAbsentNoticeText}
+          />
+        }
       />
     ) : (
       <div className="h-full flex items-center justify-center" style={{ backgroundColor: T.void }}>

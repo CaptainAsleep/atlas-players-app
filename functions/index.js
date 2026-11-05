@@ -59,7 +59,8 @@ const staffInviteTemplate = readFileSync(path.join(templatesDir, "staff-invite.h
 const childGraduationTemplate = readFileSync(path.join(templatesDir, "child-graduation.html"), "utf-8");
 const staffVerifyEmailTemplate = readFileSync(path.join(templatesDir, "staff-verify-email.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
-import { isEventClosed, stateFromCity, dayOfPriceStartMs, isDayOfPricing } from "./eventClose.js";
+import { isEventClosed, stateFromCity, dayOfPriceStartMs, isDayOfPricing, eventCloseMs, timeZoneForState } from "./eventClose.js";
+import { MAX_TEAM_TICKETS, TeamTicketError, normalizeRecipient, normalizeTeamPurchase, teamTicketTotals, acceptDeadlineMs, teamDraftId, joinNames, fmtUsd } from "./teamTickets.js";
 import { RENTAL_HOLD_MS, stockOf, maxPerPersonOf, qtyOf, normalizeRentalPicks, countBookedRentals, countHeldRentals, assertRentalStock, samePicks } from "./rentalInventory.js";
 import { GIFT_MONTHLY_CAP, monthStartUtc, capResetLabel, parseExpiresAtMs, cleanGiftNote, callsignVariants, restoredFreeEntryExpiry } from "./voucherGift.js";
 import { reserveBookingCode, writeBookingCode, normalizeBookingCode, bookingCodeDocId, bookingCodeIndexId, renderCheckInCodeBlock } from "./bookingCode.js";
@@ -1236,6 +1237,60 @@ export const cancelEventWithVouchers = onCall(
     const CHUNK_SIZE = 80;
     let vouchersIssued = 0;
     const docs = bookingsSnap.docs;
+
+    // Team Bookings (2026-11-05): every ticket bought for others that's still
+    // live — unassigned, waiting, or claimed — becomes a voucher for the
+    // BUYER (decided 2026-10-30), one per ticket. Recipients' bookings below
+    // get a notice but no voucher. Done before the event is flagged canceled;
+    // a retry skips tickets already vouchered.
+    const teamTicketSnap = await db.collection("teamTickets").where("eventId", "==", eventId).get();
+    const liveTeamTickets = teamTicketSnap.docs.filter((d) => ["unassigned", "pending", "accepted"].includes(d.data().status));
+    const teamPerBuyer = new Map();
+    for (let i = 0; i < liveTeamTickets.length; i += 100) {
+      const batch = db.batch();
+      for (const d of liveTeamTickets.slice(i, i + 100)) {
+        const tk = d.data();
+        const vRef = db.collection("users").doc(tk.buyerUid).collection("vouchers").doc();
+        batch.set(vRef, {
+          fieldId: tk.fieldId ?? null,
+          fieldName: tk.fieldName || null,
+          amountCents: tk.entryPriceCents,
+          originalAmountCents: tk.entryPriceCents,
+          status: "active",
+          source: "teamTicket",
+          teamTicketId: d.id,
+          sourceEventId: eventId,
+          sourceEventTitle: eventData.title || null,
+          issuedAt: now,
+          expiresAt,
+          redeemedAt: null,
+          redeemedEventId: null,
+          redeemedEventTitle: null,
+        });
+        batch.update(d.ref, { status: "vouchered", voucherId: vRef.id, voucheredAt: now, voucheredReason: "event_canceled", deadlineAt: FieldValue.delete(), voucherAfterAt: FieldValue.delete() });
+        batch.delete(db.collection("teamTicketHolders").doc(d.id));
+        const agg = teamPerBuyer.get(tk.buyerUid) || { count: 0, cents: 0 };
+        agg.count += 1;
+        agg.cents += tk.entryPriceCents;
+        teamPerBuyer.set(tk.buyerUid, agg);
+        vouchersIssued += 1;
+      }
+      await batch.commit();
+    }
+    for (const [buyerUid, agg] of teamPerBuyer) {
+      await db.collection("users").doc(buyerUid).collection("cancellationNotices").add({
+        type: "team_tickets_vouchered",
+        title: "Event canceled",
+        message: `"${eventData.title || "An event"}" at ${eventData.fieldName || fieldData.name || "the field"} was canceled by the field owner. The ${agg.count === 1 ? "ticket" : `${agg.count} tickets`} you bought for others ${agg.count === 1 ? "is now a voucher" : `are now ${agg.count} vouchers`} (${fmtUsd(agg.cents)} total) for ${eventData.fieldName || fieldData.name || "that field"} — use them yourself or give them to other players from your Profile.`,
+        eventId,
+        eventTitle: eventData.title || null,
+        fieldId: eventData.fieldId ?? null,
+        fieldName: eventData.fieldName || fieldData.name || null,
+        voucherAmountCents: agg.cents,
+        createdAt: now,
+        acknowledged: false,
+      });
+    }
     // Bookings that were themselves paid WITH a voucher (no amountPaidCents)
     // used to get nothing back here — the player's credit just vanished.
     // Fixed 2026-10-24: read the voucher each one used, so it can be
@@ -1265,7 +1320,11 @@ export const cancelEventWithVouchers = onCall(
         let voucherId = null;
         let voucherAmountCents = null;
         let voucherKind = null;
-        if (b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0) {
+        // A ticket someone else bought (Team Bookings): its voucher went to
+        // the buyer above, so this booking only gets the notice.
+        if (b.paidByTeamTicket === true) {
+          // nothing to issue
+        } else if (b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0) {
           const voucherRef = db.collection("users").doc(playerUid).collection("vouchers").doc();
           voucherId = voucherRef.id;
           // Ticket price only, via the shared helper — the real,
@@ -1275,7 +1334,12 @@ export const cancelEventWithVouchers = onCall(
           // existed. Atlas doesn't refund its own booking fee just
           // because the owner canceled, and a voucher never covers a
           // rental either.
-          voucherAmountCents = resolveVoucherAmountCents(b, passFeeToPlayer);
+          // Children who joined this booking on a team ticket were paid for
+          // by someone else (their voucher went to that buyer above).
+          voucherAmountCents = resolveVoucherAmountCents(
+            b.teamTicketChildCount ? { ...b, attendeeCount: Math.max(1, (b.attendeeCount || 1) - b.teamTicketChildCount) } : b,
+            passFeeToPlayer
+          );
           batch.set(voucherRef, {
             fieldId: eventData.fieldId ?? null,
             ...(isMajor ? { hostOwnerId: ownerId } : {}),
@@ -1364,6 +1428,7 @@ export const cancelEventWithVouchers = onCall(
           voucherId,
           voucherAmountCents,
           ...(voucherKind ? { voucherKind } : {}),
+          ...(b.paidByTeamTicket === true ? { teamTicket: true, purchasedByCallsign: b.purchasedByCallsign || null } : {}),
           createdAt: now,
           acknowledged: false,
         });
@@ -1453,6 +1518,12 @@ export const grantVoucherToPlayer = onCall(
         throw new HttpsError("not-found", "This player doesn't have a booking on this event.");
       }
       const b = bookingSnap.data();
+      // Team Bookings: another player paid for this ticket (or for a child on
+      // this booking), so a voucher here would go to the wrong person. Not
+      // supported from the roster yet.
+      if (b.paidByTeamTicket === true || b.teamTicketChildCount) {
+        throw new HttpsError("failed-precondition", `Someone else bought ${b.paidByTeamTicket === true ? "this ticket" : "a ticket on this booking"} for them, so a voucher can't be given from here. The player can hand the ticket back from their app, which gives the buyer a voucher.`);
+      }
       if (!(b.paid === true && typeof b.amountPaidCents === "number" && b.amountPaidCents > 0)) {
         throw new HttpsError("failed-precondition", "This player didn't pay for this booking — nothing to voucher.");
       }
@@ -1952,7 +2023,8 @@ export const bookEventWithVoucher = onCall(
 // source of truth for whether a booking (or a Connect account's payout
 // setup) is actually real.
 export const stripeWebhook = onRequest(
-  { secrets: [stripeSecretKey, stripeWebhookSecret, stripeConnectWebhookSecret], invoker: "public" },
+  // resendApiKey: team-ticket offer emails go out from the webhook (2026-11-05).
+  { secrets: [stripeSecretKey, stripeWebhookSecret, stripeConnectWebhookSecret, resendApiKey], invoker: "public" },
   async (req, res) => {
     const stripe = new Stripe(stripeSecretKey.value());
     let event;
@@ -1987,6 +2059,12 @@ export const stripeWebhook = onRequest(
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object;
+          // Team Bookings (2026-11-05): tickets bought for others. Checked
+          // first — these sessions also carry an eventId.
+          if (session.mode === "payment" && session.metadata?.kind === "teamTickets") {
+            await handleTeamTicketsPaid(db, session);
+            break;
+          }
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
             const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, priceTier, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta, guardianPlaying: guardianPlayingMeta } = session.metadata;
@@ -2899,7 +2977,10 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
     const eventSnap = await db.collection("events").doc(eventId).get();
     const eventData = eventSnap.data() || {};
 
-    const isPaid = booking.paid === true;
+    // A claimed team ticket (Team Bookings) was paid for by someone else —
+    // no "your payment" copy, no amount, no Stripe-receipt note.
+    const isTeamTicket = booking.paidByTeamTicket === true;
+    const isPaid = booking.paid === true && !isTeamTicket;
     let amountPaidCents = null;
     if (isPaid) {
       // amountPaidCents lives on the event-scoped booking doc, not this
@@ -2954,7 +3035,7 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
         amountPaidCents,
         checkInCode,
       }));
-    } else if (isFirstBooking) {
+    } else if (isFirstBooking && !isTeamTicket) {
       html = fillTemplate(bookingConfirmationFirstTemplate, commonReplacements);
       subject = `You're locked in at ${fieldName}`;
     } else {
@@ -2965,7 +3046,9 @@ export const sendBookingConfirmationEmail = onDocumentCreated(
       // the paid-only wording the drafts started with — no "your payment"
       // claim, no Amount Paid row, no Stripe-receipt note, when nothing
       // was actually charged.
-      const introLine = isPaid
+      const introLine = isTeamTicket
+        ? `Hey ${escapeHtml(callsign)} &mdash; ${escapeHtml(booking.purchasedByCallsign || "A teammate")} covered your ticket, and your spot is confirmed. Your waiver's signed, nothing else to do before game day.`
+        : isPaid
         ? `Hey ${callsign} &mdash; this confirms your payment and your spot. Your waiver's signed, nothing else to do before game day.`
         : `Hey ${callsign} &mdash; this confirms your spot. Your waiver's signed, nothing else to do before game day.`;
       const amountRow = isPaid
@@ -4496,3 +4579,1027 @@ export const setChildAvatar = onCall(async (request) => {
   if (oldPath) await bucket.file(oldPath).delete().catch(() => {});
   return { ok: true, avatarUrl };
 });
+
+// ===========================================================================
+// Team Bookings (2026-11-05) — scope: project doc
+// claude/atlas-team-bookings-scope.md. Pure helpers + tests: teamTickets.js.
+// ===========================================================================
+// One player buys up to 20 tickets to a paid, non-Major event in one Stripe
+// checkout, then hands them out. Collections (all written only here):
+//   teamTicketDrafts/{draftId}   the recipient list for a checkout (Stripe
+//                                metadata is too small to carry it). No reads.
+//   teamTicketGroups/{sessionId} one per paid purchase. Buyer can read.
+//   teamTickets/{ticketId}       one per ticket. Buyer + field owner read.
+//   teamTicketHolders/{ticketId} who must claim / currently holds the ticket
+//                                (the adult, or a child's guardian). Only that
+//                                person can read it — it's the one place a
+//                                public child's guardian is recorded, so the
+//                                buyer never learns who the parent is.
+// A claimed ticket becomes a normal booking under the recipient's uid (a
+// child joins the guardian's booking), marked paidByTeamTicket. Seats are
+// counted (bookedCount) when the tickets are bought; a ticket that turns into
+// a voucher gives its seat back.
+const TEAM_TICKET_LIVE = ["unassigned", "pending", "accepted"];
+const teamTicketOfferTemplate = readFileSync(path.join(templatesDir, "team-ticket-offer.html"), "utf-8");
+
+function rethrowTeamError(err) {
+  if (err instanceof TeamTicketError) throw new HttpsError(err.code, err.message);
+  throw err;
+}
+
+function eventStateOf(eventData, fieldData) {
+  return eventData.venueState || stateFromCity(fieldData?.city);
+}
+
+// Child identity key, the same whichever way the child was picked (own child
+// or public profile), without putting the guardian's uid on a doc the buyer
+// can read.
+function childKey(guardianUid, dependentId) {
+  return `k:${createHash("sha256").update(`${guardianUid}/${dependentId}`).digest("hex").slice(0, 24)}`;
+}
+
+async function teamIdsOf(db, memberId) {
+  const snap = await db.collectionGroup("members").where("uid", "==", memberId).get();
+  return new Set(snap.docs.map((d) => d.ref.parent.parent.id));
+}
+
+// Turns a picked recipient into everything a ticket needs, or throws a
+// player-facing HttpsError. Used at checkout (so the buyer hears about a bad
+// pick before paying), at assignment, and — tolerantly — in the webhook.
+async function resolveTeamRecipient(db, { buyerUid, buyerProfile, recipient, eventId, eventData, fieldData }) {
+  let r = recipient;
+  if (r.kind === "player" && r.uid === buyerUid) r = { kind: "self" };
+  const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
+
+  if (r.kind === "self" || r.kind === "player") {
+    const uid = r.kind === "self" ? buyerUid : r.uid;
+    const [userSnap, pubSnap, bookingSnap] = await Promise.all([
+      db.collection("users").doc(uid).get(),
+      db.collection("publicProfiles").doc(uid).get(),
+      db.collection("events").doc(eventId).collection("bookings").doc(uid).get(),
+    ]);
+    if (!userSnap.exists) throw new HttpsError("not-found", "That player doesn't have an Atlas account.");
+    const u = r.kind === "self" ? (buyerProfile || userSnap.data()) : userSnap.data();
+    const p = pubSnap.exists ? pubSnap.data() : {};
+    const callsign = p.callsign || u.callsign || "Player";
+    if (bookingSnap.exists) {
+      throw new HttpsError("already-exists", r.kind === "self" ? "You're already booked for this event." : `${callsign} is already booked for this event.`);
+    }
+    return {
+      kind: "player",
+      assigneeUid: uid,
+      assigneePublicId: null,
+      assigneeCallsign: callsign,
+      assigneeAvatarUrl: p.avatarUrl || u.avatarUrl || null,
+      assigneeKey: `u:${uid}`,
+      holderUid: uid,
+      dependentId: null,
+    };
+  }
+
+  // A child: own child by dependent id, or a public profile by publicId.
+  let guardianUid;
+  let dependentId;
+  let publicId = null;
+  if (r.kind === "ownChild") {
+    guardianUid = buyerUid;
+    dependentId = r.dependentId;
+    const ptr = await db.collection("users").doc(buyerUid).collection("childPublic").doc(dependentId).get();
+    publicId = ptr.exists ? ptr.data().publicId || null : null;
+  } else {
+    const link = await db.collection("childPublicLinks").doc(r.publicId).get();
+    if (!link.exists) throw new HttpsError("not-found", "That player's profile isn't available.");
+    guardianUid = link.data().guardianUid;
+    dependentId = link.data().dependentId;
+    publicId = r.publicId;
+    if (guardianUid !== buyerUid) {
+      // Teammates only (decided 2026-10-30): the buyer has to share a team
+      // with the child, checked here on the server every time.
+      const [mine, theirs] = await Promise.all([teamIdsOf(db, buyerUid), teamIdsOf(db, publicId)]);
+      if (![...theirs].some((id) => mine.has(id))) {
+        throw new HttpsError("permission-denied", "You can only buy tickets for kids on one of your teams.");
+      }
+    }
+  }
+  const [depSnap, pubSnap, guardianBooking] = await Promise.all([
+    db.collection("users").doc(guardianUid).collection("dependents").doc(dependentId).get(),
+    publicId ? db.collection("childPublicProfiles").doc(publicId).get() : Promise.resolve(null),
+    db.collection("events").doc(eventId).collection("bookings").doc(guardianUid).get(),
+  ]);
+  if (!depSnap.exists) throw new HttpsError("not-found", "That child profile no longer exists.");
+  const d = depSnap.data();
+  const callsign = (pubSnap?.exists ? pubSnap.data().callsign : null) || d.callsign || "Player";
+  if (d.graduatedAt) throw new HttpsError("failed-precondition", `${callsign} has their own Atlas account now — pick that account instead.`);
+  const age = ageOnDateServer(d.dob, eventData.date);
+  if (age === null) throw new HttpsError("failed-precondition", `${callsign}'s profile is missing a birthdate.`);
+  if (age >= ADULT_AGE) throw new HttpsError("failed-precondition", `${callsign} turns 18 by this event and needs their own account.`);
+  if (minAge && age < minAge) throw new HttpsError("failed-precondition", `${callsign} is under this field's minimum age of ${minAge}.`);
+  if (guardianBooking.exists) {
+    const att = await guardianBooking.ref.collection("attendeeDetails").doc(dependentId).get();
+    if (att.exists) throw new HttpsError("already-exists", `${callsign} is already booked for this event.`);
+  }
+  return {
+    kind: "child",
+    assigneeUid: null,
+    assigneePublicId: publicId,
+    assigneeCallsign: callsign,
+    assigneeAvatarUrl: (pubSnap?.exists ? pubSnap.data().avatarUrl : null) || d.avatarUrl || null,
+    assigneeKey: childKey(guardianUid, dependentId),
+    holderUid: guardianUid,
+    dependentId,
+  };
+}
+
+// Refuses a person who already holds a live ticket to this event.
+async function assertNoLiveTicket(db, eventId, assigneeKey, exceptTicketId = null) {
+  const snap = await db.collection("teamTickets").where("eventId", "==", eventId).where("assigneeKey", "==", assigneeKey).get();
+  const clash = snap.docs.find((d) => d.id !== exceptTicketId && ["pending", "accepted"].includes(d.data().status));
+  if (clash) throw new HttpsError("already-exists", `${clash.data().assigneeCallsign || "That player"} already has a ticket to this event.`);
+}
+
+function ticketAssignmentFields(a, deadline, now) {
+  return {
+    status: "pending",
+    assigneeKind: a.kind,
+    assigneeUid: a.assigneeUid,
+    assigneePublicId: a.assigneePublicId,
+    assigneeCallsign: a.assigneeCallsign,
+    assigneeAvatarUrl: a.assigneeAvatarUrl,
+    assigneeKey: a.assigneeKey,
+    assignedAt: now,
+    deadlineAt: deadline,
+  };
+}
+
+function holderDocFor(ticketId, ticket, a, deadline, now) {
+  return {
+    holderUid: a.holderUid,
+    ticketId,
+    status: "pending",
+    kind: a.kind,
+    dependentId: a.dependentId,
+    assigneeCallsign: a.assigneeCallsign,
+    eventId: ticket.eventId,
+    fieldId: ticket.fieldId ?? null,
+    eventTitle: ticket.eventTitle || null,
+    fieldName: ticket.fieldName || null,
+    eventDate: ticket.eventDate || null,
+    buyerUid: ticket.buyerUid,
+    buyerCallsign: ticket.buyerCallsign || "A player",
+    selfPurchase: a.holderUid === ticket.buyerUid,
+    deadlineAt: deadline,
+    createdAt: now,
+  };
+}
+
+const UNASSIGN_FIELDS = {
+  status: "unassigned",
+  assigneeKind: null,
+  assigneeUid: null,
+  assigneePublicId: null,
+  assigneeCallsign: null,
+  assigneeAvatarUrl: null,
+  assigneeKey: null,
+  assignedAt: null,
+  deadlineAt: FieldValue.delete(),
+};
+
+async function voucherExpiryFor(db, ticket, now) {
+  let days = 365;
+  if (ticket.fieldId) {
+    const field = (await db.collection("fields").doc(ticket.fieldId).get()).data() || {};
+    if (field.ownerId) {
+      const saved = (await db.collection("owners").doc(field.ownerId).get()).data()?.voucherExpirationDays;
+      if (Number.isInteger(saved) && saved >= 1 && saved <= 3650) days = saved;
+    }
+  }
+  return new Date(now.getTime() + days * 86400000);
+}
+
+// A dollar voucher for the ticket price (never the fee), for the buyer.
+// Field-scoped like every voucher; givable whole (source: "teamTicket").
+function teamTicketVoucherData(ticketId, ticket, expiresAt, now) {
+  return {
+    fieldId: ticket.fieldId ?? null,
+    fieldName: ticket.fieldName || null,
+    amountCents: ticket.entryPriceCents,
+    originalAmountCents: ticket.entryPriceCents,
+    status: "active",
+    source: "teamTicket",
+    teamTicketId: ticketId,
+    sourceEventId: ticket.eventId,
+    sourceEventTitle: ticket.eventTitle || null,
+    issuedAt: now,
+    expiresAt,
+    redeemedAt: null,
+    redeemedEventId: null,
+    redeemedEventTitle: null,
+  };
+}
+
+function teamNotice(fields) {
+  return { ...fields, createdAt: new Date(), acknowledged: false };
+}
+
+function formatDeadlineForEmail(deadline, tz) {
+  try {
+    return deadline.toLocaleString("en-US", { timeZone: tz || "America/Detroit", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return deadline.toUTCString();
+  }
+}
+
+// "Rogue bought you a ticket — sign the waiver within 5 days to claim it."
+// Never sent to the buyer about their own ticket.
+async function sendTeamTicketOfferEmail(db, { holderUid, ticket, assignment, deadline, tz }) {
+  if (!holderUid || holderUid === ticket.buyerUid) return;
+  const profile = (await db.collection("users").doc(holderUid).get()).data() || {};
+  if (!profile.email) return;
+  const isChild = assignment.kind === "child";
+  const buyer = ticket.buyerCallsign || "A player";
+  const who = isChild ? assignment.assigneeCallsign : "you";
+  const eventSnap = await db.collection("events").doc(ticket.eventId).get();
+  const eventData = eventSnap.data() || {};
+  const html = fillTemplate(teamTicketOfferTemplate, {
+    "[HEADLINE]": escapeHtml(`${buyer} bought ${who} a ticket.`),
+    "[INTRO_LINE]": isChild
+      ? `Hey ${escapeHtml(profile.callsign || "there")} &mdash; ${escapeHtml(buyer)} bought <b>${escapeHtml(assignment.assigneeCallsign)}</b> a ticket to ${escapeHtml(ticket.eventTitle || "an event")} at ${escapeHtml(ticket.fieldName || "the field")}. To claim it, open Atlas and sign the guardian waiver for ${escapeHtml(assignment.assigneeCallsign)}. Can&rsquo;t make it? You can decline it in the app.`
+      : `Hey ${escapeHtml(profile.callsign || "there")} &mdash; ${escapeHtml(buyer)} bought you a ticket to ${escapeHtml(ticket.eventTitle || "an event")} at ${escapeHtml(ticket.fieldName || "the field")}. To claim it, open Atlas and sign the field&rsquo;s waiver. Can&rsquo;t make it? You can decline it in the app.`,
+    "[FIELD NAME]": escapeHtml(ticket.fieldName || "the field"),
+    "[EVENT NAME]": escapeHtml(ticket.eventTitle || "the event"),
+    "[EVENT DATE], [START TIME]": escapeHtml([formatEventDateForEmail(eventData.date || ticket.eventDate, eventData.endDate), formatTimeStrForEmail(eventData.startTime)].filter(Boolean).join(", ")),
+    "[DEADLINE]": escapeHtml(formatDeadlineForEmail(deadline, tz)),
+    "[CLAIM_URL]": `https://playerapp.airsoftatlas.app/?event=${encodeURIComponent(ticket.eventId)}`,
+  });
+  try {
+    const resend = new Resend(resendApiKey.value());
+    const { error } = await resend.emails.send({
+      from: BOOKING_EMAIL_FROM,
+      to: profile.email,
+      subject: isChild ? `${buyer} bought ${assignment.assigneeCallsign} a ticket to ${ticket.eventTitle || "an event"}` : `${buyer} bought you a ticket to ${ticket.eventTitle || "an event"}`,
+      html,
+    });
+    if (error) console.error("sendTeamTicketOfferEmail: Resend error:", error);
+  } catch (err) {
+    console.error("sendTeamTicketOfferEmail failed:", err);
+  }
+}
+
+// --- Checkout --------------------------------------------------------------
+export const createTeamTicketCheckout = onCall(
+  { secrets: [stripeSecretKey], invoker: "public" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in to buy tickets.");
+    const uid = request.auth.uid;
+    const eventId = request.data?.eventId;
+    if (!eventId || typeof eventId !== "string") throw new HttpsError("invalid-argument", "Missing eventId.");
+    let purchase;
+    try {
+      purchase = normalizeTeamPurchase({ quantity: request.data?.quantity, recipients: request.data?.recipients }, uid);
+    } catch (err) {
+      rethrowTeamError(err);
+    }
+    const db = getFirestore();
+    const stripe = new Stripe(stripeSecretKey.value());
+    const eventRef = db.collection("events").doc(eventId);
+    const eventSnap = await eventRef.get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    const eventData = eventSnap.data();
+    if (eventData.canceled) throw new HttpsError("failed-precondition", "This event has been canceled.");
+    if (isMajorEvent(eventData)) throw new HttpsError("failed-precondition", "Buying tickets for others isn't available for Major events yet.");
+    const { fieldData, ownerId } = await resolveEventHost(db, eventData);
+    assertEventStillOpen(eventData, fieldData);
+    if (!ownerId) throw new HttpsError("failed-precondition", "This field isn't set up to accept payments yet.");
+    const ownerData = (await db.collection("owners").doc(ownerId).get()).data();
+    if (!ownerData?.payoutsEnabled || !ownerData?.stripeConnectAccountId) {
+      throw new HttpsError("failed-precondition", "This field hasn't finished payment setup yet.");
+    }
+    const selectedChoiceId = typeof request.data?.selectedChoiceId === "string" ? request.data.selectedChoiceId : null;
+    const { entryPriceCents, selectedChoice, resolved, priceTier } = resolveEntryPrice(eventData, selectedChoiceId, null, fieldData);
+    if (resolved?.grouped) throw new HttpsError("failed-precondition", "Buying tickets for others isn't available for this event.");
+    if (!entryPriceCents || entryPriceCents <= 0) {
+      throw new HttpsError("failed-precondition", "Free events are one ticket per player — everyone books their own.");
+    }
+
+    // Every pick is checked now, so a bad one is fixed before paying.
+    const buyerProfile = (await db.collection("users").doc(uid).get()).data() || {};
+    const assignments = [];
+    for (const r of purchase.recipients) {
+      const a = await resolveTeamRecipient(db, { buyerUid: uid, buyerProfile, recipient: r, eventId, eventData, fieldData });
+      await assertNoLiveTicket(db, eventId, a.assigneeKey);
+      assignments.push(a);
+    }
+    if (new Set(assignments.map((a) => a.assigneeKey)).size !== assignments.length) {
+      throw new HttpsError("invalid-argument", "The same person is picked twice.");
+    }
+
+    const perTicketFeeCents = computeStandardFee(entryPriceCents);
+    const passFeeToPlayer = ownerData.feeModel !== "absorb";
+    const { unitCents, totalCents, applicationFeeCents } = teamTicketTotals({ entryPriceCents, perTicketFeeCents, quantity: purchase.quantity, passFeeToPlayer });
+    const draftId = teamDraftId({ buyerUid: uid, eventId, quantity: purchase.quantity, selectedChoiceId, priceTier, recipients: purchase.recipients });
+    await db.collection("teamTicketDrafts").doc(draftId).set({
+      buyerUid: uid,
+      eventId,
+      quantity: purchase.quantity,
+      recipients: purchase.recipients,
+      selectedChoiceId,
+      createdAt: new Date(),
+    });
+
+    const placeName = eventData.fieldName || fieldData.name || "the field";
+    const sessionParams = {
+      mode: "payment",
+      customer_email: request.auth.token?.email,
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `${eventData.title} — tickets for others`,
+            description: selectedChoice ? `Entry to ${eventData.title} at ${placeName} — ${selectedChoice.label}` : `Entry to ${eventData.title} at ${placeName}`,
+          },
+          unit_amount: unitCents,
+        },
+        quantity: purchase.quantity,
+      }],
+      payment_intent_data: {
+        application_fee_amount: applicationFeeCents,
+        transfer_data: { destination: ownerData.stripeConnectAccountId },
+      },
+      metadata: {
+        kind: "teamTickets",
+        firebaseUid: uid,
+        eventId,
+        ...(eventData.fieldId ? { fieldId: eventData.fieldId } : {}),
+        quantity: String(purchase.quantity),
+        entryPriceCents: String(entryPriceCents),
+        perTicketFeeCents: String(perTicketFeeCents),
+        bookingFeeCents: String(applicationFeeCents),
+        passFeeToPlayer: passFeeToPlayer ? "true" : "false",
+        expectedTotalCents: String(totalCents),
+        draftId,
+        ...(priceTier ? { priceTier } : {}),
+        ...(selectedChoice ? { selectedChoiceLabel: String(selectedChoice.label).slice(0, 450) } : {}),
+      },
+      success_url: "https://playerapp.airsoftatlas.app/?booking=success&teamTickets=1",
+      cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
+    };
+    // Same prepay cutoff as createBookingCheckout.
+    if (priceTier === "prepay") {
+      const cutoffMs = dayOfPriceStartMs(eventData, eventStateOf(eventData, fieldData));
+      const nowMs = Date.now();
+      if (cutoffMs != null && cutoffMs < nowMs + 24 * 3600 * 1000) {
+        sessionParams.expires_at = Math.floor(Math.max(cutoffMs, nowMs + 31 * 60 * 1000) / 1000);
+      }
+    }
+    const idempotencyKey = `team-checkout:${draftId}`;
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+    } catch (err) {
+      if (err.type !== "StripeIdempotencyError") throw err;
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: `${idempotencyKey}:retry:${Date.now()}` });
+    }
+    return { url: session.url };
+  }
+);
+
+// --- Webhook: payment confirmed -> group + tickets --------------------------
+async function handleTeamTicketsPaid(db, session) {
+  const m = session.metadata || {};
+  const uid = m.firebaseUid;
+  const eventId = m.eventId;
+  const quantity = Number(m.quantity);
+  const entryPriceCents = Number(m.entryPriceCents);
+  const perTicketFeeCents = Number(m.perTicketFeeCents);
+  const passFeeToPlayer = m.passFeeToPlayer === "true";
+  if (!uid || !eventId || !Number.isInteger(quantity) || quantity < 1 || quantity > MAX_TEAM_TICKETS || !(entryPriceCents > 0)) {
+    console.error(`teamTickets webhook: bad metadata on session ${session.id}`);
+    return;
+  }
+  // Payment data is untrusted until it adds up (project rule).
+  const { totalCents, applicationFeeCents } = teamTicketTotals({ entryPriceCents, perTicketFeeCents, quantity, passFeeToPlayer });
+  if (totalCents !== session.amount_total) {
+    console.error(`teamTickets webhook: amount mismatch for session ${session.id} (uid ${uid}, event ${eventId}) — expected ${totalCents}, Stripe charged ${session.amount_total}. NO tickets created; needs manual review.`);
+    return;
+  }
+  const groupRef = db.collection("teamTicketGroups").doc(session.id);
+  if ((await groupRef.get()).exists) return; // a retried webhook
+
+  const eventRef = db.collection("events").doc(eventId);
+  const eventData = (await eventRef.get()).data() || {};
+  const { fieldData } = await resolveEventHost(db, eventData);
+  const state = eventStateOf(eventData, fieldData);
+  const closeMs = eventCloseMs(eventData, state);
+  const buyerProfile = (await db.collection("users").doc(uid).get()).data() || {};
+  const draft = m.draftId ? (await db.collection("teamTicketDrafts").doc(m.draftId).get()).data() : null;
+  const picks = Array.isArray(draft?.recipients) ? draft.recipients.slice(0, quantity) : [];
+
+  // Money is already taken, so a pick that's no longer valid (booked
+  // themselves meanwhile, left the team) just stays unassigned for the
+  // buyer to hand out — never a failure.
+  const assignments = [];
+  const seen = new Set();
+  for (const r of picks) {
+    try {
+      const a = await resolveTeamRecipient(db, { buyerUid: uid, buyerProfile, recipient: r, eventId, eventData, fieldData });
+      await assertNoLiveTicket(db, eventId, a.assigneeKey);
+      if (seen.has(a.assigneeKey)) continue;
+      seen.add(a.assigneeKey);
+      assignments.push(a);
+    } catch (err) {
+      console.warn(`teamTickets webhook: pick not assigned (${session.id}):`, err?.message || err);
+    }
+  }
+
+  const now = new Date();
+  const deadline = new Date(acceptDeadlineMs(now.getTime(), closeMs));
+  const voucherAfterAt = closeMs != null ? new Date(closeMs) : null;
+  const base = {
+    groupId: session.id,
+    eventId,
+    fieldId: eventData.fieldId ?? null,
+    eventTitle: eventData.title || null,
+    fieldName: eventData.fieldName || fieldData.name || null,
+    eventDate: eventData.date || null,
+    eventEndDate: eventData.endDate || null,
+    buyerUid: uid,
+    buyerCallsign: buyerProfile.callsign || "Player",
+    entryPriceCents,
+    perTicketFeeCents,
+    passFeeToPlayer,
+    priceTier: m.priceTier || null,
+    selectedChoiceLabel: m.selectedChoiceLabel || null,
+    acceptedAt: null,
+    voucherId: null,
+    createdAt: now,
+    ...(voucherAfterAt ? { voucherAfterAt } : {}),
+  };
+  const ticketRefs = Array.from({ length: quantity }, () => db.collection("teamTickets").doc());
+  const created = await db.runTransaction(async (t) => {
+    const [groupSnap, freshEvent] = await Promise.all([t.get(groupRef), t.get(eventRef)]);
+    if (groupSnap.exists) return null;
+    t.set(groupRef, {
+      buyerUid: uid,
+      buyerCallsign: base.buyerCallsign,
+      eventId,
+      fieldId: base.fieldId,
+      eventTitle: base.eventTitle,
+      fieldName: base.fieldName,
+      eventDate: base.eventDate,
+      quantity,
+      entryPriceCents,
+      perTicketFeeCents,
+      passFeeToPlayer,
+      amountPaidCents: session.amount_total,
+      bookingFeeCents: applicationFeeCents,
+      priceTier: base.priceTier,
+      selectedChoiceLabel: base.selectedChoiceLabel,
+      stripeCheckoutSessionId: session.id,
+      ticketIds: ticketRefs.map((r) => r.id),
+      createdAt: now,
+    });
+    const out = [];
+    ticketRefs.forEach((ref, i) => {
+      const a = assignments[i];
+      if (a) {
+        t.set(ref, { ...base, ...ticketAssignmentFields(a, deadline, now) });
+        t.set(db.collection("teamTicketHolders").doc(ref.id), holderDocFor(ref.id, base, a, deadline, now));
+        out.push({ ticketId: ref.id, assignment: a });
+      } else {
+        t.set(ref, { ...base, status: "unassigned", assigneeKind: null, assigneeUid: null, assigneePublicId: null, assigneeCallsign: null, assigneeAvatarUrl: null, assigneeKey: null, assignedAt: null });
+      }
+    });
+    t.update(eventRef, { bookedCount: (freshEvent.data()?.bookedCount || 0) + quantity });
+    return out;
+  });
+  if (!created) return;
+  const tz = timeZoneForState(state);
+  for (const { ticketId, assignment } of created) {
+    if (assignment.holderUid === uid) {
+      // The buyer's own ticket (or their own child's): claim it straight away
+      // when the waiver is already signed; otherwise it waits on their Home
+      // screen like anyone else's.
+      try {
+        await acceptTeamTicketCore(db, ticketId, uid);
+      } catch (err) {
+        console.log(`teamTickets webhook: buyer's own ticket ${ticketId} left pending:`, err?.message || err);
+      }
+    } else {
+      await sendTeamTicketOfferEmail(db, { holderUid: assignment.holderUid, ticket: base, assignment, deadline, tz });
+    }
+  }
+}
+
+// --- Claim ------------------------------------------------------------------
+// Shared by acceptTeamTicket and the webhook (buyer's own ticket). Creates the
+// recipient's booking (adult) or adds the child to the guardian's booking.
+async function acceptTeamTicketCore(db, ticketId, callerUid) {
+  const ticketRef = db.collection("teamTickets").doc(ticketId);
+  const holderRef = db.collection("teamTicketHolders").doc(ticketId);
+  const holder0 = await holderRef.get();
+  if (!holder0.exists || holder0.data().holderUid !== callerUid) throw new HttpsError("not-found", "This ticket isn't waiting for you.");
+  const h0 = holder0.data();
+  const eventRef = db.collection("events").doc(h0.eventId);
+  const eventData = (await eventRef.get()).data();
+  if (!eventData) throw new HttpsError("not-found", "Event not found.");
+  if (eventData.canceled) throw new HttpsError("failed-precondition", "This event has been canceled.");
+  const { fieldData } = await resolveEventHost(db, eventData);
+  assertEventStillOpen(eventData, fieldData);
+  const eventId = h0.eventId;
+  const bookingRef = eventRef.collection("bookings").doc(callerUid);
+  const userBookingRef = db.collection("users").doc(callerUid).collection("bookings").doc(eventId);
+  const isChild = h0.kind === "child";
+  const depId = h0.dependentId;
+  const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
+
+  await db.runTransaction(async (t) => {
+    const reads = [
+      t.get(ticketRef),
+      t.get(holderRef),
+      t.get(bookingRef),
+      t.get(db.collection("users").doc(callerUid)),
+      eventData.waiver ? t.get(db.collection("waiverSignatures").doc(isChild ? `${callerUid}_${eventId}_${depId}` : `${callerUid}_${eventId}`)) : Promise.resolve(null),
+      isChild ? t.get(db.collection("users").doc(callerUid).collection("dependents").doc(depId)) : Promise.resolve(null),
+      isChild && eventData.waiver ? t.get(db.collection("waiverSignatures").doc(`${callerUid}_${eventId}_${depId}_absent`)) : Promise.resolve(null),
+      isChild ? t.get(bookingRef.collection("attendeeDetails").doc(depId)) : Promise.resolve(null),
+    ];
+    const [ticketSnap, holderSnap, bookingSnap, profileSnap, sigSnap, depSnap, absentSnap, attSnap] = await Promise.all(reads);
+    if (!ticketSnap.exists || !holderSnap.exists) throw new HttpsError("not-found", "This ticket isn't waiting for you.");
+    const ticket = ticketSnap.data();
+    const holder = holderSnap.data();
+    if (holder.holderUid !== callerUid || ticket.status !== "pending" || holder.status !== "pending") {
+      throw new HttpsError("failed-precondition", "This ticket has already been claimed or handed back.");
+    }
+    const deadlineMs = ticket.deadlineAt?.toMillis?.() ?? 0;
+    if (deadlineMs && deadlineMs < Date.now()) throw new HttpsError("failed-precondition", "The time to claim this ticket has run out — it went back to the buyer.");
+    if (eventData.waiver && !sigSnap?.exists) throw new HttpsError("failed-precondition", "Sign the waiver first to claim this ticket.");
+    const profileData = profileSnap.data() || {};
+    const now = new Date();
+    const perTicketPaid = ticket.entryPriceCents + (ticket.passFeeToPlayer ? ticket.perTicketFeeCents : 0);
+    const moneyFields = {
+      paid: true,
+      paidByTeamTicket: true,
+      teamTicketId: ticketId,
+      purchasedBy: ticket.buyerUid,
+      purchasedByCallsign: ticket.buyerCallsign || null,
+      amountPaidCents: perTicketPaid,
+      bookingFeeCents: ticket.perTicketFeeCents,
+      entryPriceCents: ticket.entryPriceCents,
+      priceTier: ticket.priceTier || null,
+      selectedChoiceLabel: ticket.selectedChoiceLabel || null,
+      selectedRentals: [],
+    };
+
+    if (!isChild) {
+      if (bookingSnap.exists) throw new HttpsError("already-exists", "You're already booked for this event.");
+      const checkInCode = await reserveBookingCode(t, db, eventId);
+      writeBookingCode(t, db, { code: checkInCode, eventId, uid: callerUid, fieldId: eventData.fieldId ?? null, hostOwnerId: eventData.hostOwnerId || null, now });
+      t.set(bookingRef, {
+        uid: callerUid,
+        fieldId: eventData.fieldId ?? null,
+        teamId: profileData.teamId || null,
+        callsign: profileData.callsign || "Player",
+        avatarUrl: profileData.avatarUrl || null,
+        bookedAt: now,
+        ...moneyFields,
+      });
+      t.set(userBookingRef, {
+        eventId,
+        fieldId: eventData.fieldId ?? null,
+        eventTitle: eventData.title || null,
+        fieldName: eventData.fieldName || null,
+        date: eventData.date || null,
+        endDate: eventData.endDate || null,
+        bookedAt: now,
+        paid: true,
+        paidByTeamTicket: true,
+        purchasedByCallsign: ticket.buyerCallsign || null,
+        selectedChoiceLabel: ticket.selectedChoiceLabel || null,
+      });
+    } else {
+      if (!depSnap?.exists) throw new HttpsError("not-found", "That child profile no longer exists.");
+      const d = depSnap.data();
+      if (d.graduatedAt) throw new HttpsError("failed-precondition", `${d.callsign || "This child"} has their own Atlas account now.`);
+      const age = ageOnDateServer(d.dob, eventData.date);
+      if (age === null || age >= ADULT_AGE) throw new HttpsError("failed-precondition", `${d.callsign || "This child"} can't be booked as a child for this event.`);
+      if (minAge && age < minAge) throw new HttpsError("failed-precondition", `${d.callsign || "This child"} is under this field's minimum age of ${minAge}.`);
+      if (!hasValidPhone(profileData.phone)) {
+        throw new HttpsError("failed-precondition", "Add a 10-digit phone number (with area code) in My Account first — the field needs a way to reach you.");
+      }
+      if (attSnap?.exists) throw new HttpsError("already-exists", `${d.callsign || "This child"} is already booked for this event.`);
+      const existing = bookingSnap.exists ? bookingSnap.data() : null;
+      const guardianPlaying = existing ? existing.guardianPlaying !== false : false;
+      if (eventData.waiver && !guardianPlaying && absentSnap?.data()?.guardianAbsent !== true) {
+        throw new HttpsError("failed-precondition", "Sign the waiver's not-playing section first to claim this ticket.");
+      }
+      const prevCount = existing ? Math.max(guardianPlaying ? 1 : 0, existing.attendeeCount || 1) : 0;
+      if (prevCount + 1 > MAX_ATTENDEES_PER_BOOKING) {
+        throw new HttpsError("failed-precondition", `A booking can hold up to ${MAX_ATTENDEES_PER_BOOKING} people — ${d.callsign || "this child"} doesn't fit on yours.`);
+      }
+      const snapshot = {
+        id: depId,
+        guardianAbsentAckId: guardianPlaying ? null : (absentSnap?.exists ? absentSnap.id : null),
+        fullName: d.fullName,
+        callsign: d.callsign,
+        dob: d.dob,
+        avatar: d.avatar || null,
+        avatarUrl: d.avatarUrl || null,
+        waiverSignatureId: sigSnap?.exists ? sigSnap.id : null,
+        waiverVersion: sigSnap?.data()?.waiverVersion || null,
+        guardianNoticeVersion: sigSnap?.data()?.guardianNoticeVersion || null,
+      };
+      // Reads (the check-in code reservation) must all happen before writes.
+      const childCheckInCode = existing ? null : await reserveBookingCode(t, db, eventId);
+      writeAttendeeDetails(t, bookingRef, callerUid, profileData, [snapshot], guardianPlaying);
+      // Which ticket paid for this child — private (attendeeDetails), so a
+      // later "can't make it" knows what to undo. (A second write to the
+      // same doc in one transaction is applied in order.)
+      t.set(bookingRef.collection("attendeeDetails").doc(depId), { teamTicketId: ticketId, purchasedBy: ticket.buyerUid, purchasedByCallsign: ticket.buyerCallsign || null }, { merge: true });
+      if (existing) {
+        const attendees = Array.isArray(existing.attendees) && existing.attendees.length > 0
+          ? existing.attendees
+          : (guardianPlaying ? [{ kind: "adult", callsign: existing.callsign || profileData.callsign || "Player" }] : []);
+        const update = {
+          attendees: [...attendees, { kind: "minor", callsign: d.callsign || "Child" }],
+          attendeeCount: prevCount + 1,
+        };
+        t.update(bookingRef, { ...update, teamTicketChildCount: (existing.teamTicketChildCount || 0) + 1 });
+        t.set(userBookingRef, update, { merge: true });
+      } else {
+        writeBookingCode(t, db, { code: childCheckInCode, eventId, uid: callerUid, fieldId: eventData.fieldId ?? null, hostOwnerId: eventData.hostOwnerId || null, now });
+        t.set(bookingRef, {
+          uid: callerUid,
+          fieldId: eventData.fieldId ?? null,
+          teamId: profileData.teamId || null,
+          callsign: profileData.callsign || "Player",
+          avatarUrl: profileData.avatarUrl || null,
+          bookedAt: now,
+          ...moneyFields,
+          teamTicketChildCount: 1,
+          ...attendeePublicFields(profileData, [snapshot], false),
+        });
+        t.set(userBookingRef, {
+          eventId,
+          fieldId: eventData.fieldId ?? null,
+          eventTitle: eventData.title || null,
+          fieldName: eventData.fieldName || null,
+          date: eventData.date || null,
+          endDate: eventData.endDate || null,
+          bookedAt: now,
+          paid: true,
+          paidByTeamTicket: true,
+          purchasedByCallsign: ticket.buyerCallsign || null,
+          selectedChoiceLabel: ticket.selectedChoiceLabel || null,
+          ...attendeePublicFields(profileData, [snapshot], false),
+        });
+      }
+    }
+    // Seats were counted at purchase — nothing to add to bookedCount.
+    t.update(ticketRef, { status: "accepted", acceptedAt: now, deadlineAt: FieldValue.delete(), voucherAfterAt: FieldValue.delete() });
+    t.update(holderRef, { status: "accepted", acceptedAt: now, deadlineAt: FieldValue.delete() });
+  });
+}
+
+export const acceptTeamTicket = onCall({ invoker: "public" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const ticketId = request.data?.ticketId;
+  if (typeof ticketId !== "string" || !ticketId) throw new HttpsError("invalid-argument", "Missing ticket.");
+  await acceptTeamTicketCore(getFirestore(), ticketId, request.auth.uid);
+  return { accepted: true };
+});
+
+// --- Hand back ----------------------------------------------------------------
+// A pending ticket declined, or a claimed one given back ("can't make it"):
+// either way it becomes a voucher for the buyer (decided 2026-10-30).
+export const returnTeamTicket = onCall({ invoker: "public" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const ticketId = request.data?.ticketId;
+  if (typeof ticketId !== "string" || !ticketId) throw new HttpsError("invalid-argument", "Missing ticket.");
+  const db = getFirestore();
+  const ticketRef = db.collection("teamTickets").doc(ticketId);
+  const holderRef = db.collection("teamTicketHolders").doc(ticketId);
+  const holder0 = await holderRef.get();
+  if (!holder0.exists || holder0.data().holderUid !== uid) throw new HttpsError("not-found", "This ticket isn't yours to hand back.");
+  const h0 = holder0.data();
+  const eventRef = db.collection("events").doc(h0.eventId);
+  const eventData = (await eventRef.get()).data() || {};
+  if (eventData.canceled) throw new HttpsError("failed-precondition", "This event was canceled — the buyer already has a voucher.");
+  const { fieldData } = await resolveEventHost(db, eventData);
+  if (h0.status === "accepted") assertEventStillOpen(eventData, fieldData);
+  const ticket0 = (await ticketRef.get()).data();
+  if (!ticket0) throw new HttpsError("not-found", "Ticket not found.");
+  const now = new Date();
+  const expiresAt = await voucherExpiryFor(db, ticket0, now);
+  const bookingRef = eventRef.collection("bookings").doc(uid);
+  const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(h0.eventId);
+  const isChild = h0.kind === "child";
+  const voucherRef = db.collection("users").doc(ticket0.buyerUid).collection("vouchers").doc();
+
+  const was = await db.runTransaction(async (t) => {
+    const [ticketSnap, holderSnap, freshEvent, bookingSnap, attSnap] = await Promise.all([
+      t.get(ticketRef),
+      t.get(holderRef),
+      t.get(eventRef),
+      t.get(bookingRef),
+      isChild ? t.get(bookingRef.collection("attendeeDetails").doc(h0.dependentId)) : Promise.resolve(null),
+    ]);
+    const ticket = ticketSnap.data();
+    const holder = holderSnap.data();
+    if (!ticket || !holder || holder.holderUid !== uid || !["pending", "accepted"].includes(ticket.status) || ticket.status !== holder.status) {
+      throw new HttpsError("failed-precondition", "This ticket has already been handed back.");
+    }
+    if (ticket.status === "accepted") {
+      if (!isChild) {
+        if (bookingSnap.exists && bookingSnap.data().teamTicketId === ticketId) {
+          t.delete(bookingRef);
+          t.delete(userBookingRef);
+        }
+      } else if (bookingSnap.exists && attSnap?.exists && attSnap.data().teamTicketId === ticketId) {
+        const b = bookingSnap.data();
+        const callsign = attSnap.data().callsign;
+        const attendees = Array.isArray(b.attendees) ? [...b.attendees] : [];
+        const idx = attendees.findIndex((a) => a.kind === "minor" && a.callsign === callsign);
+        if (idx >= 0) attendees.splice(idx, 1);
+        const remaining = Math.max(0, (b.attendeeCount || 1) - 1);
+        t.delete(attSnap.ref);
+        if (remaining === 0) {
+          t.delete(bookingRef);
+          t.delete(userBookingRef);
+        } else {
+          const update = { attendees, attendeeCount: remaining };
+          t.update(bookingRef, { ...update, teamTicketChildCount: Math.max(0, (b.teamTicketChildCount || 1) - 1) });
+          t.set(userBookingRef, update, { merge: true });
+        }
+      }
+    }
+    t.set(voucherRef, teamTicketVoucherData(ticketId, ticket, expiresAt, now));
+    t.update(ticketRef, { status: "vouchered", voucherId: voucherRef.id, voucheredAt: now, voucheredReason: ticket.status === "accepted" ? "given_back" : "declined", deadlineAt: FieldValue.delete(), voucherAfterAt: FieldValue.delete() });
+    t.delete(holderRef);
+    t.update(eventRef, { bookedCount: Math.max(0, (freshEvent.data()?.bookedCount || 0) - 1) });
+    const who = ticket.assigneeCallsign || "A player";
+    t.set(db.collection("users").doc(ticket.buyerUid).collection("cancellationNotices").doc(), teamNotice({
+      type: "team_ticket_returned",
+      title: ticket.status === "accepted" ? `${who} can't make it` : `${who} declined their ticket`,
+      message: `The ticket you bought ${who} for "${ticket.eventTitle || "your event"}" is now a ${fmtUsd(ticket.entryPriceCents)} voucher for ${ticket.fieldName || "that field"}. You can use it yourself or give it to another player from your Profile.`,
+      eventId: ticket.eventId,
+      eventTitle: ticket.eventTitle || null,
+      fieldId: ticket.fieldId ?? null,
+      fieldName: ticket.fieldName || null,
+      voucherId: voucherRef.id,
+      voucherAmountCents: ticket.entryPriceCents,
+    }));
+    return ticket.status;
+  });
+  return { returned: true, was };
+});
+
+// --- Buyer: hand out / take back ---------------------------------------------
+export const assignTeamTicket = onCall({ invoker: "public", secrets: [resendApiKey] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const ticketId = request.data?.ticketId;
+  if (typeof ticketId !== "string" || !ticketId) throw new HttpsError("invalid-argument", "Missing ticket.");
+  let recipient = null;
+  if (request.data?.recipient != null) {
+    try {
+      recipient = normalizeRecipient(request.data.recipient);
+    } catch (err) {
+      rethrowTeamError(err);
+    }
+  }
+  const db = getFirestore();
+  const ticketRef = db.collection("teamTickets").doc(ticketId);
+  const holderRef = db.collection("teamTicketHolders").doc(ticketId);
+  const ticket0 = (await ticketRef.get()).data();
+  if (!ticket0 || ticket0.buyerUid !== uid) throw new HttpsError("not-found", "Ticket not found.");
+  if (!["unassigned", "pending"].includes(ticket0.status)) throw new HttpsError("failed-precondition", ticket0.status === "accepted" ? "This ticket has been claimed already." : "This ticket is now a voucher.");
+  const eventData = (await db.collection("events").doc(ticket0.eventId).get()).data() || {};
+  if (eventData.canceled) throw new HttpsError("failed-precondition", "This event has been canceled.");
+  const { fieldData } = await resolveEventHost(db, eventData);
+  assertEventStillOpen(eventData, fieldData);
+
+  let assignment = null;
+  if (recipient) {
+    const buyerProfile = (await db.collection("users").doc(uid).get()).data() || {};
+    assignment = await resolveTeamRecipient(db, { buyerUid: uid, buyerProfile, recipient, eventId: ticket0.eventId, eventData, fieldData });
+    await assertNoLiveTicket(db, ticket0.eventId, assignment.assigneeKey, ticketId);
+  }
+  const state = eventStateOf(eventData, fieldData);
+  const now = new Date();
+  const deadline = new Date(acceptDeadlineMs(now.getTime(), eventCloseMs(eventData, state)));
+  await db.runTransaction(async (t) => {
+    const [ticketSnap, holderSnap] = await Promise.all([t.get(ticketRef), t.get(holderRef)]);
+    const ticket = ticketSnap.data();
+    if (!ticket || !["unassigned", "pending"].includes(ticket.status)) throw new HttpsError("failed-precondition", "This ticket changed — refresh and try again.");
+    if (ticket.status === "pending" && holderSnap.exists && holderSnap.data().status !== "pending") {
+      throw new HttpsError("failed-precondition", "This ticket has been claimed already.");
+    }
+    if (holderSnap.exists) t.delete(holderRef);
+    if (assignment) {
+      t.update(ticketRef, ticketAssignmentFields(assignment, deadline, now));
+      t.set(holderRef, holderDocFor(ticketId, ticket, assignment, deadline, now));
+    } else {
+      t.update(ticketRef, UNASSIGN_FIELDS);
+    }
+  });
+  if (assignment) await sendTeamTicketOfferEmail(db, { holderUid: assignment.holderUid, ticket: ticket0, assignment, deadline, tz: timeZoneForState(state) });
+  return { status: assignment ? "pending" : "unassigned", deadlineAtMs: assignment ? deadline.getTime() : null };
+});
+
+// Callsign search for the "who's this ticket for" picker. Adults by callsign
+// prefix (never by email — this is player-to-player, so it mustn't reveal
+// whether an email has an account), the buyer's own children, and public
+// child profiles on one of the buyer's teams. includeChildren:false for
+// giving a voucher (a child can't hold one).
+export const searchTeamTicketRecipients = onCall({ invoker: "public" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const q = String(request.data?.query || "").trim().slice(0, 40);
+  const includeChildren = request.data?.includeChildren !== false;
+  const db = getFirestore();
+  const results = [];
+  const lower = q.toLowerCase();
+  if (q.length >= 2) {
+    const ids = new Set();
+    const snaps = await Promise.all(
+      callsignVariants(q).map((v) => db.collection("publicProfiles").where("callsign", ">=", v).where("callsign", "<", v + "").limit(10).get())
+    );
+    for (const s of snaps) s.docs.forEach((d) => ids.add(d.id));
+    ids.delete(uid);
+    const list = [...ids].slice(0, 10);
+    if (list.length) {
+      const [userSnaps, profSnaps] = await Promise.all([
+        db.getAll(...list.map((id) => db.collection("users").doc(id))),
+        db.getAll(...list.map((id) => db.collection("publicProfiles").doc(id))),
+      ]);
+      list.forEach((id, i) => {
+        if (!userSnaps[i].exists) return;
+        const p = profSnaps[i].data() || {};
+        results.push({ kind: "player", uid: id, callsign: p.callsign || "Player", avatarUrl: p.avatarUrl || null, teamName: p.teamName || null });
+      });
+    }
+  }
+  if (includeChildren) {
+    const own = await db.collection("users").doc(uid).collection("dependents").get();
+    own.docs.forEach((d) => {
+      const c = d.data();
+      if (c.graduatedAt) return;
+      if (q && !String(c.callsign || "").toLowerCase().startsWith(lower)) return;
+      results.push({ kind: "ownChild", dependentId: d.id, callsign: c.callsign || "Child", avatarUrl: c.avatarUrl || null, yourChild: true });
+    });
+    if (q.length >= 1) {
+      const teamIds = [...(await teamIdsOf(db, uid))].slice(0, 20);
+      const memberSnaps = await Promise.all(teamIds.map((tid) => db.collection("teams").doc(tid).collection("members").where("kind", "==", "child").get()));
+      const seen = new Set();
+      memberSnaps.forEach((s, i) => s.docs.forEach((d) => {
+        const m = d.data();
+        if (seen.has(d.id) || !String(m.callsign || "").toLowerCase().startsWith(lower)) return;
+        seen.add(d.id);
+        results.push({ kind: "child", publicId: d.id, callsign: m.callsign || "Player", avatarUrl: m.avatarUrl || null, teamId: teamIds[i] });
+      }));
+    }
+  }
+  results.sort((a, b) => String(a.callsign).localeCompare(String(b.callsign)));
+  return { results: results.slice(0, 25) };
+});
+
+// --- Give a team-ticket voucher to another player -----------------------------
+export const giveTeamTicketVoucher = onCall({ invoker: "public" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const voucherId = request.data?.voucherId;
+  const toUid = request.data?.toUid;
+  if (typeof voucherId !== "string" || !voucherId || typeof toUid !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(toUid)) {
+    throw new HttpsError("invalid-argument", "Missing voucher or player.");
+  }
+  if (toUid === uid) throw new HttpsError("invalid-argument", "That's you — pick another player.");
+  const db = getFirestore();
+  const [toUser, toPub, me] = await Promise.all([
+    db.collection("users").doc(toUid).get(),
+    db.collection("publicProfiles").doc(toUid).get(),
+    db.collection("users").doc(uid).get(),
+  ]);
+  if (!toUser.exists) throw new HttpsError("not-found", "That player doesn't have an Atlas account.");
+  const toCallsign = toPub.data()?.callsign || toUser.data()?.callsign || "Player";
+  const myCallsign = me.data()?.callsign || "A player";
+  const fromRef = db.collection("users").doc(uid).collection("vouchers").doc(voucherId);
+  const toRef = db.collection("users").doc(toUid).collection("vouchers").doc();
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(fromRef);
+    const v = snap.data();
+    if (!v) throw new HttpsError("not-found", "Voucher not found.");
+    if (v.source !== "teamTicket") throw new HttpsError("failed-precondition", "Only vouchers from tickets you bought for others can be given away.");
+    if (v.status !== "active" || v.redeemedAt || v.amountCents !== v.originalAmountCents) throw new HttpsError("failed-precondition", "Only an unused voucher can be given away, and only whole.");
+    if (v.expiresAt && v.expiresAt.toDate() < new Date()) throw new HttpsError("failed-precondition", "This voucher has expired.");
+    const now = new Date();
+    t.set(toRef, {
+      ...v,
+      issuedAt: now,
+      givenByUid: uid,
+      givenByCallsign: myCallsign,
+      givenFromVoucherId: voucherId,
+    });
+    t.update(fromRef, { status: "given", givenToUid: toUid, givenToCallsign: toCallsign, givenAt: now, givenVoucherId: toRef.id });
+    t.set(db.collection("users").doc(toUid).collection("cancellationNotices").doc(), teamNotice({
+      type: "voucher_given",
+      title: `${myCallsign} gave you a voucher`,
+      message: `You've got a ${fmtUsd(v.amountCents)} voucher for ${v.fieldName || "a field"} — good for a future event there. It'll show up as an option when you book.`,
+      fieldId: v.fieldId ?? null,
+      fieldName: v.fieldName || null,
+      voucherId: toRef.id,
+      voucherAmountCents: v.amountCents,
+    }));
+  });
+  return { given: true, toCallsign };
+});
+
+// --- Sweep: deadlines and after-the-event vouchers ------------------------------
+// Every 15 minutes. (1) Tickets still not claimed when the event closes become
+// vouchers for the buyer. (2) Pending tickets past their 5-day deadline go
+// back to the buyer, unassigned. One notice per buyer per event for each.
+// Single-field range queries only (voucherAfterAt / deadlineAt are deleted
+// once they no longer apply), so no composite index is needed.
+export const sweepTeamTickets = onSchedule(
+  { schedule: "every 15 minutes", timeZone: "America/Detroit", timeoutSeconds: 300 },
+  async () => {
+    const db = getFirestore();
+    const now = new Date();
+
+    const due = await db.collection("teamTickets").where("voucherAfterAt", "<=", now).limit(300).get();
+    const byEvent = new Map();
+    for (const d of due.docs) {
+      const tk = d.data();
+      if (tk.status !== "unassigned" && tk.status !== "pending") continue;
+      if (!byEvent.has(tk.eventId)) byEvent.set(tk.eventId, []);
+      byEvent.get(tk.eventId).push(d);
+    }
+    for (const [eventId, docs] of byEvent) {
+      const expiresAt = await voucherExpiryFor(db, docs[0].data(), now);
+      const perBuyer = new Map();
+      for (let i = 0; i < docs.length; i += 100) {
+        const batch = db.batch();
+        let freed = 0;
+        for (const d of docs.slice(i, i + 100)) {
+          const tk = d.data();
+          const vRef = db.collection("users").doc(tk.buyerUid).collection("vouchers").doc();
+          batch.set(vRef, teamTicketVoucherData(d.id, tk, expiresAt, now));
+          batch.update(d.ref, { status: "vouchered", voucherId: vRef.id, voucheredAt: now, voucheredReason: "unclaimed", deadlineAt: FieldValue.delete(), voucherAfterAt: FieldValue.delete() });
+          batch.delete(db.collection("teamTicketHolders").doc(d.id));
+          freed += 1;
+          const agg = perBuyer.get(tk.buyerUid) || { count: 0, cents: 0, tk };
+          agg.count += 1;
+          agg.cents += tk.entryPriceCents;
+          perBuyer.set(tk.buyerUid, agg);
+        }
+        batch.update(db.collection("events").doc(eventId), { bookedCount: FieldValue.increment(-freed) });
+        await batch.commit();
+      }
+      for (const [buyerUid, agg] of perBuyer) {
+        await db.collection("users").doc(buyerUid).collection("cancellationNotices").add(teamNotice({
+          type: "team_tickets_vouchered",
+          title: agg.count === 1 ? "An unclaimed ticket is now a voucher" : `${agg.count} unclaimed tickets are now vouchers`,
+          message: `Nobody claimed ${agg.count === 1 ? "one of the tickets" : `${agg.count} of the tickets`} you bought for "${agg.tk.eventTitle || "your event"}". You've got ${agg.count === 1 ? `a ${fmtUsd(agg.tk.entryPriceCents)} voucher` : `${agg.count} vouchers (${fmtUsd(agg.cents)} total)`} for ${agg.tk.fieldName || "that field"} — use them yourself or give them to other players from your Profile.`,
+          eventId,
+          eventTitle: agg.tk.eventTitle || null,
+          fieldId: agg.tk.fieldId ?? null,
+          fieldName: agg.tk.fieldName || null,
+          voucherAmountCents: agg.cents,
+        }));
+      }
+    }
+
+    const lapsed = await db.collection("teamTickets").where("deadlineAt", "<=", now).limit(300).get();
+    const lapsedPerBuyer = new Map();
+    for (const d of lapsed.docs) {
+      const ok = await db.runTransaction(async (t) => {
+        const [snap, holder] = await Promise.all([t.get(d.ref), t.get(db.collection("teamTicketHolders").doc(d.id))]);
+        const tk = snap.data();
+        if (!tk || tk.status !== "pending") {
+          if (tk && tk.deadlineAt) t.update(d.ref, { deadlineAt: FieldValue.delete() });
+          return null;
+        }
+        if (holder.exists) t.delete(holder.ref);
+        t.update(d.ref, UNASSIGN_FIELDS);
+        return tk;
+      });
+      if (!ok) continue;
+      const key = `${ok.buyerUid}|${ok.eventId}`;
+      const agg = lapsedPerBuyer.get(key) || { names: [], tk: ok };
+      agg.names.push(ok.assigneeCallsign || "A player");
+      lapsedPerBuyer.set(key, agg);
+    }
+    for (const [key, agg] of lapsedPerBuyer) {
+      const buyerUid = key.split("|")[0];
+      await db.collection("users").doc(buyerUid).collection("cancellationNotices").add(teamNotice({
+        type: "team_ticket_lapsed",
+        title: agg.names.length === 1 ? "A ticket came back to you" : `${agg.names.length} tickets came back to you`,
+        message: `${joinNames(agg.names)} didn't claim ${agg.names.length === 1 ? "the ticket" : "their tickets"} you bought for "${agg.tk.eventTitle || "your event"}" in time. ${agg.names.length === 1 ? "It's" : "They're"} yours to hand to someone else — open the event to reassign. Anything still unclaimed when the event ends becomes a voucher for you.`,
+        eventId: agg.tk.eventId,
+        eventTitle: agg.tk.eventTitle || null,
+        fieldId: agg.tk.fieldId ?? null,
+        fieldName: agg.tk.fieldName || null,
+      }));
+    }
+  }
+);

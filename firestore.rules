@@ -1057,6 +1057,37 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Team Bookings (2026-11-05). Everything here is written only by Cloud
+    // Functions (createTeamTicketCheckout -> stripeWebhook, assignTeamTicket,
+    // acceptTeamTicket, returnTeamTicket, sweepTeamTickets).
+    // Purchase record: the buyer (and admin) can read it.
+    match /teamTicketGroups/{groupId} {
+      allow read: if request.auth != null && (resource.data.buyerUid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    // One per ticket: the buyer sees status and who it's for; the field owner
+    // sees the event's tickets (queries must filter on fieldId). Holds no
+    // guardian link for a child — that lives only in teamTicketHolders.
+    match /teamTickets/{ticketId} {
+      allow read: if request.auth != null && (
+        resource.data.buyerUid == request.auth.uid
+        || isAdmin()
+        || (resource.data.get('fieldId', null) != null
+          && get(/databases/$(database)/documents/fields/$(resource.data.fieldId)).data.ownerId == request.auth.uid)
+      );
+      allow write: if false;
+    }
+    // Who has to claim / currently holds a ticket (the adult, or a child's
+    // guardian). Readable only by that person.
+    match /teamTicketHolders/{ticketId} {
+      allow read: if request.auth != null && resource.data.holderUid == request.auth.uid;
+      allow write: if false;
+    }
+    // Checkout drafts (recipient lists) — server only.
+    match /teamTicketDrafts/{draftId} {
+      allow read, write: if false;
+    }
+
     // Teams (clans). Public read — rosters, patches, and names are meant to
     // be visible to everyone, not just members. Any signed-in user can
     // create a team (they become its founding officer in the same batched
