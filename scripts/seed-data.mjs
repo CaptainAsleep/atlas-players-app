@@ -7264,15 +7264,26 @@ async function seed() {
     batch.set(db.collection("events").doc(id), data, { merge: true });
   }
 
+  // Teams are create-only (2026-11-07). Once a team doc exists, its officers
+  // own it: re-running this script used to reset DTB's name, description and
+  // patch every time (lost the officer's description ~2026-11-05). Same idea
+  // as the claimed-field skip above, but for teams any existing doc counts.
+  const teamSnaps = await db.getAll(...teams.map((t) => db.collection("teams").doc(t.id)));
+  const existingTeamIds = new Set(teamSnaps.filter((s) => s.exists).map((s) => s.id));
+  let skippedTeams = 0;
   for (const team of teams) {
+    if (existingTeamIds.has(team.id)) {
+      skippedTeams++;
+      continue;
+    }
     const { id, ...data } = team;
-    batch.set(db.collection("teams").doc(id), data, { merge: true });
+    batch.set(db.collection("teams").doc(id), data);
   }
 
   await batch.commit();
   console.log(
     `Seeded ${fields.length - skippedFields}/${fields.length} fields and ` +
-    `${events.length - skippedEvents}/${events.length} events (plus ${teams.length} team(s)). ` +
+    `${events.length - skippedEvents}/${events.length} events (plus ${teams.length - skippedTeams} new team(s), ${skippedTeams} existing left alone). ` +
     `Skipped ${skippedFields} already-claimed field(s) and ${skippedEvents} of their event(s) to avoid overwriting owner edits.`
   );
 }
