@@ -49,6 +49,22 @@ export function consentProblem({ choice, version, termsHash } = {}) {
 }
 export const consentIsCurrentIn = (d) => !!d && d.choice === "in" && d.version === CARD_CONSENT.version;
 
+// Trading + card packs consent (2026-11-09) — a second, separate permission,
+// asked only of Legendary-and-up cards (influencers, ambassadors, founders).
+// The hash covers every term AND the "I understand" checkbox line; "in"
+// is only accepted with that box ticked. Same rule as above: change a word
+// = new version + hash here and in src/TradingCards.jsx.
+export const CARD_PACK_CONSENT = { version: "2026-11-09.p1", sha256: "4f9f378a24820430d73ca2979edf60d830cd2d2a3ed062399d3c39d4df53c4cf" };
+export const PACK_ELIGIBLE_RANKS = ["legendary", "onyx", "diamond", "founder"];
+export const isPackEligible = (cardTier) => PACK_ELIGIBLE_RANKS.includes(cardTier);
+export function packConsentProblem({ choice, version, termsHash, acknowledged } = {}) {
+  if (choice !== "in" && choice !== "out") return "choice";
+  if (version !== CARD_PACK_CONSENT.version || termsHash !== CARD_PACK_CONSENT.sha256) return "terms";
+  if (choice === "in" && acknowledged !== true) return "ack";
+  return null;
+}
+export const packConsentIsCurrentIn = (d) => !!d && d.choice === "in" && d.acknowledged === true && d.version === CARD_PACK_CONSENT.version;
+
 // "diamond" is hand-set only (TIER_OVERRIDES); circulation never produces it.
 export const TIERS = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "onyx", "diamond", "founder"];
 

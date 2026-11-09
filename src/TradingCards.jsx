@@ -647,34 +647,84 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function useCardConsent(uid) {
-  const [s, setS] = useState({ loading: !!uid, choice: null, version: null, error: false });
-  useEffect(() => {
-    if (!uid) { setS({ loading: false, choice: null, version: null, error: false }); return undefined; }
-    return onSnapshot(doc(db, "cardConsents", uid),
-      (snap) => { const d = snap.data() || {}; setS({ loading: false, choice: d.choice || null, version: d.version || null, error: false }); },
-      () => setS({ loading: false, choice: null, version: null, error: true }));
-  }, [uid]);
-  const current = s.version === CARD_CONSENT_VERSION;
-  return { ...s, answered: current && !!s.choice, optedIn: current && s.choice === "in" };
-}
+// Trading + card packs (2026-11-09): a second, separate permission asked
+// only of Legendary-and-up cards. "I'm in" stays locked until the
+// "I understand" box is ticked; the box's words are part of the hash.
+export const CARD_PACK_CONSENT_VERSION = "2026-11-09.p1";
+export const PACK_ELIGIBLE_RANKS = ["legendary", "onyx", "diamond", "founder"];
+export const CARD_PACK_CONSENT_TERMS = [
+  "I give Atlas permission to include my trading card in Atlas card packs, which players can buy with real money, and to let players trade my card with each other inside the Atlas app.",
+  "Atlas can show my card in the app's card pack store to show what packs may contain.",
+  "My card will never be sold on its own. Atlas won't sell it individually, and players can't sell it, to Atlas or to anyone, for money or anything of value.",
+  "All cards, including cards from card packs, are for use in the Atlas app only. They have no monetary value, can't be exchanged for cash, and can't be transferred outside the Atlas app.",
+  "I won't be paid for this, including when packs that may contain my card are sold, unless I have a separate written agreement with Atlas.",
+  "This permission is non-exclusive and revocable. I can withdraw it at any time from Profile → My Card. When I do, Atlas stops adding my card to new packs and stops new trades of it. Copies players already have stay in their decks.",
+  "Atlas keeps a record of my choice, the date, and the version of these terms I saw.",
+];
+export const CARD_PACK_CONSENT_ACK = "I understand that my card can be traded and put in card packs, that it can't be sold on its own, and that cards have no monetary value and are for use in the Atlas app only.";
 
-// The pop-up. Without onClose it can only be answered (first-time ask);
-// with onClose (from My Card) it also has a close button.
-export function CardConsentModal({ uid, onClose }) {
+const CONSENT_KINDS = {
+  likeness: {
+    collection: "cardConsents", version: CARD_CONSENT_VERSION, callable: "setCardConsent",
+    hashText: () => CARD_CONSENT_TERMS.join("\n"),
+    eyebrow: "Your Atlas trading card",
+    title: "Can we put your likeness on this card?",
+    intro: () => "This is your trading card. Other players collect it by scanning your code in person. Before anyone can, we need your OK to show your photo and callsign on it.",
+    terms: CARD_CONSENT_TERMS,
+    outText: "Your card stays private: other players can't see it, collect it or share it. Everything else in Atlas works as normal, and you can opt in later from Profile → My Card.",
+    footer: "Trading card likeness consent",
+  },
+  packs: {
+    collection: "cardPackConsents", version: CARD_PACK_CONSENT_VERSION, callable: "setCardPackConsent",
+    hashText: () => [...CARD_PACK_CONSENT_TERMS, CARD_PACK_CONSENT_ACK].join("\n"),
+    eyebrow: "Trading & card packs",
+    title: "Can your card be traded and go in card packs?",
+    intro: (rank) => `Your card is ${rank}. Cards at this rank can be traded between players and included in Atlas card packs. This is a separate permission from the one you already gave, and we need it from you directly.`,
+    terms: CARD_PACK_CONSENT_TERMS,
+    ack: CARD_PACK_CONSENT_ACK,
+    outText: "Your card stays out of card packs and can't be traded. Players can still collect it in person, the same as now. You can change this later from Profile → My Card.",
+    footer: "Trading & card packs consent",
+  },
+};
+
+function useConsentDoc(uid, kind) {
+  const k = CONSENT_KINDS[kind];
+  const [s, setS] = useState({ loading: !!uid, choice: null, version: null, acknowledged: false, error: false });
+  useEffect(() => {
+    if (!uid) { setS({ loading: false, choice: null, version: null, acknowledged: false, error: false }); return undefined; }
+    return onSnapshot(doc(db, k.collection, uid),
+      (snap) => { const d = snap.data() || {}; setS({ loading: false, choice: d.choice || null, version: d.version || null, acknowledged: d.acknowledged === true, error: false }); },
+      () => setS({ loading: false, choice: null, version: null, acknowledged: false, error: true }));
+  }, [uid, k.collection]);
+  const current = s.version === k.version;
+  const optedIn = current && s.choice === "in" && (kind !== "packs" || s.acknowledged);
+  return { ...s, answered: current && !!s.choice, optedIn };
+}
+export const useCardConsent = (uid) => useConsentDoc(uid, "likeness");
+export const useCardPackConsent = (uid) => useConsentDoc(uid, "packs");
+export const isPackEligible = (card) => !!card && card.kind === "adult" && PACK_ELIGIBLE_RANKS.includes(card.tier);
+
+// The pop-up. kind = "likeness" (every card) or "packs" (Legendary and up).
+// Without onClose it can only be answered (first-time ask); with onClose
+// (from My Card) it also has a close button.
+export function CardConsentModal({ uid, kind = "likeness", onClose }) {
+  const k = CONSENT_KINDS[kind];
   const { T, display, body, mono } = useTheme();
   const { card } = useCardOwner("adult", uid);
   const total = useCardsTotal();
   const scale = useScaleFor(0.56, 0.3, 0.62);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState("");
+  const [ticked, setTicked] = useState(false);
   useHideBottomNav();
+  const needsTick = !!k.ack;
   const answer = async (choice) => {
+    if (choice === "in" && needsTick && !ticked) return;
     setBusy(choice);
     setError("");
     try {
-      const termsHash = await sha256Hex(CARD_CONSENT_TERMS.join("\n"));
-      await httpsCallable(firebaseFunctions, "setCardConsent")({ choice, version: CARD_CONSENT_VERSION, termsHash });
+      const termsHash = await sha256Hex(k.hashText());
+      await httpsCallable(firebaseFunctions, k.callable)({ choice, version: k.version, termsHash, ...(needsTick ? { acknowledged: choice === "in" && ticked } : {}) });
       if (choice === "in") CardSound.reveal();
       setBusy(null);
       onClose?.(choice);
@@ -683,8 +733,10 @@ export function CardConsentModal({ uid, onClose }) {
       setError(err?.message || "Couldn't save your answer. Check your connection and try again.");
     }
   };
+  const rank = card ? (card.tier === "founder" ? "Founder" : card.rankName || rankName(card.tier)) : "";
   const dim = "rgba(255,255,255,0.72)";
   const label = { ...mono, color: "rgba(255,255,255,0.55)", letterSpacing: "0.12em" };
+  const inLocked = needsTick && !ticked;
   return createPortal(
     <div className="fixed inset-0 flex flex-col" role="dialog" aria-modal="true" aria-labelledby="card-consent-title"
       style={{ zIndex: 2080, background: "radial-gradient(120% 80% at 50% 18%,#1b2440 0%,#0a0d18 60%,#05060b 100%)" }}>
@@ -692,54 +744,63 @@ export function CardConsentModal({ uid, onClose }) {
         <button onClick={() => onClose()} className="absolute top-4 right-4 w-10 h-10 text-[18px]" style={{ zIndex: 1, color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 999 }} aria-label="Close">✕</button>
       )}
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4 text-center">
-        <div className="text-[11px] font-semibold uppercase" style={{ ...mono, color: "#7aa2ff", letterSpacing: "0.2em" }}>Your Atlas trading card</div>
+        <div className="text-[11px] font-semibold uppercase" style={{ ...mono, color: "#7aa2ff", letterSpacing: "0.2em" }}>{k.eyebrow}</div>
         <div className="flex justify-center mt-2" style={{ minHeight: Math.round(H * scale) + 24 }}>
           {card && <SpinCard card={card} total={total} scale={scale} />}
         </div>
-        <h2 id="card-consent-title" className="text-[22px] font-semibold mt-1" style={{ ...display, color: "#fff" }}>Can we put your likeness on this card?</h2>
-        <p className="text-[13px] mt-2 mx-auto" style={{ ...body, color: dim, maxWidth: 340 }}>
-          This is your trading card. Other players collect it by scanning your code in person. Before anyone can, we need your OK to show your photo and callsign on it.
-        </p>
+        <h2 id="card-consent-title" className="text-[22px] font-semibold mt-1" style={{ ...display, color: "#fff" }}>{k.title}</h2>
+        <p className="text-[13px] mt-2 mx-auto" style={{ ...body, color: dim, maxWidth: 340 }}>{k.intro(rank)}</p>
         <div className="mt-4 mx-auto text-left p-4" style={{ maxWidth: 380, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
           <div className="text-[11px] font-semibold uppercase mb-2" style={label}>If you tap “I'm in”</div>
           <ul className="space-y-2">
-            {CARD_CONSENT_TERMS.map((t, i) => (
+            {k.terms.map((t, i) => (
               <li key={i} className="text-[12.5px] leading-snug flex gap-2" style={{ ...body, color: "rgba(255,255,255,0.86)" }}>
                 <span aria-hidden="true" style={{ color: "#7aa2ff" }}>•</span><span>{t}</span>
               </li>
             ))}
           </ul>
           <div className="text-[11px] font-semibold uppercase mt-4 mb-1" style={label}>If you tap “I'm out”</div>
-          <p className="text-[12.5px] leading-snug" style={{ ...body, color: "rgba(255,255,255,0.86)" }}>
-            Your card stays private: other players can't see it, collect it or share it. Everything else in Atlas works as normal, and you can opt in later from Profile → My Card.
-          </p>
-          <div className="text-[10.5px] mt-4" style={{ ...mono, color: "rgba(255,255,255,0.4)" }}>Trading card likeness consent · version {CARD_CONSENT_VERSION}</div>
+          <p className="text-[12.5px] leading-snug" style={{ ...body, color: "rgba(255,255,255,0.86)" }}>{k.outText}</p>
+          <div className="text-[10.5px] mt-4" style={{ ...mono, color: "rgba(255,255,255,0.4)" }}>{k.footer} · version {k.version}</div>
         </div>
       </div>
       <div className="px-6 pt-3" style={{ background: "rgba(5,6,11,0.94)", borderTop: "1px solid rgba(255,255,255,0.1)", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+        {needsTick && (
+          <label className="flex items-start gap-3 mx-auto mb-3 text-left cursor-pointer" style={{ maxWidth: 380 }}>
+            <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} className="mt-0.5 flex-shrink-0" style={{ width: 20, height: 20, accentColor: "#2563eb" }} />
+            <span className="text-[12.5px] leading-snug font-semibold" style={{ ...body, color: "#fff" }}>{k.ack}</span>
+          </label>
+        )}
         {error && <div className="text-[12px] mb-2 text-center" style={{ ...body, color: "#fca5a5" }}>{error}</div>}
         <div className="flex gap-3 mx-auto" style={{ maxWidth: 380 }}>
           <button disabled={!!busy} onClick={() => answer("out")} className="flex-1 py-3.5 text-[15px] font-semibold"
             style={{ ...display, color: "#fff", border: "1px solid rgba(255,255,255,0.35)", borderRadius: T.rPill, opacity: busy && busy !== "out" ? 0.5 : 1 }}>
             {busy === "out" ? "Saving…" : "I'm out"}
           </button>
-          <button disabled={!!busy} onClick={() => answer("in")} className="flex-1 py-3.5 text-[15px] font-semibold"
-            style={{ ...display, background: "#2563eb", color: "#fff", borderRadius: T.rPill, boxShadow: "0 8px 24px rgba(37,99,235,.45)", opacity: busy && busy !== "in" ? 0.5 : 1 }}>
+          <button disabled={!!busy || inLocked} onClick={() => answer("in")} className="flex-1 py-3.5 text-[15px] font-semibold"
+            style={{ ...display, background: "#2563eb", color: "#fff", borderRadius: T.rPill, boxShadow: inLocked ? "none" : "0 8px 24px rgba(37,99,235,.45)", opacity: inLocked || (busy && busy !== "in") ? 0.4 : 1 }}>
             {busy === "in" ? "Saving…" : "I'm in"}
           </button>
         </div>
-        <div className="text-[11px] mt-2 text-center" style={{ ...body, color: "rgba(255,255,255,0.5)" }}>You can change this anytime in Profile → My Card.</div>
+        <div className="text-[11px] mt-2 text-center" style={{ ...body, color: "rgba(255,255,255,0.5)" }}>
+          {inLocked ? "Tick the box above to opt in." : "You can change this anytime in Profile → My Card."}
+        </div>
       </div>
     </div>,
     document.body
   );
 }
 
-// App-level: asks any card tester who hasn't answered the current version.
+// App-level: asks the likeness question first; then, for Legendary-and-up
+// cards that said yes, the separate trading + card packs question.
 export function CardConsentGate({ uid }) {
   const consent = useCardConsent(uid);
-  if (!uid || consent.loading || consent.error || consent.answered) return null;
-  return <CardConsentModal uid={uid} />;
+  const packs = useCardPackConsent(uid);
+  const { card } = useCardOwner("adult", uid);
+  if (!uid || consent.loading || consent.error) return null;
+  if (!consent.answered) return <CardConsentModal key="likeness" uid={uid} />;
+  if (consent.optedIn && isPackEligible(card) && !packs.loading && !packs.error && !packs.answered) return <CardConsentModal key="packs" uid={uid} kind="packs" />;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -875,7 +936,9 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
   const [idle, setIdle] = useState(true);
   const [sharing, setSharing] = useState(null); // { card, childPublicId }
   const consent = useCardConsent(user?.uid);
+  const packConsent = useCardPackConsent(user?.uid);
   const [askConsent, setAskConsent] = useState(false);
+  const [askPacks, setAskPacks] = useState(false);
   const deckCount = useDeckCount(user?.uid);
   const canShare = !!card?.photoUrl && consent.optedIn;
   // One line under Share saying what's in the way (most important first).
@@ -918,6 +981,17 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
               <Pill primary={!consent.optedIn} onClick={() => setAskConsent(true)}>{consent.optedIn ? "Change" : "Opt in"}</Pill>
             </div>
           )}
+          {consent.optedIn && isPackEligible(card) && !packConsent.loading && (
+            <div className="w-full mt-2.5 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, border: `1px solid ${T.line}` }}>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{packConsent.optedIn ? "Trading & card packs: on" : "Trading & card packs: off"}</div>
+                <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+                  {packConsent.optedIn ? "Your card can be traded and included in card packs. It can't be sold on its own and has no monetary value." : "Your card won't be traded or put in card packs."}
+                </div>
+              </div>
+              <Pill primary={!packConsent.optedIn} onClick={() => setAskPacks(true)}>{packConsent.optedIn ? "Change" : "Opt in"}</Pill>
+            </div>
+          )}
           <RankPanel card={card} />
           {publicChildren.length > 0 && (
             <div className="w-full mt-6">
@@ -929,6 +1003,7 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
       )}
       {sharing && <ShareCardSheet card={sharing.card} total={total} childPublicId={sharing.childPublicId} onClose={() => setSharing(null)} />}
       {askConsent && user?.uid && <CardConsentModal uid={user.uid} onClose={() => setAskConsent(false)} />}
+      {askPacks && user?.uid && <CardConsentModal uid={user.uid} kind="packs" onClose={() => setAskPacks(false)} />}
     </div>
   );
 }

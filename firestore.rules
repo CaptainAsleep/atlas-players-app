@@ -1031,6 +1031,15 @@ service cloud.firestore {
         allow read, write: if false;
       }
     }
+    // Trading + card packs consent (2026-11-09), Legendary-and-up only. Same
+    // shape: your own current answer is readable; setCardPackConsent writes.
+    match /cardPackConsents/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+      match /history/{entryId} {
+        allow read, write: if false;
+      }
+    }
 
     // Friend requests. A top-level collection (not a subcollection under
     // either user) because a friendship spans two accounts, and neither

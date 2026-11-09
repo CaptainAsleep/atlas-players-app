@@ -177,3 +177,18 @@ test("likeness consent: only the current version + exact terms are accepted", ()
   assert.equal(cards.consentIsCurrentIn(null), false);
   assert.ok(cards.CARD_SERVER_KEYS.includes("cardOptOut"));
 });
+
+test("pack consent: Legendary-and-up only, exact terms, box must be ticked to say yes", () => {
+  const base = { version: cards.CARD_PACK_CONSENT.version, termsHash: cards.CARD_PACK_CONSENT.sha256 };
+  assert.equal(cards.packConsentProblem({ ...base, choice: "in", acknowledged: true }), null);
+  assert.equal(cards.packConsentProblem({ ...base, choice: "in" }), "ack");
+  assert.equal(cards.packConsentProblem({ ...base, choice: "in", acknowledged: "yes" }), "ack");
+  assert.equal(cards.packConsentProblem({ ...base, choice: "out" }), null);
+  assert.equal(cards.packConsentProblem({ ...base, choice: "in", acknowledged: true, termsHash: cards.CARD_CONSENT.sha256 }), "terms");
+  assert.equal(cards.packConsentProblem({ ...base, choice: "maybe" }), "choice");
+  for (const r of ["legendary", "onyx", "diamond", "founder"]) assert.ok(cards.isPackEligible(r), r);
+  for (const r of ["unranked", "common", "uncommon", "rare", "epic", undefined]) assert.ok(!cards.isPackEligible(r), String(r));
+  assert.equal(cards.packConsentIsCurrentIn({ choice: "in", acknowledged: true, version: cards.CARD_PACK_CONSENT.version }), true);
+  assert.equal(cards.packConsentIsCurrentIn({ choice: "in", version: cards.CARD_PACK_CONSENT.version }), false);
+  assert.equal(cards.packConsentIsCurrentIn({ choice: "out", acknowledged: true, version: cards.CARD_PACK_CONSENT.version }), false);
+});

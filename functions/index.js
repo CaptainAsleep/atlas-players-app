@@ -6024,6 +6024,40 @@ export const setCardConsent = onCall(async (request) => {
   return { choice };
 });
 
+// { choice, version, termsHash, acknowledged } → { choice }. Trading + card
+// packs consent (2026-11-09): separate from the likeness consent, only for
+// Legendary-and-up cards, and "in" needs the likeness consent to be "in" too
+// and the "I understand" box ticked. Current answer in cardPackConsents/{uid},
+// every answer in .../history (append-only). Packs and trading aren't built
+// yet — they must check cards.packConsentIsCurrentIn() before using a card.
+export const setCardPackConsent = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const db = getFirestore();
+  if (!(await cardBetaAllowed(db, uid))) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
+  const { choice, version, termsHash, acknowledged } = request.data || {};
+  const problem = cards.packConsentProblem({ choice, version, termsHash, acknowledged });
+  if (problem === "choice") throw new HttpsError("invalid-argument", "Choose in or out.");
+  if (problem === "ack") throw new HttpsError("failed-precondition", "Tick the box to confirm you understand.");
+  if (problem) throw new HttpsError("failed-precondition", "These terms have been updated. Close and reopen Atlas, then try again.");
+  const pub = await db.collection("publicProfiles").doc(uid).get();
+  if (!pub.exists) throw new HttpsError("failed-precondition", cards.collectMessage("no-profile"));
+  if (!cards.isPackEligible(pub.data().cardTier)) throw new HttpsError("failed-precondition", "Only Legendary and higher cards can be traded or put in card packs.");
+  if (choice === "in") {
+    const likeness = await db.collection("cardConsents").doc(uid).get();
+    if (!cards.consentIsCurrentIn(likeness.exists ? likeness.data() : null)) throw new HttpsError("failed-precondition", "Opt in to your trading card first.");
+  }
+  const record = {
+    uid, choice, version, termsSha256: termsHash, acknowledged: choice === "in",
+    cardTier: pub.data().cardTier,
+    at: FieldValue.serverTimestamp(),
+    userAgent: String(request.rawRequest?.headers?.["user-agent"] || "").slice(0, 300),
+  };
+  const ref = db.collection("cardPackConsents").doc(uid);
+  await commitInChunks(db, [(b) => b.set(ref, record), (b) => b.set(ref.collection("history").doc(), record)]);
+  return { choice };
+});
+
 // Hourly: rarity tiers + the two titles. Only writes cards that changed.
 // Rank v2 (2026-11-09): ranks are recomputed when an input changes; this
 // hourly pass only catches anything missed (and applies TIER_OVERRIDES edits
