@@ -9172,7 +9172,7 @@ function SettingsScreen({ profile, user, onBack, onOpenAccount, onOpenAppearance
 
         <Eyebrow>Support</Eyebrow>
         <div className="px-4 mb-2.5" style={cardStyle}>
-          <SettingsRow first icon={AlertTriangle} label="Report a concern" value="Discord" href="https://discord.gg/hR8EntGsq" />
+          <SettingsRow first icon={AlertTriangle} label="Report a concern" value="Discord" href="https://discord.gg/4FFyd2qAs" />
         </div>
         <FeedbackPanel />
 
