@@ -1674,8 +1674,12 @@ function HomeScreen({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       className="h-full overflow-y-auto pb-24"
-      style={{ backgroundColor: T.void, position: "relative", zIndex: 0 }}
+      style={{ backgroundColor: T.void }}
     >
+      {/* Positioned wrapper for the skin band. It must NOT be the scroller
+          itself: BottomNav is absolute, and a positioned scroller makes it
+          anchor to the scrolling content instead of the screen. */}
+      <div style={{ position: "relative", zIndex: 0 }}>
       {/* Skins with a texture fade it in behind the greeting (z -1, under everything). */}
       <SkinHeaderBand T={T} />
       <div
@@ -2133,6 +2137,7 @@ function HomeScreen({
         )}
       </div>
       )}
+      </div>
       <BottomNav active="home" onNavigate={onNavigate} />
     </div>
   );
