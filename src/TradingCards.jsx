@@ -24,6 +24,11 @@ export const CARD_BETA_UIDS = new Set([
 ]);
 export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 export const isCardBeta = (uid) => !!uid && CARD_BETA_UIDS.has(uid);
+// The word on a card's rank badge, when it isn't the rank's own name.
+// Display only: the rank (and its colors) stays what the server says.
+export const CARD_RANK_LABELS = {
+  "4gaohQb6ddMvdSNdhlDp75eMZke2": { label: "CO-FOUNDER", name: "Co-Founder" }, // Rogue, on Diamond (Michael, 2026-11-09)
+};
 
 // Testers added without a code change live in cardBeta/{uid}
 // (scripts/set-card-beta.mjs). Only your own entry is readable.
@@ -123,6 +128,8 @@ export function toCard(kind, id, d) {
     crop: hasCardPhoto ? d.cardCrop || null : null,
     hiRes: hasCardPhoto,
     optedOut: !!d.cardOptOut,
+    rankLabel: kind === "adult" ? CARD_RANK_LABELS[id]?.label || null : null,
+    rankName: kind === "adult" ? CARD_RANK_LABELS[id]?.name || null : null,
   };
 }
 
@@ -400,7 +407,7 @@ export const TradingCardFaces = React.forwardRef(function TradingCardFaces({ car
           <div className="ac-inner">
             {photoStyle ? <div className="ac-photo" style={photoStyle} /> : <div className="ac-nophoto">{(card?.callsign || "?").charAt(0).toUpperCase()}</div>}
             <div className="ac-top">
-              <div className="ac-rarity">{(TIER_STYLE[tier] || TIER_STYLE.unranked).label}</div>
+              <div className="ac-rarity">{(!tierOverride && card?.rankLabel) || (TIER_STYLE[tier] || TIER_STYLE.unranked).label}</div>
               <div className="ac-serial">{serial}</div>
             </div>
             {card?.title && TITLE_LABEL[card.title] && <div className="ac-title">★ {TITLE_LABEL[card.title]}</div>}
@@ -999,7 +1006,7 @@ export function CardCollectedOverlay({ result, onClose, onOpenDeck }) {
         </div>
         {card && (
           <div className="text-[12px] mt-1 mb-4" style={{ ...body, color: "rgba(255,255,255,0.65)" }}>
-            #{card.serial ?? "—"} · {card.tier === "founder" ? "Founder Edition" : ((t) => t.charAt(0) + t.slice(1).toLowerCase())((TIER_STYLE[card.tier] || TIER_STYLE.unranked).label)} · in {card.circ} deck{card.circ === 1 ? "" : "s"}
+            #{card.serial ?? "—"} · {card.tier === "founder" ? "Founder Edition" : card.rankName || ((t) => t.charAt(0) + t.slice(1).toLowerCase())((TIER_STYLE[card.tier] || TIER_STYLE.unranked).label)} · in {card.circ} deck{card.circ === 1 ? "" : "s"}
           </div>
         )}
         <div className="flex gap-2 justify-center">
@@ -1196,7 +1203,7 @@ function RankPanel({ card }) {
     <div className="w-full mt-6 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
       <div className="flex items-center justify-between mb-2">
         <div className="text-[11px] font-semibold uppercase" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.1em" }}>Rank</div>
-        <div className="text-[13px] font-semibold" style={{ ...display, color }}>{card.tier === "founder" ? "Founder · Diamond" : rankName(card.tier)}</div>
+        <div className="text-[13px] font-semibold" style={{ ...display, color }}>{card.tier === "founder" ? "Founder · Diamond" : card.rankName ? `${card.rankName} · ${rankName(card.tier)}` : rankName(card.tier)}</div>
       </div>
       {handGiven ? (
         <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>

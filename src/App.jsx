@@ -8524,7 +8524,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildP
   const cardBeta = useCardBeta(user?.uid);
   const { card: myCard } = useCardOwner("adult", cardBeta ? user?.uid : null);
   const deckCount = useDeckCount(cardBeta ? user?.uid : null);
-  const rank = cardBeta && myCard ? TIER_STYLE[myCard.tier] || null : null;
+  const rank = cardBeta && myCard && TIER_STYLE[myCard.tier] ? { ...TIER_STYLE[myCard.tier], ...(myCard.rankLabel ? { label: myCard.rankLabel } : {}) } : null;
   const isOwner = user?.uid === ATLAS_OWNER_UID;
   // Year in Review only shows in season — the same Dec 26 - Jan 31 window as
   // the Home banner. Michael's own account always sees it, to troubleshoot.
@@ -8578,7 +8578,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildP
 
   const cardStyle = { background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd };
   const iconBtnStyle = { background: T.panel, borderRadius: T.rPill, boxShadow: T.shadowSm };
-  const rankName = rank ? rank.label.charAt(0) + rank.label.slice(1).toLowerCase() : null;
+  const rankName = rank ? myCard?.rankName || rank.label.charAt(0) + rank.label.slice(1).toLowerCase() : null;
   const cardSubtitle = [rankName && `${rankName} rank`, deckCount != null && `${deckCount} in deck`].filter(Boolean).join(" · ") || "Your trading card";
 
   return (
