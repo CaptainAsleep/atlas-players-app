@@ -7,6 +7,7 @@ import Stripe from "stripe";
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as feedback from "./feedback.js";
+import * as cards from "./cards.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -4334,6 +4335,8 @@ async function makeChildPrivate(db, guardianUid, dependentId) {
   if (!ptr.exists) return 0;
   const publicId = ptr.data().publicId;
   const profRef = db.collection("childPublicProfiles").doc(publicId);
+  // Trading cards: pull every collected copy of this child's card first.
+  await removeChildCardCopies(db, publicId);
   const [members, requests, patches] = await Promise.all([
     db.collectionGroup("members").where("uid", "==", publicId).get(),
     db.collection("joinRequests").where("uid", "==", publicId).get(),
@@ -4384,6 +4387,14 @@ export const setChildProfilePublic = onCall(async (request) => {
   const patches = await depRef.collection("childPatches").get();
   const pubPatches = db.collection("childPublicProfiles").doc(publicId).collection("publicPatches");
   await commitInChunks(db, patches.docs.map((p) => (b) => b.set(pubPatches.doc(p.id), publicPatchFields(p.data()))));
+  // Trading cards: the child's serial (kept across off/on) and card stats.
+  // Best-effort — a failure here must not undo making the profile public.
+  try {
+    await assignChildSerial(db, uid, dependentId, publicId);
+    await refreshStatsFor(db, uid);
+  } catch (err) {
+    console.error("child card setup failed:", err);
+  }
   return { ok: true, public: true, publicId };
 });
 
@@ -5603,3 +5614,219 @@ export const sweepTeamTickets = onSchedule(
     }
   }
 );
+
+// ===========================================================================
+// Player Trading Cards (2026-11-08) — helpers in cards.js, scope in project
+// doc claude/atlas-trading-cards-scope.md. v1 is gated to CARD_BETA_UIDS for
+// sharing and collecting; serial numbers and stats run for everyone so the
+// data is ready when cards open up.
+// ===========================================================================
+
+const PLAYERS_COUNTER = "players";
+
+// Next number from the all-time counter, inside a transaction. Returns null
+// when the counter hasn't been created yet (the backfill script creates it;
+// until then nobody is numbered, so new sign-ups can't collide with it).
+async function takeNextSerial(t, db) {
+  const ref = db.collection("counters").doc(PLAYERS_COUNTER);
+  const snap = await t.get(ref);
+  if (!snap.exists) return null;
+  const next = (snap.data().total || 0) + 1;
+  t.update(ref, { total: next, updatedAt: FieldValue.serverTimestamp() });
+  return next;
+}
+
+// New adult public profile → next serial number.
+export const assignCardSerial = onDocumentCreated("publicProfiles/{uid}", async (event) => {
+  const db = getFirestore();
+  const ref = db.collection("publicProfiles").doc(event.params.uid);
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists || Number.isInteger(snap.data().signupNumber)) return;
+    const n = await takeNextSerial(t, db);
+    if (n != null) t.update(ref, { signupNumber: n });
+  });
+});
+
+// A public child's number is kept server-side under childCardSerials (no
+// client access), so turning the profile off and on again keeps it — the
+// public doc and its random id are deleted when it goes private.
+async function assignChildSerial(db, guardianUid, dependentId, publicId) {
+  const keepRef = db.collection("childCardSerials").doc(`${guardianUid}_${dependentId}`);
+  const pubRef = db.collection("childPublicProfiles").doc(publicId);
+  await db.runTransaction(async (t) => {
+    const [kept, pub] = await Promise.all([t.get(keepRef), t.get(pubRef)]);
+    if (!pub.exists) return;
+    let n = kept.exists ? kept.data().signupNumber : null;
+    if (!Number.isInteger(n)) {
+      n = await takeNextSerial(t, db);
+      if (n == null) return;
+      t.set(keepRef, { signupNumber: n, assignedAt: FieldValue.serverTimestamp() });
+    }
+    if (pub.data().signupNumber !== n) t.update(pubRef, { signupNumber: n });
+  });
+}
+
+async function computeAdultStats(db, uid) {
+  const snap = await db.collection("users").doc(uid).collection("bookings").where("checkedIn", "==", true).get();
+  return cards.adultCardStats(snap.docs.map((d) => d.data()));
+}
+
+async function computeChildStats(db, guardianUid, dependentId) {
+  const snap = await db.collection("users").doc(guardianUid).collection("bookings").where("checkedIn", "==", true).get();
+  const rows = [];
+  for (const d of snap.docs) {
+    const b = d.data();
+    if ((b.attendeeCount || 1) <= 1 && b.guardianPlaying !== false) continue; // no children on it
+    const eventId = b.eventId || d.id;
+    const det = await db.collection("events").doc(eventId).collection("bookings").doc(guardianUid).collection("attendeeDetails").doc(dependentId).get().catch(() => null);
+    if (det?.exists) rows.push(b);
+  }
+  return cards.childCardStats(rows);
+}
+
+async function refreshStatsFor(db, guardianUid) {
+  const pubRef = db.collection("publicProfiles").doc(guardianUid);
+  const pub = await pubRef.get();
+  if (pub.exists) {
+    const stats = await computeAdultStats(db, guardianUid);
+    if (!cards.sameStats(stats, pub.data().cardStats)) await pubRef.update({ cardStats: stats });
+  }
+  const ptrs = await db.collection("users").doc(guardianUid).collection("childPublic").get();
+  for (const p of ptrs.docs) {
+    const childRef = db.collection("childPublicProfiles").doc(p.data().publicId);
+    const child = await childRef.get();
+    if (!child.exists) continue;
+    const stats = await computeChildStats(db, guardianUid, p.id);
+    if (!cards.sameStats(stats, child.data().cardStats)) await childRef.update({ cardStats: stats });
+  }
+}
+
+// Ops / Fields on the card follow check-ins. Every check-in path writes the
+// player's mirror booking, so that's the one trigger.
+export const refreshCardStats = onDocumentWritten("users/{uid}/bookings/{eventId}", async (event) => {
+  const before = event.data?.before?.data() || null;
+  const after = event.data?.after?.data() || null;
+  if (!!before?.checkedIn === !!after?.checkedIn) return;
+  await refreshStatsFor(getFirestore(), event.params.uid);
+});
+
+// Who owns a card. kind "adult": publicProfiles/{uid}; kind "child":
+// childPublicProfiles/{publicId} + the server-only guardian link.
+async function loadCardOwner(db, kind, id) {
+  if (kind === "child") {
+    const [pub, link] = await Promise.all([
+      db.collection("childPublicProfiles").doc(id).get(),
+      db.collection("childPublicLinks").doc(id).get(),
+    ]);
+    if (!pub.exists || !link.exists) return null;
+    return { ref: pub.ref, data: pub.data(), guardianUid: link.data().guardianUid };
+  }
+  const pub = await db.collection("publicProfiles").doc(id).get();
+  return pub.exists ? { ref: pub.ref, data: pub.data(), guardianUid: null } : null;
+}
+
+// { childPublicId? } → { token, expiresAtMs }. Shows a card for collecting.
+// Your own card, or one of your public children's (from your app — kids have
+// no login). Refuses without a photo (Michael: no photo, can't share).
+export const issueCardToken = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  if (!cards.isCardBeta(uid)) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
+  const db = getFirestore();
+  const childPublicId = request.data?.childPublicId || null;
+  let ownerKind = "adult", ownerId = uid;
+  if (childPublicId) {
+    if (typeof childPublicId !== "string" || !/^c[0-9a-f]{24}$/.test(childPublicId)) throw new HttpsError("invalid-argument", "Unknown card.");
+    ownerKind = "child"; ownerId = childPublicId;
+  }
+  const owner = await loadCardOwner(db, ownerKind, ownerId);
+  if (!owner) throw new HttpsError("not-found", ownerKind === "child" ? "That child profile isn't public." : "Profile not found.");
+  if (ownerKind === "child" && owner.guardianUid !== uid) throw new HttpsError("permission-denied", "That isn't your child's card.");
+  const photo = owner.data.cardPhotoUrl || owner.data.avatarUrl;
+  if (!photo) throw new HttpsError("failed-precondition", "Add a photo to share your card.");
+  const token = cards.newShareToken(randomBytes);
+  const expiresAtMs = Date.now() + cards.SHARE_TTL_MS;
+  // Only the public id goes in here — never a parent uid or dependent id.
+  await db.collection("cardShares").doc(token).set({
+    ownerId, ownerKind, issuerUid: uid, status: "open",
+    expiresAt: new Date(expiresAtMs), createdAt: FieldValue.serverTimestamp(),
+  });
+  return { token, expiresAtMs };
+});
+
+// { token } → { ok, already, ownerId, ownerKind, callsign } or an error.
+// One collect per player per card (the doc id), never your own card, and
+// circulation only ever goes up.
+export const collectCard = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const token = request.data?.token;
+  if (!cards.isCardBeta(uid)) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
+  if (!cards.isWellFormedShareToken(token)) throw new HttpsError("invalid-argument", cards.collectMessage("invalid"));
+  const db = getFirestore();
+  const shareRef = db.collection("cardShares").doc(token);
+  const collectorPubRef = db.collection("publicProfiles").doc(uid);
+  const result = await db.runTransaction(async (t) => {
+    const shareSnap = await t.get(shareRef);
+    const share = shareSnap.exists ? shareSnap.data() : null;
+    let owner = null, guardianUid = null;
+    if (share) {
+      const ownerRef = share.ownerKind === "child" ? db.collection("childPublicProfiles").doc(share.ownerId) : db.collection("publicProfiles").doc(share.ownerId);
+      const ownerSnap = await t.get(ownerRef);
+      if (ownerSnap.exists) owner = { ref: ownerRef, data: ownerSnap.data() };
+      if (share.ownerKind === "child") {
+        const link = await t.get(db.collection("childPublicLinks").doc(share.ownerId));
+        guardianUid = link.exists ? link.data().guardianUid : null;
+        if (!link.exists) owner = null;
+      }
+    }
+    const collectorPub = await t.get(collectorPubRef);
+    const problem = cards.collectProblem(share, {
+      now: Date.now(), collectorUid: uid, collectorHasProfile: collectorPub.exists, ownerExists: !!owner, guardianUid,
+    });
+    if (problem) return { problem };
+    const colRef = db.collection("cardCollections").doc(cards.collectionDocId(uid, share.ownerId));
+    const existing = await t.get(colRef);
+    const callsign = owner.data.callsign || "Player";
+    const collectorCallsign = collectorPub.data().callsign || "Player";
+    t.update(shareRef, { status: "collected", lastCollectedAt: FieldValue.serverTimestamp(), lastCollectorCallsign: collectorCallsign, lastAlready: existing.exists, collects: FieldValue.increment(1) });
+    if (existing.exists) return { ok: true, already: true, ownerId: share.ownerId, ownerKind: share.ownerKind, callsign };
+    t.set(colRef, { collectorUid: uid, ownerId: share.ownerId, ownerKind: share.ownerKind, collectedAt: FieldValue.serverTimestamp() });
+    t.update(owner.ref, { circulation: FieldValue.increment(1) });
+    t.update(collectorPubRef, { cardsCollected: FieldValue.increment(1) });
+    // The achievement engine reads the player's own users doc.
+    t.set(db.collection("users").doc(uid), { cardsCollected: FieldValue.increment(1) }, { merge: true });
+    return { ok: true, already: false, ownerId: share.ownerId, ownerKind: share.ownerKind, callsign };
+  });
+  if (result.problem) throw new HttpsError("failed-precondition", cards.collectMessage(result.problem), { reason: result.problem });
+  return result;
+});
+
+// Hourly: rarity tiers + the two titles. Only writes cards that changed.
+export const refreshCardTiers = onSchedule({ schedule: "every 60 minutes", timeZone: "America/Detroit" }, async () => {
+  const db = getFirestore();
+  const [adults, kids] = await Promise.all([db.collection("publicProfiles").get(), db.collection("childPublicProfiles").get()]);
+  const all = [
+    ...adults.docs.map((d) => ({ key: `a:${d.id}`, ref: d.ref, data: d.data(), founder: d.id === cards.FOUNDER_UID })),
+    ...kids.docs.map((d) => ({ key: `c:${d.id}`, ref: d.ref, data: d.data(), founder: false })),
+  ];
+  const { tiers, titles } = cards.computeTiers(all.map((c) => ({ key: c.key, circulation: c.data.circulation || 0, founder: c.founder, serial: c.data.signupNumber })));
+  const ops = [];
+  for (const c of all) {
+    const tier = tiers[c.key] || "unranked";
+    const title = titles[c.key] || null;
+    if (c.data.cardTier !== tier || (c.data.cardTitle || null) !== title) ops.push((b) => b.update(c.ref, { cardTier: tier, cardTitle: title }));
+  }
+  await commitInChunks(db, ops);
+});
+
+// Child going private / deleted: every collected copy and open share of the
+// card is removed, so a minor's photo doesn't stay in other players' decks.
+async function removeChildCardCopies(db, publicId) {
+  const [cols, shares] = await Promise.all([
+    db.collection("cardCollections").where("ownerId", "==", publicId).get(),
+    db.collection("cardShares").where("ownerId", "==", publicId).get(),
+  ]);
+  await commitInChunks(db, [...cols.docs, ...shares.docs].map((d) => (b) => b.delete(d.ref)));
+}

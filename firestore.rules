@@ -937,13 +937,19 @@ service cloud.firestore {
     // private fields on users/{uid}.
     match /publicProfiles/{uid} {
       allow read: if true;
-      allow create, delete: if request.auth != null && request.auth.uid == uid;
+      // Trading cards (2026-11-08): serial number, circulation, tier, title,
+      // card stats and collected count are written only by Cloud Functions
+      // (they drive rarity). A player can't set them on create or change them.
+      allow create: if request.auth != null && request.auth.uid == uid
+        && !request.resource.data.keys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected']);
+      allow delete: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && (
         // Same verified-forgery carve-out as users/{userId} above — the
         // public mirror is just as self-writable, so it needs the same
         // guard, not just the source doc.
         (request.auth.uid == uid
-          && (request.resource.data.get('verified', false) != true || request.auth.token.email_verified == true))
+          && (request.resource.data.get('verified', false) != true || request.auth.token.email_verified == true)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected']))
         ||
         // Anyone signing up with this player's referral link can bump
         // their referral count by exactly 1 — narrow, single-field,
@@ -954,6 +960,29 @@ service cloud.firestore {
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["referralCount"])
           && request.resource.data.referralCount == resource.data.get('referralCount', 0) + 1)
       );
+    }
+
+    // Trading cards (2026-11-08). See functions/cards.js.
+    // All-time card count shown as the "/ total" on every card.
+    match /counters/{counterId} {
+      allow read: if counterId == "players";
+      allow write: if false;
+    }
+    // Who collected whose card. Decks are public (shown on public profiles).
+    // Only collectCard writes; nobody can remove a card (Michael, 2026-11-08).
+    match /cardCollections/{collectionId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // A short-lived share code. Only the phone that showed it can watch it
+    // (to play the "collected" animation); only functions write.
+    match /cardShares/{token} {
+      allow read: if request.auth != null && resource.data.issuerUid == request.auth.uid;
+      allow write: if false;
+    }
+    // A public child's kept serial number. Server-only.
+    match /childCardSerials/{id} {
+      allow read, write: if false;
     }
 
     // Friend requests. A top-level collection (not a subcollection under

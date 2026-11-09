@@ -199,6 +199,7 @@ export const ACCOUNT_ONLY_TRIGGER_TYPES = new Set([
   "team_joined",
   "referral_count",
   "team_threshold_any_event",
+  "cards_collected_count",
 ]);
 
 // The same patch with only the rules a child can meet (as a `rules` array,
@@ -234,6 +235,10 @@ function triggerProgress(trigger, { checkedIn, checkedInEventIds, myBookings, ev
       return { current: profile?.teamId ? 1 : 0, target: 1, label: "team joined" };
     case "referral_count":
       return { current: profile?.referralCount || 0, target: trigger.count, label: "referrals" };
+    // Trading cards (2026-11-08): cards this player has collected. Kept on
+    // users/{uid}.cardsCollected by the collectCard function.
+    case "cards_collected_count":
+      return { current: profile?.cardsCollected || 0, target: trigger.count, label: "cards collected" };
     case "total_checkin_count":
       return { current: checkedIn.length, target: trigger.count, label: "check-ins" };
     // Counts bookings (not check-ins) on events at a claimed field, i.e.

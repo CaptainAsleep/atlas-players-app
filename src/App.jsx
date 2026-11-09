@@ -30,6 +30,8 @@ import { useMyBooking, useEventBookings, useMyBookings, useBookingActions, getEv
 import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./hooks/useVouchersAndNotices";
 import { useMyTicketHoldings, useMyEventTeamTickets } from "./hooks/useTeamTickets";
 import { EventTeamTickets, TicketOffersCard, GiveVoucherSheet, canGiveVoucher } from "./TeamTickets";
+import PhotoCropper from "./PhotoCropper";
+import { isCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal } from "./TradingCards";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
@@ -4191,9 +4193,15 @@ function FriendsTabContent({ onOpenPlayer, user, allProfiles, childProfiles = []
 }
 
 function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, currentUserFriendUids, outgoingRequestUids,
-  sendRequest, cancelOrUnfriend, events, onOpenEvent }) {
+  sendRequest, cancelOrUnfriend, events, onOpenEvent, onOpenPlayerDeck }) {
   const { T, display, body, mono } = useTheme();
   const { profile, profileLoading } = usePublicProfile(uid);
+  // Trading cards (beta): their card + deck. Decks are public.
+  const cardBeta = isCardBeta(currentUser?.uid);
+  const { card: theirCard } = useCardOwner("adult", cardBeta ? uid : null);
+  const deckCount = useDeckCount(cardBeta ? uid : null);
+  const cardTotal = useCardsTotal();
+  const [viewingCard, setViewingCard] = useState(false);
   const { favorites: theirFavorites } = useFavorites(uid);
   const { patches: theirPatches } = usePatches(uid);
   const [tab, setTab] = useState("interested");
@@ -4259,6 +4267,16 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
           {profile.verified && <BadgeCheck size={16} color={T.accent} />}
         </div>
         {profile.teamName && <div className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>{profile.teamName}</div>}
+
+        {cardBeta && theirCard && (
+          <div className="flex gap-2 mb-3">
+            <button onClick={() => setViewingCard(true)} className="px-4 py-2 text-[12px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>View card</button>
+            <button onClick={() => onOpenPlayerDeck?.(uid)} className="px-4 py-2 text-[12px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>
+              Deck{deckCount != null ? ` (${deckCount})` : ""}
+            </button>
+          </div>
+        )}
+        {viewingCard && theirCard && <CardViewer card={theirCard} total={cardTotal} onClose={() => setViewingCard(false)} />}
 
         {!isSelf && (
           <>
@@ -6536,7 +6554,7 @@ function SecretPatchScreen({ onBack }) {
         </div>
       )}
       <p className="text-[13px] text-center mt-6 max-w-xs" style={{ ...body, color: T.ashDim }}>
-        Have a player scan this from their own Profile → Scan a Patch Code. Same idempotent grant as everything
+        Have a player scan this from their own Profile → Scan a Code. Same idempotent grant as everything
         else — showing it to the same person twice is harmless, it won't duplicate.
       </p>
     </div>
@@ -6548,7 +6566,9 @@ function SecretPatchScreen({ onBack }) {
 // Not scoped to a specific patch; whatever the code points to is what gets
 // granted, so this scanner doesn't need updating if more redeemable
 // patches get added later.
-function RedeemScannerScreen({ onBack, user, grantPatch }) {
+// 2026-11-08: "Scan a Code" — one scanner for patch codes, trading-card
+// codes (?card=, beta only server-side) and referral links (explained, not redeemed).
+function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected }) {
   const { T, display, body, mono } = useTheme();
   const containerRef = useRef(null);
   const scannerRef = useRef(null);
@@ -6581,6 +6601,23 @@ function RedeemScannerScreen({ onBack, user, grantPatch }) {
           async (decodedText) => {
             if (busyRef.current) return;
             busyRef.current = true;
+            const cardToken = parseCardToken(decodedText);
+            if (cardToken) {
+              const r = await collectCardCode(cardToken);
+              if (r.ok) {
+                busyRef.current = false;
+                onCardCollected?.(r);
+                return;
+              }
+              setStatus({ ok: false, message: r.message });
+              setTimeout(() => { setStatus(null); busyRef.current = false; }, 2600);
+              return;
+            }
+            if (/[?&]ref=/.test(decodedText)) {
+              setStatus({ ok: false, message: "That's a referral link — it's for signing up, not a patch or card." });
+              setTimeout(() => { setStatus(null); busyRef.current = false; }, 2600);
+              return;
+            }
             const result = await redeemPatchCode(decodedText, user.uid, grantPatch);
             if (result.ok) {
               setStatus({ ok: true, message: `${result.name} unlocked!` });
@@ -6617,7 +6654,7 @@ function RedeemScannerScreen({ onBack, user, grantPatch }) {
         <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
         </button>
-        <h1 className="flex-1 text-center text-[16px] font-semibold mr-9" style={{ ...display, color: T.ash }}>Scan a Patch Code</h1>
+        <h1 className="flex-1 text-center text-[16px] font-semibold mr-9" style={{ ...display, color: T.ash }}>Scan a Code</h1>
       </div>
 
       <div id="atlas-redeem-reader" ref={containerRef} className="flex-1 min-h-0" />
@@ -6629,7 +6666,7 @@ function RedeemScannerScreen({ onBack, user, grantPatch }) {
           </div>
         ) : (
           <div className="py-3 text-center text-[13px]" style={{ ...body, color: T.ashFaint }}>
-            Point the camera at a patch redemption code
+            Point the camera at an Atlas code
           </div>
         )}
       </div>
@@ -7941,6 +7978,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [cropFile, setCropFile] = useState(null); // picked photo waiting in the crop tool
 
   const [callsign, setCallsign] = useState(profile?.callsign || "");
   const [firstName, setFirstName] = useState(profile?.firstName || "");
@@ -7965,13 +8003,18 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
       return;
     }
     setAvatarError("");
+    // 2026-11-08: the crop tool comes first (reposition the round photo and
+    // the trading-card framing), then it uploads at up to 1,200px.
+    setCropFile(file);
+  };
+  const handleCropSave = async (result) => {
     setAvatarUploading(true);
     try {
-      const resized = await resizeImageFile(file);
-      await uploadAvatar(resized);
+      await uploadAvatar(result);
     } catch (err) {
       setAvatarError(err.message || "Upload failed — try again.");
     } finally {
+      setCropFile(null);
       setAvatarUploading(false);
     }
   };
@@ -8039,6 +8082,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
 
       <div className="px-6 pt-6 flex flex-col items-center">
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+        {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
         <button onClick={handleAvatarPick} className="relative w-20 h-20 mb-2" disabled={avatarUploading}>
           {profile?.avatarUrl ? (
             <div className="w-20 h-20" style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 40 }} />
@@ -8253,17 +8297,22 @@ function FeedbackPanel() {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenActiveAchievements, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenActiveAchievements, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onOpenMyCard, onOpenDeck, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
   const { T, display, body, mono, theme, setTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [cropFile, setCropFile] = useState(null); // picked photo waiting in the crop tool
   // Team Bookings: an unused voucher from a ticket bought for others can be
   // given, whole, to another player.
   const [givingVoucher, setGivingVoucher] = useState(null);
 
   const referralUrl = user ? `${window.location.origin}${import.meta.env.BASE_URL}?ref=${user.uid}` : "";
+  // Trading cards (beta): nudge for a sharper photo if the card would use an
+  // old low-res one.
+  const cardBeta = isCardBeta(user?.uid);
+  const { card: myCard } = useCardOwner("adult", cardBeta ? user?.uid : null);
 
   // "Past Events," not "attended" — this counts favorited events that have
   // already happened, which isn't the same as confirmed attendance. That
@@ -8301,13 +8350,18 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
       return;
     }
     setAvatarError("");
+    // 2026-11-08: the crop tool comes first (reposition the round photo and
+    // the trading-card framing), then it uploads at up to 1,200px.
+    setCropFile(file);
+  };
+  const handleCropSave = async (result) => {
     setAvatarUploading(true);
     try {
-      const resized = await resizeImageFile(file);
-      await uploadAvatar(resized);
+      await uploadAvatar(result);
     } catch (err) {
       setAvatarError(err.message || "Upload failed — try again.");
     } finally {
+      setCropFile(null);
       setAvatarUploading(false);
     }
   };
@@ -8398,8 +8452,10 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
     <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
       <ScreenHeader title="Profile" />
       <div className="px-6 pt-4">
+        {cardBeta && myCard && !myCard.hiRes && <CardPhotoPrompt onUpload={handleAvatarPick} />}
         <div className="p-4 flex items-center gap-3 mb-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+          {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
           <button onClick={handleAvatarPick} className="relative w-14 h-14 flex-shrink-0" disabled={avatarUploading}>
             {profile?.avatarUrl ? (
               <div
@@ -8589,7 +8645,19 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
               <ChevronRight size={15} color={T.ashFaint} />
             </div>
           </button>
-          <button onClick={onOpenPatches} className="w-full flex items-center justify-between py-3.5">
+          {cardBeta && (
+            <>
+              <button onClick={onOpenMyCard} className="w-full flex items-center justify-between py-3.5">
+                <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>My Card</span>
+                <ChevronRight size={15} color={T.ashFaint} />
+              </button>
+              <button onClick={onOpenDeck} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
+                <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Deck</span>
+                <ChevronRight size={15} color={T.ashFaint} />
+              </button>
+            </>
+          )}
+          <button onClick={onOpenPatches} className={`w-full flex items-center justify-between py-3.5${cardBeta ? " border-t" : ""}`} style={cardBeta ? { borderColor: T.line } : undefined}>
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Patches</span>
             <ChevronRight size={15} color={T.ashFaint} />
           </button>
@@ -8602,7 +8670,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
             <ChevronRight size={15} color={T.ashFaint} />
           </button>
           <button onClick={onOpenScanRedeem} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Scan a Patch Code</span>
+            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Scan a Code</span>
             <ChevronRight size={15} color={T.ashFaint} />
           </button>
           {user?.uid === ATLAS_OWNER_UID && (
@@ -8887,6 +8955,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl || null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [cropFile, setCropFile] = useState(null); // picked photo waiting in the crop tool
   const [eventTypes, setEventTypes] = useState([]);
   const [frequency, setFrequency] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -8908,15 +8977,18 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
       return;
     }
     setAvatarError("");
+    setCropFile(file); // crop tool first (2026-11-08)
+  };
+  const handleCropSave = async (result) => {
     setAvatarUploading(true);
     try {
-      const resized = await resizeImageFile(file);
-      const url = await uploadAvatar(resized);
+      const url = await uploadAvatar(result);
       setAvatarUrl(url);
     } catch (err) {
       console.error("onboarding avatar upload failed:", err);
       setAvatarError("Upload failed — try again, or skip for now.");
     } finally {
+      setCropFile(null);
       setAvatarUploading(false);
     }
   };
@@ -9039,6 +9111,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
               </button>
               {avatarError && <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{avatarError}</p>}
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+              {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
             </div>
           </>
         )}
@@ -9630,7 +9703,7 @@ function AppShell() {
   const { fields, loading: fieldsLoading } = useFields();
   const claimedFieldIds = useMemo(() => new Set(fields.filter((f) => f.ownerId).map((f) => f.id)), [fields]);
   const { events, loading: eventsLoading } = useEvents();
-  const { user, profile, authLoading, signUp, signIn, signInWithGoogle, sendPasswordReset, signOut, updateProfileFields, changePassword, uploadAvatar, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
+  const { user, profile, authLoading, signUp, signIn, signInWithGoogle, sendPasswordReset, signOut, updateProfileFields, changePassword, uploadAvatar, setCardCrop, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { dependents, graduatedDependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
   const childGraduations = useChildGraduations(user?.uid);
@@ -9706,6 +9779,31 @@ function AppShell() {
     }
   });
   const [graduatePromptHidden, setGraduatePromptHidden] = useState(false);
+
+  // Trading cards (2026-11-08). A card QR is this app's URL with ?card=<token>,
+  // so a phone camera opens the app straight to collecting. Kept briefly in
+  // localStorage so it survives signing in (the code itself expires fast).
+  const [cardLinkToken, setCardLinkToken] = useState(() => {
+    const fromUrl = parseCardToken(window.location.search);
+    try {
+      if (fromUrl) {
+        localStorage.setItem("atlas_card", JSON.stringify({ t: fromUrl, at: Date.now() }));
+        const u = new URL(window.location.href);
+        u.searchParams.delete("card");
+        window.history.replaceState(null, "", u.toString());
+        return fromUrl;
+      }
+      const saved = JSON.parse(localStorage.getItem("atlas_card") || "null");
+      return saved && Date.now() - saved.at < 10 * 60 * 1000 ? saved.t : null;
+    } catch {
+      return fromUrl || null;
+    }
+  });
+  const [collectedCard, setCollectedCard] = useState(null); // collectCard result
+  const [cardLinkError, setCardLinkError] = useState("");
+  const [deckOwnerId, setDeckOwnerId] = useState(null); // whose deck the "deck" screen shows (null = mine)
+  const [deckHighlight, setDeckHighlight] = useState(null);
+  const [adjustingCardPhoto, setAdjustingCardPhoto] = useState(false);
   const clearGraduateToken = () => {
     try { localStorage.removeItem("atlas_graduate"); } catch { /* storage blocked */ }
     setGraduateToken(null);
@@ -10058,6 +10156,19 @@ function AppShell() {
   const openYearInReview = () => push("yearInReview");
   const openSecretPatchQR = () => push("secretPatchQR");
   const openScanRedeem = () => push("scanRedeem");
+  const openMyCard = () => push("myCard");
+  const openDeck = (ownerUid = null) => { setDeckOwnerId(ownerUid); setDeckHighlight(null); push("deck"); };
+  const { card: myCardForCrop } = useCardOwner("adult", adjustingCardPhoto ? user?.uid : null);
+  useEffect(() => {
+    if (!cardLinkToken || !user || !profile) return;
+    const t = cardLinkToken;
+    setCardLinkToken(null);
+    try { localStorage.removeItem("atlas_card"); } catch { /* storage blocked */ }
+    collectCardCode(t).then((r) => {
+      if (r.ok) setCollectedCard(r);
+      else setCardLinkError(r.message);
+    });
+  }, [cardLinkToken, user, profile]);
   const openTeam = (teamId) => {
     setActiveTeamId(teamId);
     push("team");
@@ -10306,6 +10417,7 @@ function AppShell() {
         cancelOrUnfriend={cancelOrUnfriend}
         events={events}
         onOpenEvent={openEvent}
+        onOpenPlayerDeck={(id) => openDeck(id)}
       />
     );
   } else if (screen === "team") {
@@ -10360,6 +10472,8 @@ function AppShell() {
         onOpenYearInReview={openYearInReview}
         onOpenSecretPatchQR={openSecretPatchQR}
         onOpenScanRedeem={openScanRedeem}
+        onOpenMyCard={openMyCard}
+        onOpenDeck={() => openDeck(null)}
         onLogout={handleLogout}
         changePassword={changePassword}
         uploadAvatar={uploadAvatar}
@@ -10433,7 +10547,27 @@ function AppShell() {
   } else if (screen === "secretPatchQR") {
     content = <SecretPatchScreen onBack={pop} />;
   } else if (screen === "scanRedeem") {
-    content = <RedeemScannerScreen onBack={pop} user={user} grantPatch={grantPatch} />;
+    content = <RedeemScannerScreen onBack={pop} user={user} grantPatch={grantPatch} onCardCollected={(r) => { pop(); setCollectedCard(r); }} />;
+  } else if (screen === "myCard") {
+    content = (
+      <MyCardScreen
+        user={user}
+        publicChildren={publicChildren}
+        onBack={pop}
+        onOpenDeck={() => openDeck(null)}
+        onUploadPhoto={openAccount}
+        onAdjustCardPhoto={() => setAdjustingCardPhoto(true)}
+      />
+    );
+  } else if (screen === "deck") {
+    content = (
+      <DeckScreen
+        collectorUid={deckOwnerId || user?.uid}
+        title={deckOwnerId && deckOwnerId !== user?.uid ? "Their deck" : "My Deck"}
+        onBack={pop}
+        highlightOwnerId={deckHighlight}
+      />
+    );
   }
 
   return (
@@ -10460,6 +10594,29 @@ function AppShell() {
       )}
       {user && profile && !installGate && noticeToShow && (
         <CancellationNoticeModal notice={noticeToShow} onDismiss={() => acknowledgeNotice(noticeToShow.id)} />
+      )}
+      {user && profile && !installGate && collectedCard && (
+        <CardCollectedOverlay
+          result={collectedCard}
+          onClose={() => setCollectedCard(null)}
+          onOpenDeck={() => { const id = collectedCard.ownerId; setCollectedCard(null); setDeckOwnerId(null); setDeckHighlight(id); push("deck"); }}
+        />
+      )}
+      {user && profile && !installGate && cardLinkError && (
+        <div className="fixed left-1/2 z-[70] px-4 py-3 text-[13px] flex items-center gap-3" style={{ top: 70, transform: "translateX(-50%)", background: T.panel, color: T.ash, border: `1px solid ${T.line}`, borderRadius: 12, boxShadow: T.shadowMd, maxWidth: "90vw" }}>
+          <span>{cardLinkError}</span>
+          <button onClick={() => setCardLinkError("")} className="text-[12px] underline" style={{ color: T.accent }}>OK</button>
+        </div>
+      )}
+      {adjustingCardPhoto && myCardForCrop?.hiRes && (
+        <PhotoCropper
+          mode="card"
+          imageUrl={myCardForCrop.photoUrl}
+          imageAspect={myCardForCrop.aspect}
+          initialCardCrop={myCardForCrop.crop}
+          onCancel={() => setAdjustingCardPhoto(false)}
+          onSave={async ({ cardCrop }) => { await setCardCrop(cardCrop); setAdjustingCardPhoto(false); }}
+        />
       )}
       {needRefresh && <UpdateAvailableToast onRefresh={refreshNow} />}
     </div>

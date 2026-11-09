@@ -369,15 +369,36 @@ export function useAuth() {
   // Takes an already-resized image Blob (resizing happens in the component,
   // right where the file picker lives), uploads it to this user's own
   // Storage folder, and saves the resulting URL to their profile doc.
-  async function uploadAvatar(blob) {
+  // 2026-11-08 (trading cards): from the crop tool it gets
+  // { profileBlob, originalBlob, aspect, cardCrop } instead — the round photo
+  // (profile.jpg, cropped, used everywhere as before) plus the full photo at
+  // up to 1,200px (card-photo.jpg) and where the card frames it.
+  async function uploadAvatar(input) {
     if (!auth.currentUser) return;
-    const storageRef = ref(storage, `avatars/${auth.currentUser.uid}/profile.jpg`);
+    const uid = auth.currentUser.uid;
+    const isCropped = input && typeof input === "object" && input.profileBlob;
+    const blob = isCropped ? input.profileBlob : input;
+    const storageRef = ref(storage, `avatars/${uid}/profile.jpg`);
     await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
     const url = await getDownloadURL(storageRef);
-    await updateDoc(doc(db, "users", auth.currentUser.uid), { avatarUrl: url });
-    await updateDoc(doc(db, "publicProfiles", auth.currentUser.uid), { avatarUrl: url });
+    const card = {};
+    if (isCropped && input.originalBlob) {
+      const cardRef = ref(storage, `avatars/${uid}/card-photo.jpg`);
+      await uploadBytes(cardRef, input.originalBlob, { contentType: "image/jpeg" });
+      card.cardPhotoUrl = await getDownloadURL(cardRef);
+      card.cardPhotoAspect = Number(input.aspect) || 1;
+      card.cardCrop = input.cardCrop || { x: 0.5, y: 0.5, zoom: 1 };
+    }
+    await updateDoc(doc(db, "users", uid), { avatarUrl: url });
+    await updateDoc(doc(db, "publicProfiles", uid), { avatarUrl: url, ...card });
     await updateProfile(auth.currentUser, { photoURL: url });
     return url;
+  }
+
+  // Re-frame the trading card photo without uploading again.
+  async function setCardCrop(cardCrop) {
+    if (!auth.currentUser) return;
+    await updateDoc(doc(db, "publicProfiles", auth.currentUser.uid), { cardCrop });
   }
 
   // Permanently deletes the account. Requires re-authentication for the
@@ -401,6 +422,11 @@ export function useAuth() {
     } catch {
       // No avatar on file — nothing to clean up.
     }
+    try {
+      await deleteObject(ref(storage, `avatars/${uid}/card-photo.jpg`));
+    } catch {
+      // No card photo on file.
+    }
 
     await deleteDoc(doc(db, "users", uid));
     await deleteDoc(doc(db, "publicProfiles", uid)).catch(() => {});
@@ -420,6 +446,7 @@ export function useAuth() {
     updateProfileFields,
     changePassword,
     uploadAvatar,
+    setCardCrop,
     updateLanguage,
     deleteAccount,
     acceptTerms,
