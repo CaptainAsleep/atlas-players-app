@@ -31,7 +31,7 @@ import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./h
 import { useMyTicketHoldings, useMyEventTeamTickets } from "./hooks/useTeamTickets";
 import { EventTeamTickets, TicketOffersCard, GiveVoucherSheet, canGiveVoucher } from "./TeamTickets";
 import PhotoCropper from "./PhotoCropper";
-import { isCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal } from "./TradingCards";
+import { isCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher } from "./TradingCards";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
@@ -10595,6 +10595,7 @@ function AppShell() {
       {user && profile && !installGate && noticeToShow && (
         <CancellationNoticeModal notice={noticeToShow} onDismiss={() => acknowledgeNotice(noticeToShow.id)} />
       )}
+      {user && profile && !installGate && isCardBeta(user.uid) && <RankUpWatcher uid={user.uid} />}
       {user && profile && !installGate && collectedCard && (
         <CardCollectedOverlay
           result={collectedCard}

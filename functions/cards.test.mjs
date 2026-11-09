@@ -137,3 +137,27 @@ test("hand-set tier overrides skip the ranking and titles", async () => {
   assert.equal(titles.x, "most_popular");
   assert.equal(tiers.y, "unranked"); // unknown override ignored
 });
+
+test("rank v2: earned ranks, all criteria, kids table, overrides, floor", async () => {
+  const { earnedRank, finalRank, rankInputs, RANK_TABLES } = await import("./cards.js");
+  assert.equal(earnedRank({}), "unranked");
+  assert.equal(earnedRank({ events: 3, fields: 1, circulation: 5 }), "common");
+  assert.equal(earnedRank({ events: 3, fields: 1, circulation: 4 }), "unranked"); // every criterion
+  assert.equal(earnedRank({ events: 500, fields: 1, circulation: 999, patches: 99 }), "common"); // one field holds it back
+  assert.equal(earnedRank({ events: 10, fields: 3, circulation: 20 }), "uncommon");
+  assert.equal(earnedRank({ events: 30, fields: 10, circulation: 75, patches: 9 }), "uncommon"); // Rare needs patches
+  assert.equal(earnedRank({ events: 30, fields: 10, circulation: 75, patches: 10 }), "rare");
+  assert.equal(earnedRank({ events: 100, fields: 50, circulation: 250, patches: 25 }), "epic");
+  assert.equal(earnedRank({ events: 1e6, fields: 1e6, circulation: 1e6, patches: 1e6 }), "epic"); // never Legendary by numbers
+  assert.equal(earnedRank({ events: 2, fields: 1, circulation: 3 }, "child"), "common");
+  assert.equal(earnedRank({ events: 15, fields: 4, circulation: 25, patches: 5 }, "child"), "rare");
+  assert.equal(earnedRank({ events: 15, fields: 4, circulation: 25, patches: 5 }, "adult"), "uncommon");
+  assert.equal(RANK_TABLES.adult.length, 4);
+  assert.equal(finalRank({ earned: "common", founder: true }), "founder");
+  assert.equal(finalRank({ earned: "common", override: "diamond" }), "diamond");
+  assert.equal(finalRank({ earned: "common", override: "legendary" }), "legendary");
+  assert.equal(finalRank({ earned: "common", floor: "rare" }), "rare");        // graduated kid keeps rank
+  assert.equal(finalRank({ earned: "epic", floor: "rare" }), "epic");          // and can still climb
+  assert.equal(finalRank({ earned: "common", floor: "diamond" }), "common");   // a floor can't grant a hand-set rank
+  assert.deepEqual(rankInputs({ cardStats: { ops: 4, fields: 2, patches: 7 }, circulation: 9 }), { events: 4, fields: 2, circulation: 9, patches: 7 });
+});

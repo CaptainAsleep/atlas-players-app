@@ -4185,6 +4185,10 @@ export const claimChildProfile = onCall(async (request) => {
   const publicPtrRef = guardianRef.collection("childPublic").doc(dependentId);
   const publicPtr = await publicPtrRef.get();
   const publicId = publicPtr.exists ? publicPtr.data().publicId : null;
+  // Trading cards (2026-11-09): a child keeps their earned rank when they move
+  // to their own account (it becomes a floor; they keep climbing from there).
+  const childRank = publicId ? (await db.collection("childPublicProfiles").doc(publicId).get()).data()?.cardTier || null : null;
+  const keptRank = childRank && cards.rankIndex(childRank) > 0 && cards.rankIndex(childRank) <= cards.rankIndex("epic") ? childRank : null;
 
   const result = await db.runTransaction(async (t) => {
     const [tokSnap, depSnap, childPatchesSnap, myPatchesSnap, myBookingsSnap] = await Promise.all([
@@ -4270,6 +4274,7 @@ export const claimChildProfile = onCall(async (request) => {
       }
       reqSnap.docs.forEach((d) => t.delete(d.ref));
       pubPatchSnap.docs.forEach((d) => t.delete(d.ref));
+      if (keptRank) t.set(db.collection("publicProfiles").doc(uid), { rankFloor: keptRank }, { merge: true });
       t.delete(db.collection("childPublicProfiles").doc(publicId));
       t.delete(db.collection("childPublicLinks").doc(publicId));
       t.delete(publicPtrRef);
@@ -4277,6 +4282,7 @@ export const claimChildProfile = onCall(async (request) => {
     return { ...plan, childCallsign: dep.callsign || "", teamsJoined };
   });
 
+  if (keptRank) await recomputeRank(db, "adult", uid).catch((err) => console.error("rank after claim failed:", err));
   return {
     ok: true,
     childCallsign: result.childCallsign,
@@ -5668,8 +5674,11 @@ async function assignChildSerial(db, guardianUid, dependentId, publicId) {
 }
 
 async function computeAdultStats(db, uid) {
-  const snap = await db.collection("users").doc(uid).collection("bookings").where("checkedIn", "==", true).get();
-  return cards.adultCardStats(snap.docs.map((d) => d.data()));
+  const [snap, patches] = await Promise.all([
+    db.collection("users").doc(uid).collection("bookings").where("checkedIn", "==", true).get(),
+    db.collection("users").doc(uid).collection("patches").count().get(),
+  ]);
+  return { ...cards.adultCardStats(snap.docs.map((d) => d.data())), patches: patches.data().count || 0 };
 }
 
 async function computeChildStats(db, guardianUid, dependentId) {
@@ -5682,7 +5691,25 @@ async function computeChildStats(db, guardianUid, dependentId) {
     const det = await db.collection("events").doc(eventId).collection("bookings").doc(guardianUid).collection("attendeeDetails").doc(dependentId).get().catch(() => null);
     if (det?.exists) rows.push(b);
   }
-  return cards.childCardStats(rows);
+  const patches = await db.collection("users").doc(guardianUid).collection("dependents").doc(dependentId).collection("childPatches").count().get();
+  return { ...cards.childCardStats(rows), patches: patches.data().count || 0 };
+}
+
+// Rank v2: work out a card's rank from what's on its public doc and write it
+// if it changed. Hand-set ranks (Legendary, Diamond, Founder) always win.
+async function recomputeRank(db, kind, id) {
+  const ref = db.collection(kind === "child" ? "childPublicProfiles" : "publicProfiles").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const d = snap.data();
+  const rank = cards.finalRank({
+    earned: cards.earnedRank(cards.rankInputs(d), kind),
+    override: cards.TIER_OVERRIDES[id],
+    floor: d.rankFloor,
+    founder: kind !== "child" && id === cards.FOUNDER_UID,
+  });
+  if (d.cardTier !== rank || d.cardTitle) await ref.update({ cardTier: rank, cardTitle: null, rankChangedAt: FieldValue.serverTimestamp() });
+  return rank;
 }
 
 async function refreshStatsFor(db, guardianUid) {
@@ -5691,6 +5718,7 @@ async function refreshStatsFor(db, guardianUid) {
   if (pub.exists) {
     const stats = await computeAdultStats(db, guardianUid);
     if (!cards.sameStats(stats, pub.data().cardStats)) await pubRef.update({ cardStats: stats });
+    await recomputeRank(db, "adult", guardianUid);
   }
   const ptrs = await db.collection("users").doc(guardianUid).collection("childPublic").get();
   for (const p of ptrs.docs) {
@@ -5699,8 +5727,22 @@ async function refreshStatsFor(db, guardianUid) {
     if (!child.exists) continue;
     const stats = await computeChildStats(db, guardianUid, p.id);
     if (!cards.sameStats(stats, child.data().cardStats)) await childRef.update({ cardStats: stats });
+    await recomputeRank(db, "child", p.data().publicId);
   }
 }
+
+// Patches count toward Rare and Epic: a patch added or removed refreshes the
+// player's card (adult) or their public kids' cards (child patches).
+export const refreshCardPatches = onDocumentWritten("users/{uid}/patches/{patchId}", async (event) => {
+  const had = !!event.data?.before?.exists, has = !!event.data?.after?.exists;
+  if (had === has) return;
+  await refreshStatsFor(getFirestore(), event.params.uid);
+});
+export const refreshChildCardPatches = onDocumentWritten("users/{uid}/dependents/{depId}/childPatches/{patchId}", async (event) => {
+  const had = !!event.data?.before?.exists, has = !!event.data?.after?.exists;
+  if (had === has) return;
+  await refreshStatsFor(getFirestore(), event.params.uid);
+});
 
 // Ops / Fields on the card follow check-ins. Every check-in path writes the
 // player's mirror booking, so that's the one trigger.
@@ -5800,24 +5842,30 @@ export const collectCard = onCall(async (request) => {
     return { ok: true, already: false, ownerId: share.ownerId, ownerKind: share.ownerKind, callsign };
   });
   if (result.problem) throw new HttpsError("failed-precondition", cards.collectMessage(result.problem), { reason: result.problem });
+  if (!result.already) await recomputeRank(db, result.ownerKind, result.ownerId).catch((err) => console.error("rank after collect failed:", err));
   return result;
 });
 
 // Hourly: rarity tiers + the two titles. Only writes cards that changed.
+// Rank v2 (2026-11-09): ranks are recomputed when an input changes; this
+// hourly pass only catches anything missed (and applies TIER_OVERRIDES edits
+// after a deploy). The old circulation-percentile tiers and titles are gone.
 export const refreshCardTiers = onSchedule({ schedule: "every 60 minutes", timeZone: "America/Detroit" }, async () => {
   const db = getFirestore();
   const [adults, kids] = await Promise.all([db.collection("publicProfiles").get(), db.collection("childPublicProfiles").get()]);
-  const all = [
-    ...adults.docs.map((d) => ({ key: `a:${d.id}`, ref: d.ref, data: d.data(), founder: d.id === cards.FOUNDER_UID, override: cards.TIER_OVERRIDES[d.id] })),
-    ...kids.docs.map((d) => ({ key: `c:${d.id}`, ref: d.ref, data: d.data(), founder: false })),
-  ];
-  const { tiers, titles } = cards.computeTiers(all.map((c) => ({ key: c.key, circulation: c.data.circulation || 0, founder: c.founder, override: c.override, serial: c.data.signupNumber })));
   const ops = [];
-  for (const c of all) {
-    const tier = tiers[c.key] || "unranked";
-    const title = titles[c.key] || null;
-    if (c.data.cardTier !== tier || (c.data.cardTitle || null) !== title) ops.push((b) => b.update(c.ref, { cardTier: tier, cardTitle: title }));
-  }
+  const plan = (kind, d) => {
+    const data = d.data();
+    const rank = cards.finalRank({
+      earned: cards.earnedRank(cards.rankInputs(data), kind),
+      override: cards.TIER_OVERRIDES[d.id],
+      floor: data.rankFloor,
+      founder: kind !== "child" && d.id === cards.FOUNDER_UID,
+    });
+    if (data.cardTier !== rank || data.cardTitle) ops.push((b) => b.update(d.ref, { cardTier: rank, cardTitle: null, rankChangedAt: FieldValue.serverTimestamp() }));
+  };
+  adults.docs.forEach((d) => plan("adult", d));
+  kids.docs.forEach((d) => plan("child", d));
   await commitInChunks(db, ops);
 });
 

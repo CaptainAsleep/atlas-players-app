@@ -941,7 +941,7 @@ service cloud.firestore {
       // card stats and collected count are written only by Cloud Functions
       // (they drive rarity). A player can't set them on create or change them.
       allow create: if request.auth != null && request.auth.uid == uid
-        && !request.resource.data.keys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected']);
+        && !request.resource.data.keys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor']);
       allow delete: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && (
         // Same verified-forgery carve-out as users/{userId} above — the
@@ -949,7 +949,7 @@ service cloud.firestore {
         // guard, not just the source doc.
         (request.auth.uid == uid
           && (request.resource.data.get('verified', false) != true || request.auth.token.email_verified == true)
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected']))
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor']))
         ||
         // Anyone signing up with this player's referral link can bump
         // their referral count by exactly 1 — narrow, single-field,

@@ -15,7 +15,7 @@
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { readFileSync } from "fs";
-import { planSerials, adultCardStats, childCardStats, computeTiers, sameStats, FOUNDER_UID, TIER_OVERRIDES } from "../functions/cards.js";
+import { planSerials, adultCardStats, childCardStats, sameStats, FOUNDER_UID, TIER_OVERRIDES, earnedRank, finalRank, rankInputs } from "../functions/cards.js";
 
 const APPLY = process.argv.includes("--apply");
 const sa = JSON.parse(readFileSync(new URL("./serviceAccountKey.json", import.meta.url)));
@@ -90,7 +90,8 @@ if (kidPlan.assignments.length) {
 const statUpdates = [];
 for (const d of adults) {
   const m = await db.collection("users").doc(d.id).collection("bookings").where("checkedIn", "==", true).get();
-  const stats = adultCardStats(m.docs.map((x) => x.data()));
+  const pc = (await db.collection("users").doc(d.id).collection("patches").count().get()).data().count || 0;
+  const stats = { ...adultCardStats(m.docs.map((x) => x.data())), patches: pc };
   if (!sameStats(stats, d.data().cardStats)) statUpdates.push({ ref: d.ref, stats });
 }
 for (const d of kidsSnap) {
@@ -102,7 +103,8 @@ for (const d of kidsSnap) {
     const det = await db.collection("events").doc(b.data().eventId || b.id).collection("bookings").doc(l.guardianUid).collection("attendeeDetails").doc(l.dependentId).get().catch(() => null);
     if (det?.exists) rows.push(b.data());
   }
-  const stats = childCardStats(rows);
+  const pc = (await db.collection("users").doc(l.guardianUid).collection("dependents").doc(l.dependentId).collection("childPatches").count().get()).data().count || 0;
+  const stats = { ...childCardStats(rows), patches: pc };
   if (!sameStats(stats, d.data().cardStats)) statUpdates.push({ ref: d.ref, stats });
 }
 console.log(`\nCard stats to update: ${statUpdates.length}`);
@@ -146,16 +148,20 @@ for (const d of late) {
   });
 }
 
-// Tiers + titles now, instead of waiting for the hourly job.
+// Ranks (Rank v2, 2026-11-09) now, instead of waiting for the hourly job.
 const pubs = (await db.collection("publicProfiles").get()).docs;
 const kids2 = (await db.collection("childPublicProfiles").get()).docs;
-const all = [
-  ...pubs.map((d) => ({ key: `a:${d.id}`, ref: d.ref, data: d.data(), founder: d.id === FOUNDER_UID, override: TIER_OVERRIDES[d.id] })),
-  ...kids2.map((d) => ({ key: `c:${d.id}`, ref: d.ref, data: d.data(), founder: false })),
-];
-const { tiers, titles } = computeTiers(all.map((c) => ({ key: c.key, circulation: c.data.circulation || 0, founder: c.founder, override: c.override, serial: c.data.signupNumber })));
-const tierOps = all.filter((c) => c.data.cardTier !== tiers[c.key] || (c.data.cardTitle || null) !== (titles[c.key] || null))
-  .map((c) => (b) => b.update(c.ref, { cardTier: tiers[c.key], cardTitle: titles[c.key] || null }));
+const tierOps = [];
+for (const [kind, docs] of [["adult", pubs], ["child", kids2]]) {
+  for (const d of docs) {
+    const data = d.data();
+    const rank = finalRank({ earned: earnedRank(rankInputs(data), kind), override: TIER_OVERRIDES[d.id], floor: data.rankFloor, founder: kind === "adult" && d.id === FOUNDER_UID });
+    if (data.cardTier !== rank || data.cardTitle) {
+      tierOps.push((b) => b.update(d.ref, { cardTier: rank, cardTitle: null }));
+      console.log(`rank  ${String(data.callsign || d.id).padEnd(20)} ${data.cardTier || "-"} -> ${rank}`);
+    }
+  }
+}
 for (let i = 0; i < tierOps.length; i += 400) {
   const batch = db.batch();
   tierOps.slice(i, i + 400).forEach((op) => op(batch));

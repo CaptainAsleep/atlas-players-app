@@ -21,6 +21,8 @@ export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 // Hand-set tiers that skip the circulation ranking (like Founder). Rogue is
 // Diamond (Michael, 2026-11-08; was Legendary). Decide before cards open to
 // everyone: her card shows Diamond no matter how many decks it's in.
+// Legendary (influencers) and Diamond (founders, special members) are only
+// ever set here. Add a uid with "legendary" or "diamond".
 export const TIER_OVERRIDES = { "4gaohQb6ddMvdSNdhlDp75eMZke2": "diamond" };
 
 // Fewer collections than this = Unranked (Michael, 2026-11-08).
@@ -32,7 +34,7 @@ export const RANKED_MIN = 5;
 export const SHARE_TTL_MS = 3 * 60 * 1000;
 
 // Server-owned fields on a public profile. Mirrored in firestore.rules.
-export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected"];
+export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected", "rankFloor"];
 
 // "diamond" is hand-set only (TIER_OVERRIDES); circulation never produces it.
 export const TIERS = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "diamond", "founder"];
@@ -67,7 +69,8 @@ export function childCardStats(mirrorsWithChild) {
 }
 
 export function sameStats(a, b) {
-  return (a?.ops ?? -1) === (b?.ops ?? -1) && (a?.fields ?? -1) === (b?.fields ?? -1);
+  return (a?.ops ?? -1) === (b?.ops ?? -1) && (a?.fields ?? -1) === (b?.fields ?? -1)
+    && (a?.patches ?? -1) === (b?.patches ?? -1);
 }
 
 // Rarity. cards: [{ key, circulation, founder, serial }]
@@ -166,4 +169,62 @@ export function collectMessage(reason) {
     case "not-beta": return "Trading cards aren't available yet.";
     default: return "That isn't a valid card code.";
   }
+}
+
+// ===========================================================================
+// Rank v2 (Michael + Rogue, 2026-11-08/09). Replaces the circulation
+// percentile. Everyone starts Unranked and climbs; every input only goes up,
+// so a rank is never lost. ALL criteria of a rank must be met. Legendary and
+// Diamond are hand-set only (TIER_OVERRIDES). Same numbers live in
+// src/TradingCards.jsx (RANK_TABLES) for the progress view — keep in sync.
+// ===========================================================================
+export const RANK_ORDER = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "diamond", "founder"];
+export const RANK_TABLES = {
+  adult: [
+    { rank: "common",   events: 3,   fields: 1,  circulation: 5,   patches: 0 },
+    { rank: "uncommon", events: 10,  fields: 3,  circulation: 20,  patches: 0 },
+    { rank: "rare",     events: 30,  fields: 10, circulation: 75,  patches: 10 },
+    { rank: "epic",     events: 100, fields: 50, circulation: 250, patches: 25 },
+  ],
+  child: [
+    { rank: "common",   events: 2,  fields: 1,  circulation: 3,  patches: 0 },
+    { rank: "uncommon", events: 6,  fields: 2,  circulation: 10, patches: 0 },
+    { rank: "rare",     events: 15, fields: 4,  circulation: 25, patches: 5 },
+    { rank: "epic",     events: 40, fields: 12, circulation: 75, patches: 15 },
+  ],
+};
+
+export const rankIndex = (r) => Math.max(0, RANK_ORDER.indexOf(r));
+
+// stats: { events, fields, circulation, patches } → highest earned rank.
+export function earnedRank(stats, kind = "adult") {
+  const s = stats || {};
+  let best = "unranked";
+  for (const row of RANK_TABLES[kind === "child" ? "child" : "adult"]) {
+    const ok = (s.events || 0) >= row.events && (s.fields || 0) >= row.fields
+      && (s.circulation || 0) >= row.circulation && (s.patches || 0) >= row.patches;
+    if (!ok) break; // ranks are cumulative; each row is strictly harder
+    best = row.rank;
+  }
+  return best;
+}
+
+// What a card shows: a hand-set rank wins; otherwise the earned rank, never
+// below a kept floor (a child who moved to an adult account keeps their rank,
+// Michael 2026-11-09).
+export function finalRank({ earned, override, floor, founder }) {
+  if (founder) return "founder";
+  if (override && RANK_ORDER.includes(override)) return override;
+  const f = floor && RANK_ORDER.includes(floor) && rankIndex(floor) <= rankIndex("epic") ? floor : "unranked";
+  return rankIndex(f) > rankIndex(earned) ? f : earned;
+}
+
+// The four rank inputs from a public profile doc.
+export function rankInputs(doc) {
+  return {
+    events: doc?.cardStats?.ops || 0,
+    fields: doc?.cardStats?.fields || 0,
+    circulation: doc?.circulation || 0,
+    patches: doc?.cardStats?.patches || 0,
+  };
 }

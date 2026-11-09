@@ -48,6 +48,44 @@ const TIER_STYLE = {
 };
 const TITLE_LABEL = { most_popular: "MOST POPULAR", rarest: "RAREST" };
 
+// Rank v2 (Michael + Rogue, 2026-11-09). Same numbers as RANK_TABLES in
+// functions/cards.js, which is what actually sets a card's rank — keep in sync.
+// All criteria must be met. Legendary and Diamond are given by hand only.
+export const RANK_ORDER = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "diamond", "founder"];
+export const RANK_TABLES = {
+  adult: [
+    { rank: "common",   events: 3,   fields: 1,  circulation: 5,   patches: 0 },
+    { rank: "uncommon", events: 10,  fields: 3,  circulation: 20,  patches: 0 },
+    { rank: "rare",     events: 30,  fields: 10, circulation: 75,  patches: 10 },
+    { rank: "epic",     events: 100, fields: 50, circulation: 250, patches: 25 },
+  ],
+  child: [
+    { rank: "common",   events: 2,  fields: 1,  circulation: 3,  patches: 0 },
+    { rank: "uncommon", events: 6,  fields: 2,  circulation: 10, patches: 0 },
+    { rank: "rare",     events: 15, fields: 4,  circulation: 25, patches: 5 },
+    { rank: "epic",     events: 40, fields: 12, circulation: 75, patches: 15 },
+  ],
+};
+const rankIdx = (r) => Math.max(0, RANK_ORDER.indexOf(r));
+const rankName = (r) => { const l = (TIER_STYLE[r] || TIER_STYLE.unranked).label; return l.charAt(0) + l.slice(1).toLowerCase(); };
+
+// The next rank and how far along each requirement is, or null when there's
+// nothing left to earn (Epic, or a hand-given rank).
+export function rankProgress(card) {
+  if (!card || rankIdx(card.tier) >= rankIdx("epic")) return null;
+  const table = RANK_TABLES[card.kind === "child" ? "child" : "adult"];
+  const next = table.find((row) => rankIdx(row.rank) > rankIdx(card.tier));
+  if (!next) return null;
+  const have = { events: card.ops || 0, fields: card.fields || 0, circulation: card.circ || 0, patches: card.patches || 0 };
+  const items = [
+    { key: "events", label: "Events", target: next.events },
+    { key: "fields", label: "Different fields", target: next.fields },
+    { key: "circulation", label: "Cards in circulation", target: next.circulation },
+    { key: "patches", label: "Patches", target: next.patches },
+  ].filter((i) => i.target > 0).map((i) => ({ ...i, current: Math.min(have[i.key], i.target), done: have[i.key] >= i.target }));
+  return { next: next.rank, items };
+}
+
 // ---------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------
@@ -65,6 +103,7 @@ export function toCard(kind, id, d) {
     circ: d.circulation || 0,
     ops: d.cardStats?.ops ?? 0,
     fields: d.cardStats?.fields ?? 0,
+    patches: d.cardStats?.patches ?? 0,
     photoUrl: d.cardPhotoUrl || d.avatarUrl || null,
     aspect: hasCardPhoto ? d.cardPhotoAspect || 1 : 1,
     crop: hasCardPhoto ? d.cardCrop || null : null,
@@ -669,12 +708,7 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
           {card.hiRes && (
             <button onClick={onAdjustCardPhoto} className="mt-3 text-[12px] underline" style={{ ...body, color: T.accent }}>Adjust card photo</button>
           )}
-          <div className="w-full mt-6 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className="text-[11px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.1em" }}>How rarity works</div>
-            <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
-              Circulation is how many players have collected your card. Cards in fewer than 5 decks are Unranked; after that, the least-circulated cards are the rarest. Most Popular and Rarest are titles that move as cards change hands.
-            </p>
-          </div>
+          <RankPanel card={card} />
           {publicChildren.length > 0 && (
             <div className="w-full mt-6">
               <div className="text-[11px] font-semibold uppercase mb-2" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.1em" }}>Your kids' cards</div>
@@ -699,7 +733,7 @@ function ChildCardRow({ child, total, onShare }) {
       <div className="flex-1 min-w-0">
         <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{card.callsign}</div>
         <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>
-          {card.photoUrl ? `In ${card.circ} deck${card.circ === 1 ? "" : "s"}` : "Add a photo in Child Profiles to share"}
+          {card.photoUrl ? `${rankName(card.tier)} · in ${card.circ} deck${card.circ === 1 ? "" : "s"}` : "Add a photo in Child Profiles to share"}
         </div>
       </div>
       <Pill primary disabled={!card.photoUrl} onClick={() => onShare(card)}>Share</Pill>
@@ -951,6 +985,79 @@ export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId }) {
       )}
       {viewing && <CardViewer card={viewing} total={total} onClose={() => setViewing(null)} />}
     </div>
+  );
+}
+
+// Rank v2: the player's rank and what the next one takes.
+function RankPanel({ card }) {
+  const { T, display, body, mono } = useTheme();
+  const prog = rankProgress(card);
+  const handGiven = ["legendary", "diamond", "founder"].includes(card.tier);
+  const color = (TIER_STYLE[card.tier] || TIER_STYLE.unranked).c[0];
+  return (
+    <div className="w-full mt-6 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] font-semibold uppercase" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.1em" }}>Rank</div>
+        <div className="text-[13px] font-semibold" style={{ ...display, color }}>{card.tier === "founder" ? "Founder · Diamond" : rankName(card.tier)}</div>
+      </div>
+      {handGiven ? (
+        <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+          {card.tier === "legendary" ? "Legendary is given by Atlas to standout members of the airsoft community." : "Diamond is reserved for Atlas founders and special members."}
+        </p>
+      ) : prog ? (
+        <>
+          <div className="text-[12px] mb-2" style={{ ...body, color: T.ashDim }}>Next: <span style={{ color: (TIER_STYLE[prog.next] || TIER_STYLE.unranked).c[0], fontWeight: 600 }}>{rankName(prog.next)}</span> — meet every goal below.</div>
+          {prog.items.map((i) => (
+            <div key={i.key} className="mb-2">
+              <div className="flex justify-between text-[12px] mb-1" style={body}>
+                <span style={{ color: T.ash }}>{i.label}</span>
+                <span style={{ ...mono, color: i.done ? T.good : T.ashFaint }}>{i.current} / {i.target}</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden" style={{ background: T.panelAlt, borderRadius: 999 }}>
+                <div className="h-full" style={{ width: `${Math.round((i.current / Math.max(1, i.target)) * 100)}%`, background: i.done ? T.good : T.accent, borderRadius: 999 }} />
+              </div>
+            </div>
+          ))}
+        </>
+      ) : (
+        <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>Epic is the highest rank you can earn. Legendary and Diamond are given by Atlas.</p>
+      )}
+      <p className="text-[11px] mt-1" style={{ ...body, color: T.ashFaint }}>Ranks never go down. Events and fields count Atlas check-ins.</p>
+    </div>
+  );
+}
+
+// Rank-up moment: when your own card's rank goes up, a full-screen "RANK UP"
+// like a patch unlock. The last rank you've seen is kept on this device; the
+// first time it just records it (no overlay for a rank you already had).
+export function RankUpWatcher({ uid }) {
+  const { T, display, body } = useTheme();
+  const { card } = useCardOwner("adult", uid);
+  const total = useCardsTotal();
+  const scale = useScaleFor(0.6, 0.45);
+  const [shown, setShown] = useState(null);
+  useEffect(() => {
+    if (!card || !uid) return;
+    const key = `atlasRankSeen:${uid}`;
+    let seen = null;
+    try { seen = localStorage.getItem(key); } catch { /* storage blocked */ }
+    try { localStorage.setItem(key, card.tier); } catch { /* storage blocked */ }
+    if (seen && rankIdx(card.tier) > rankIdx(seen)) {
+      setShown(card.tier);
+      CardSound.chime();
+      buzz([20, 40, 60]);
+    }
+  }, [card?.tier, uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  useHideBottomNav(!!shown);
+  if (!shown || !card) return null;
+  return createPortal(
+    <div className="fixed inset-0 flex flex-col items-center justify-center px-6 text-center" style={{ zIndex: 2050, background: "radial-gradient(120% 80% at 50% 30%,#1b2440 0%,#0a0d18 60%,#05060b 100%)" }}>
+      <div className="text-[12px] font-semibold uppercase mb-1" style={{ ...body, color: "rgba(255,255,255,0.6)", letterSpacing: "0.3em" }}>Rank up</div>
+      <div className="text-[30px] font-semibold mb-4" style={{ ...display, color: (TIER_STYLE[shown] || TIER_STYLE.unranked).c[0] }}>{rankName(shown)}</div>
+      <SpinCard card={card} total={total} scale={scale} />
+      <button onClick={() => setShown(null)} className="mt-5 px-5 py-2.5 text-[13px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill }}>Nice</button>
+    </div>,
+    document.body
   );
 }
 
