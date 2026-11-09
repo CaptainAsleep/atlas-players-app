@@ -201,7 +201,8 @@ export const SKIN_THEMES = {
       heroBg: "#E9DFC6", heroBorder: "1px solid #D3C8AE", heroGlow: "transparent",
       texture: "camo", heroScrim: "linear-gradient(100deg, rgba(250,247,238,0.95) 0%, rgba(250,247,238,0.88) 55%, rgba(250,247,238,0.62) 100%)",
       bandOpacity: 0.5,
-      camo: { seed: 11, base: "#C4B48C", layers: [["#A39465", 16, 54, 40], ["#7A774A", 14, 44, 32], ["#5B4A32", 12, 22, 16], ["#E0D4AE", 12, 18, 12]] },
+      // "Field" pattern (SkinTexture.jsx), picked by Michael 2026-11-09.
+      camo: { style: "field", seed: 3, base: "#CBBD96", layers: ["#AB9C6E", "#807C53", "#5F4C33", "#E3D8B6"], grain: "#3A3220", grainAmt: 0.22 },
     },
     fonts: { display: "'Barlow Condensed', sans-serif", body: "'Inter', sans-serif", mono: "'IBM Plex Mono', monospace" },
   },
@@ -221,7 +222,8 @@ export const SKIN_THEMES = {
       heroMotif: null, motifColor: null,
       texture: "camo", heroScrim: "linear-gradient(100deg, rgba(13,14,15,0.88) 0%, rgba(13,14,15,0.66) 60%, rgba(13,14,15,0.38) 100%)",
       bandOpacity: 0.85,
-      camo: { seed: 23, base: "#1B1D1E", layers: [["#2B2E30", 16, 54, 40], ["#393C3F", 13, 42, 30], ["#0F1011", 12, 22, 16], ["#4A4E51", 11, 16, 11]] },
+      // "Field" pattern (SkinTexture.jsx), picked by Michael 2026-11-09.
+      camo: { style: "field", seed: 3, base: "#1C1E1F", layers: ["#2C3032", "#3B3F42", "#111213", "#4E5357"], grain: "#FFFFFF", grainAmt: 0.10 },
     },
     fonts: { display: "'Barlow Condensed', sans-serif", body: "'Inter', sans-serif", mono: "'JetBrains Mono', monospace" },
   },

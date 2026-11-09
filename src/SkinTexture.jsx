@@ -55,12 +55,54 @@ function brushedLines(H, seed) {
 
 const BASE = { brushed: "#2A2F36", grid: "#0B0816" };
 
+// ── "Field" camo (Ridgeline / Ridgeline Black, picked 2026-11-09) ────────
+// Atlas-original: four layers of thresholded fractal noise at different
+// scales, each with roughened edges, plus a fine fabric grain. Built as one
+// SVG string and used as a data-URL background, so the browser rasterizes
+// it once instead of re-running the filters while the page scrolls.
+// camo = { style: "field", seed, base, layers: [4 colors], grain, grainAmt }
+const FIELD_SCALES = [
+  { freq: 0.010, cut: 0.50, rough: 7 },
+  { freq: 0.016, cut: 0.56, rough: 6 },
+  { freq: 0.028, cut: 0.62, rough: 5 },
+  { freq: 0.045, cut: 0.64, rough: 4 },
+];
+
+export function fieldCamoSvg(camo, W, H, seedOffset = 0) {
+  const seed = (camo?.seed || 1) + seedOffset;
+  const layer = (i, color, { freq, cut, rough }) => {
+    const id = `l${i}`;
+    return `<filter id="${id}" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}" color-interpolation-filters="sRGB">`
+      + `<feTurbulence type="fractalNoise" baseFrequency="${freq}" numOctaves="4" seed="${seed + i + 1}" result="n"/>`
+      + `<feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 ${(0.5 - cut).toFixed(3)}" result="a"/>`
+      + `<feComponentTransfer in="a" result="m"><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>`
+      + `<feTurbulence type="fractalNoise" baseFrequency="0.14" numOctaves="2" seed="${seed + i + 51}" result="d"/>`
+      + `<feDisplacementMap in="m" in2="d" scale="${rough}" xChannelSelector="R" yChannelSelector="G" result="r"/>`
+      + `<feFlood flood-color="${color}"/><feComposite in2="r" operator="in"/></filter>`
+      + `<rect width="${W}" height="${H}" filter="url(#${id})"/>`;
+  };
+  const grain = `<filter id="g" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}">`
+    + `<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="n"/>`
+    + `<feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  ${camo.grainAmt ?? 0.15} 0 0 0 0" result="a"/>`
+    + `<feFlood flood-color="${camo.grain || "#000000"}"/><feComposite in2="a" operator="in"/></filter>`
+    + `<rect width="${W}" height="${H}" filter="url(#g)"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+    + `<rect width="${W}" height="${H}" fill="${camo.base}"/>`
+    + (camo.layers || []).slice(0, FIELD_SCALES.length).map((c, i) => layer(i, c, FIELD_SCALES[i])).join("")
+    + grain + `</svg>`;
+}
+
+const svgUrl = (svg) => `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+
 // withBase: paint the texture's own background (the header band needs it;
 // the hero card already has T.heroBg underneath).
 export default function SkinTexture({ T, width = 400, height = 240, seedOffset = 0, withBase = false, style }) {
   const kind = T?.texture;
   const camo = T?.camo;
+  const isField = kind === "camo" && camo?.style === "field";
+  const fieldUrl = useMemo(() => (isField ? svgUrl(fieldCamoSvg(camo, width, height, seedOffset)) : null), [isField, camo, width, height, seedOffset]);
   const parts = useMemo(() => {
+    if (isField) return null;
     if (kind === "camo") return { blobs: camoBlobs(camo, width, height, seedOffset) };
     if (kind === "brushed") return { lines: brushedLines(height, 5 + seedOffset) };
     if (kind === "grid") {
@@ -72,7 +114,15 @@ export default function SkinTexture({ T, width = 400, height = 240, seedOffset =
       return { xs, ys };
     }
     return null;
-  }, [kind, camo, width, height, seedOffset]);
+  }, [isField, kind, camo, width, height, seedOffset]);
+  if (fieldUrl) {
+    return (
+      <div
+        aria-hidden="true"
+        style={{ position: "absolute", inset: 0, backgroundImage: fieldUrl, backgroundSize: "cover", backgroundPosition: "center", pointerEvents: "none", ...style }}
+      />
+    );
+  }
   if (!parts) return null;
   return (
     <svg
