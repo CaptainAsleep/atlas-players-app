@@ -5630,6 +5630,13 @@ export const sweepTeamTickets = onSchedule(
 
 const PLAYERS_COUNTER = "players";
 
+// Card testers: the code list, or a cardBeta/{uid} doc (scripts/set-card-beta.mjs).
+async function cardBetaAllowed(db, uid) {
+  if (cards.isCardBeta(uid)) return true;
+  const d = await db.collection("cardBeta").doc(uid).get().catch(() => null);
+  return !!d?.exists;
+}
+
 // Next number from the all-time counter, inside a transaction. Returns null
 // when the counter hasn't been created yet (the backfill script creates it;
 // until then nobody is numbered, so new sign-ups can't collide with it).
@@ -5783,8 +5790,8 @@ async function loadCardOwner(db, kind, id) {
 export const issueCardToken = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const uid = request.auth.uid;
-  if (!cards.isCardBeta(uid)) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
   const db = getFirestore();
+  if (!(await cardBetaAllowed(db, uid))) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
   const childPublicId = request.data?.childPublicId || null;
   let ownerKind = "adult", ownerId = uid;
   if (childPublicId) {
@@ -5813,9 +5820,9 @@ export const collectCard = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const uid = request.auth.uid;
   const token = request.data?.token;
-  if (!cards.isCardBeta(uid)) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
   if (!cards.isWellFormedShareToken(token)) throw new HttpsError("invalid-argument", cards.collectMessage("invalid"));
   const db = getFirestore();
+  if (!(await cardBetaAllowed(db, uid))) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
   const shareRef = db.collection("cardShares").doc(token);
   const collectorPubRef = db.collection("publicProfiles").doc(uid);
   const result = await db.runTransaction(async (t) => {

@@ -31,7 +31,7 @@ import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./h
 import { useMyTicketHoldings, useMyEventTeamTickets } from "./hooks/useTeamTickets";
 import { EventTeamTickets, TicketOffersCard, GiveVoucherSheet, canGiveVoucher } from "./TeamTickets";
 import PhotoCropper from "./PhotoCropper";
-import { isCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher } from "./TradingCards";
+import { isCardBeta, useCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher } from "./TradingCards";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
@@ -4197,7 +4197,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
   const { T, display, body, mono } = useTheme();
   const { profile, profileLoading } = usePublicProfile(uid);
   // Trading cards (beta): their card + deck. Decks are public.
-  const cardBeta = isCardBeta(currentUser?.uid);
+  const cardBeta = useCardBeta(currentUser?.uid);
   const { card: theirCard } = useCardOwner("adult", cardBeta ? uid : null);
   const deckCount = useDeckCount(cardBeta ? uid : null);
   const cardTotal = useCardsTotal();
@@ -8311,7 +8311,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
   const referralUrl = user ? `${window.location.origin}${import.meta.env.BASE_URL}?ref=${user.uid}` : "";
   // Trading cards (beta): nudge for a sharper photo if the card would use an
   // old low-res one.
-  const cardBeta = isCardBeta(user?.uid);
+  const cardBeta = useCardBeta(user?.uid);
   const { card: myCard } = useCardOwner("adult", cardBeta ? user?.uid : null);
 
   // "Past Events," not "attended" — this counts favorited events that have
@@ -10157,6 +10157,7 @@ function AppShell() {
   const openSecretPatchQR = () => push("secretPatchQR");
   const openScanRedeem = () => push("scanRedeem");
   const openMyCard = () => push("myCard");
+  const cardBetaMe = useCardBeta(user?.uid);
   const openDeck = (ownerUid = null) => { setDeckOwnerId(ownerUid); setDeckHighlight(null); push("deck"); };
   const { card: myCardForCrop } = useCardOwner("adult", adjustingCardPhoto ? user?.uid : null);
   useEffect(() => {
@@ -10595,7 +10596,7 @@ function AppShell() {
       {user && profile && !installGate && noticeToShow && (
         <CancellationNoticeModal notice={noticeToShow} onDismiss={() => acknowledgeNotice(noticeToShow.id)} />
       )}
-      {user && profile && !installGate && isCardBeta(user.uid) && <RankUpWatcher uid={user.uid} />}
+      {user && profile && !installGate && cardBetaMe && <RankUpWatcher uid={user.uid} />}
       {user && profile && !installGate && collectedCard && (
         <CardCollectedOverlay
           result={collectedCard}

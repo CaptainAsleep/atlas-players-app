@@ -990,6 +990,12 @@ service cloud.firestore {
     match /cardRankOverrides/{id} {
       allow read, write: if false;
     }
+    // Trading-card testers (scripts/set-card-beta.mjs). A player can only see
+    // their own entry, which is how the app knows to show cards to them.
+    match /cardBeta/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
 
     // Friend requests. A top-level collection (not a subcollection under
     // either user) because a friendship spans two accounts, and neither

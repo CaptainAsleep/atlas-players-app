@@ -25,6 +25,18 @@ export const CARD_BETA_UIDS = new Set([
 export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 export const isCardBeta = (uid) => !!uid && CARD_BETA_UIDS.has(uid);
 
+// Testers added without a code change live in cardBeta/{uid}
+// (scripts/set-card-beta.mjs). Only your own entry is readable.
+export function useCardBeta(uid) {
+  const [on, setOn] = useState(isCardBeta(uid));
+  useEffect(() => {
+    if (!uid) { setOn(false); return undefined; }
+    if (isCardBeta(uid)) { setOn(true); return undefined; }
+    return onSnapshot(doc(db, "cardBeta", uid), (s) => setOn(s.exists()), () => setOn(false));
+  }, [uid]);
+  return on;
+}
+
 const W = 300;
 const H = 420;
 const QR_REFRESH_S = 30;
