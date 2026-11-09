@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2, Users, Shield,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy, Target, Flag, Rocket, Medal, Flame
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy, Target, Flag, Rocket, Medal, Flame,
+  Settings, ScanLine, UserPlus, Copy, Lock, Mail, Globe, Palette, AlertTriangle, ExternalLink, CalendarDays
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -31,7 +32,7 @@ import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./h
 import { useMyTicketHoldings, useMyEventTeamTickets } from "./hooks/useTeamTickets";
 import { EventTeamTickets, TicketOffersCard, GiveVoucherSheet, canGiveVoucher } from "./TeamTickets";
 import PhotoCropper from "./PhotoCropper";
-import { isCardBeta, useCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher } from "./TradingCards";
+import { isCardBeta, useCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher, TIER_STYLE } from "./TradingCards";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
@@ -6711,27 +6712,6 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
   );
 }
 
-function ProfileRow({ label, value, static: isStatic, href }) {
-  const { T, display, body, mono } = useTheme();
-  const content = (
-    <>
-      <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>{label}</span>
-      <div className="flex items-center gap-2">
-        {value && <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{value}</span>}
-        {!isStatic && <ChevronRight size={15} color={T.ashFaint} />}
-      </div>
-    </>
-  );
-  if (href) {
-    return (
-      <a href={href} target="_blank" rel="noreferrer" className="w-full flex items-center justify-between py-3.5">
-        {content}
-      </a>
-    );
-  }
-  return <div className="w-full flex items-center justify-between py-3.5">{content}</div>;
-}
-
 // A patch's achievement text can come from two different places: the
 // achievement catalog stores name/details as separate fields, while an
 // owner's check-in patch has the whole thing baked into one "Name: What
@@ -8521,8 +8501,13 @@ function FeedbackPanel() {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenActiveAchievements, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onOpenMyCard, onOpenDeck, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
-  const { T, display, body, mono, savedTheme } = useTheme();
+// Profile redesign (2026-11-09). The page had turned into one long menu
+// mixing collectibles, tools and account settings. Profile is now the
+// player's identity + collection; account, preferences and support moved to
+// SettingsScreen (gear in the header), and the referral QR moved into
+// InviteSheet so it no longer takes the second-biggest block on the page.
+function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildProfiles, dependents = [], onOpenPatches, onOpenActiveAchievements, achievementRows = [], onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onOpenMyCard, uploadAvatar, favorites, events, patches, vouchers }) {
+  const { T, display, body, mono } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -8531,12 +8516,19 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAcco
   // Team Bookings: an unused voucher from a ticket bought for others can be
   // given, whole, to another player.
   const [givingVoucher, setGivingVoucher] = useState(null);
+  const [showInvite, setShowInvite] = useState(false);
 
   const referralUrl = user ? `${window.location.origin}${import.meta.env.BASE_URL}?ref=${user.uid}` : "";
   // Trading cards (beta): nudge for a sharper photo if the card would use an
-  // old low-res one.
+  // old low-res one; rank chip + Card & Deck tile only for beta accounts.
   const cardBeta = useCardBeta(user?.uid);
   const { card: myCard } = useCardOwner("adult", cardBeta ? user?.uid : null);
+  const deckCount = useDeckCount(cardBeta ? user?.uid : null);
+  const rank = cardBeta && myCard ? TIER_STYLE[myCard.tier] || null : null;
+  const isOwner = user?.uid === ATLAS_OWNER_UID;
+  // Year in Review only shows in season — the same Dec 26 - Jan 31 window as
+  // the Home banner. Michael's own account always sees it, to troubleshoot.
+  const showYearInReview = isReviewWindow() || isOwner;
 
   // "Past Events," not "attended" — this counts favorited events that have
   // already happened, which isn't the same as confirmed attendance. That
@@ -8544,24 +8536,18 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAcco
   const today = localDateStr();
   const savedEventIds = (favorites || []).filter((f) => f.type === "event").map((f) => f.refId);
   const pastEventsCount = (events || []).filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today).length;
-  const [referralQr, setReferralQr] = useState(null);
-  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!referralUrl) return;
-    QRCode.toDataURL(referralUrl, { width: 280, margin: 4, color: { dark: "#002C48", light: "#FFFFFF" } /* fixed — always scannable regardless of theme */ }).then(setReferralQr);
-  }, [referralUrl]);
+  // Achievements tile: how many are in progress, and how close the nearest
+  // one is (the bar), from the same rows the Active Achievements screen uses.
+  const inProgress = achievementRows.length;
+  const closestRatio = achievementRows.reduce(
+    (m, r) => Math.max(m, ...(r.paths || []).map((p) => (p.target > 0 ? p.current / p.target : 0))),
+    0
+  );
 
-  const handleCopyReferral = async () => {
-    try {
-      await navigator.clipboard.writeText(referralUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard access can be blocked in some contexts — the link is
-      // still visible/shareable via the QR code either way.
-    }
-  };
+  const patchCount = patches?.length || 0;
+  const shownPatches = (patches || []).slice(0, 4);
+  const extraPatches = Math.max(0, patchCount - shownPatches.length);
 
   const handleAvatarPick = () => fileInputRef.current?.click();
 
@@ -8590,9 +8576,386 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAcco
     }
   };
 
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const cardStyle = { background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd };
+  const iconBtnStyle = { background: T.panel, borderRadius: T.rPill, boxShadow: T.shadowSm };
+  const rankName = rank ? rank.label.charAt(0) + rank.label.slice(1).toLowerCase() : null;
+  const cardSubtitle = [rankName && `${rankName} rank`, deckCount != null && `${deckCount} in deck`].filter(Boolean).join(" · ") || "Your trading card";
+
+  return (
+    <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
+      <div className="px-4 pt-2 pb-3 flex items-center justify-between border-b" style={{ borderColor: T.line }}>
+        <button onClick={onOpenScanRedeem} aria-label="Scan a code" className="w-10 h-10 flex items-center justify-center transition-transform duration-100 active:scale-90" style={iconBtnStyle}>
+          <ScanLine size={18} color={T.ash} />
+        </button>
+        <h1 className="text-[18px] font-semibold" style={{ ...display, color: T.ash, letterSpacing: "-0.01em" }}>Profile</h1>
+        <button onClick={() => onOpenSettings()} aria-label="Settings" className="w-10 h-10 flex items-center justify-center transition-transform duration-100 active:scale-90" style={iconBtnStyle}>
+          <Settings size={18} color={T.ash} />
+        </button>
+      </div>
+      <div className="px-6 pt-4">
+        {cardBeta && myCard && !myCard.hiRes && <CardPhotoPrompt onUpload={handleAvatarPick} />}
+
+        {profile && profile.verified !== true && (
+          <button onClick={() => onOpenSettings(true)} className="w-full flex items-center gap-3 px-3.5 py-3 mb-4 text-left" style={{ background: T.tint, borderRadius: T.rCard }}>
+            <BadgeCheck size={20} color={T.accent} className="flex-shrink-0" />
+            <span className="flex-1 text-[13px] leading-snug" style={{ ...body, color: T.ash }}>Verify your email to get the badge next to your callsign.</span>
+            <span className="text-[13px] font-semibold" style={{ ...display, color: T.accent }}>Verify</span>
+          </button>
+        )}
+
+        {/* Identity */}
+        <div className="p-5 mb-2" style={{ background: T.heroBg, border: T.heroBorder, borderRadius: T.rHero, boxShadow: T.shadowLg }}>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+          {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
+          <div className="flex items-center gap-4">
+            <button onClick={handleAvatarPick} aria-label="Change profile photo" className="relative flex-shrink-0" style={{ width: 76, height: 76 }} disabled={avatarUploading}>
+              {profile?.avatarUrl ? (
+                <div
+                  style={{ width: 76, height: 76, backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 14 }}
+                />
+              ) : (
+                <div
+                  className="flex items-center justify-center text-[28px] font-semibold"
+                  style={{ ...display, width: 76, height: 76, background: T.panelAlt, borderRadius: 14, color: T.ash }}
+                >
+                  {initial}
+                </div>
+              )}
+              <div
+                className="absolute -bottom-1 -right-1 w-6 h-6 flex items-center justify-center"
+                style={{ background: T.cta, borderRadius: 8, border: `2px solid ${T.panel}` }}
+              >
+                {avatarUploading ? (
+                  <span className="text-[8px]" style={{ ...mono, color: T.inverse }}>…</span>
+                ) : (
+                  <Camera size={11} color={T.inverse} strokeWidth={2.5} />
+                )}
+              </div>
+            </button>
+            <div className="min-w-0 flex flex-col gap-1.5">
+              <span className="text-[22px] font-bold inline-flex items-center gap-1.5 min-w-0" style={{ ...display, color: T.ash, letterSpacing: "-0.01em" }}>
+                <span className="truncate">{profile?.callsign || "Loading…"}</span>
+                {profile?.verified && <BadgeCheck size={18} color={T.inverse} fill={T.accent} className="flex-shrink-0" />}
+                {profile?.featuredPatch && (
+                  <img
+                    src={profile.featuredPatch.imageUrl}
+                    alt={`${profile.featuredPatch.name} patch`}
+                    className="w-6 h-6 flex-shrink-0"
+                    style={{ objectFit: "contain" }}
+                  />
+                )}
+              </span>
+              {(rank || profile?.teamName) && (
+                <div className="flex flex-wrap gap-1.5">
+                  {rank && (
+                    <span className="text-[10px] font-semibold px-2 py-1" style={{ ...mono, letterSpacing: "0.06em", background: `linear-gradient(135deg, ${rank.c[0]}, ${rank.c[1]})`, color: rank.ink, borderRadius: T.rPill }}>
+                      {rank.label}
+                    </span>
+                  )}
+                  {profile?.teamName && (
+                    <span className="text-[10px] font-semibold px-2 py-1 truncate" style={{ ...mono, letterSpacing: "0.04em", border: `1px solid ${T.line}`, color: T.ashDim, borderRadius: T.rPill, maxWidth: 180 }}>
+                      {profile.teamName}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 mt-4 pt-3.5" style={{ borderTop: `1px solid ${T.line}` }}>
+            <div className="text-center">
+              <div className="text-[20px] font-semibold" style={{ ...display, color: T.ash }}>{pastEventsCount}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>Past Events</div>
+            </div>
+            <button onClick={onOpenPatches} className="text-center" style={{ borderLeft: `1px solid ${T.line}`, borderRight: `1px solid ${T.line}` }}>
+              <div className="text-[20px] font-semibold" style={{ ...display, color: T.ash }}>{patchCount}</div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>Patches</div>
+            </button>
+            <div className="text-center">
+              <div className="text-[20px] font-semibold" style={{ ...display, color: T.ash }}>
+                {profile?.createdAt?.toDate ? profile.createdAt.toDate().getFullYear() : "—"}
+              </div>
+              <div className="text-[11px]" style={{ ...body, color: T.ashDim }}>Member Since</div>
+            </div>
+          </div>
+        </div>
+        {avatarError && <p className="text-[11px] mb-2" style={{ ...body, color: T.alert }}>{avatarError}</p>}
+        <div className="mb-3" />
+
+        {/* Invite: one CTA; the QR lives in the sheet */}
+        <button
+          onClick={() => setShowInvite(true)}
+          className="w-full flex items-center gap-3 px-4 py-3.5 mb-5 text-left transition-transform duration-100 active:scale-[0.98]"
+          style={{ background: T.cta, borderRadius: T.rCard, boxShadow: T.shadowMd }}
+        >
+          <span className="w-10 h-10 flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.14)", borderRadius: 12 }}>
+            <UserPlus size={19} color={T.inverse} />
+          </span>
+          <span className="flex-1 flex flex-col">
+            <span className="text-[15px] font-semibold" style={{ ...display, color: T.inverse }}>Invite friends to Atlas</span>
+            <span className="text-[12px]" style={{ ...body, color: T.inverse, opacity: 0.8 }}>Show your QR or copy your link</span>
+          </span>
+          <ChevronRight size={17} color={T.inverse} />
+        </button>
+
+        {/* Collection */}
+        <Eyebrow>Collection</Eyebrow>
+        <div className="flex flex-col gap-2.5 mb-5">
+          <button onClick={onOpenPatches} className="w-full p-4 text-left transition-transform duration-100 active:scale-[0.98]" style={cardStyle}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Patches</span>
+              <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold" style={{ ...display, color: T.accent }}>
+                {patchCount > 0 ? `All ${patchCount}` : "View"}
+                <ChevronRight size={14} color={T.accent} />
+              </span>
+            </div>
+            {shownPatches.length > 0 ? (
+              <div className="flex items-center gap-2.5">
+                {shownPatches.map((p, i) => (
+                  <img key={p.id || i} src={p.imageUrl} alt={p.name ? `${p.name} patch` : "Patch"} style={{ width: 52, height: 52, objectFit: "contain" }} />
+                ))}
+                {extraPatches > 0 && (
+                  <span className="flex items-center justify-center text-[12px] font-semibold" style={{ ...mono, width: 52, height: 52, background: T.panelAlt, color: T.ashDim, borderRadius: 999 }}>
+                    +{extraPatches}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>No patches yet. Check in at a game to earn your first.</p>
+            )}
+          </button>
+
+          <div className={`grid gap-2.5 ${showYearInReview ? "grid-cols-2" : "grid-cols-1"}`}>
+            <button onClick={onOpenActiveAchievements} className="p-4 text-left flex flex-col gap-2.5 transition-transform duration-100 active:scale-[0.97]" style={cardStyle}>
+              <span className="w-9 h-9 flex items-center justify-center" style={{ background: T.tintGood, borderRadius: 10 }}>
+                <Target size={18} color={T.good} />
+              </span>
+              <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>Achievements</span>
+              <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>{inProgress > 0 ? `${inProgress} in progress` : "Nothing in progress"}</span>
+              {inProgress > 0 && (
+                <span className="block h-1.5 w-full overflow-hidden" style={{ background: T.panelAlt, borderRadius: T.rPill }}>
+                  <span className="block h-1.5" style={{ width: `${Math.round(Math.min(1, closestRatio) * 100)}%`, background: T.good, borderRadius: T.rPill }} />
+                </span>
+              )}
+            </button>
+            {showYearInReview && (
+              <button onClick={onOpenYearInReview} className="p-4 text-left flex flex-col gap-2.5 transition-transform duration-100 active:scale-[0.97]" style={cardStyle}>
+                <span className="w-9 h-9 flex items-center justify-center" style={{ background: T.tint, borderRadius: 10 }}>
+                  <CalendarDays size={18} color={T.accent} />
+                </span>
+                <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>Year in Review</span>
+                <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>Your {reviewYear()} recap</span>
+              </button>
+            )}
+          </div>
+
+          {cardBeta && (
+            <button onClick={onOpenMyCard} className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left transition-transform duration-100 active:scale-[0.98]" style={cardStyle}>
+              {myCard?.photoUrl ? (
+                <div className="flex-shrink-0" style={{ width: 44, height: 60, backgroundImage: `url("${myCard.photoUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 6 }} />
+              ) : (
+                <div className="flex-shrink-0 flex items-center justify-center text-[8px] font-semibold" style={{ ...mono, width: 44, height: 60, background: T.cta, color: T.inverse, borderRadius: 6, letterSpacing: "0.08em" }}>CARD</div>
+              )}
+              <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>My Card &amp; Deck</span>
+                <span className="text-[12px] truncate" style={{ ...body, color: T.ashDim }}>{cardSubtitle}</span>
+              </span>
+              <ChevronRight size={16} color={T.ashFaint} />
+            </button>
+          )}
+        </div>
+
+        {vouchers && vouchers.length > 0 && (
+          <>
+            <Eyebrow>Wallet</Eyebrow>
+            <div className="mb-5 divide-y" style={cardStyle}>
+              {vouchers.map((v) => {
+                // No sweep job flips status to "expired" in Firestore —
+                // this is purely a time comparison for display. The real
+                // enforcement (rejecting an expired voucher at
+                // redemption) happens server-side in bookEventWithVoucher.
+                const isExpired = v.expiresAt && v.expiresAt.toDate() < new Date();
+                return (
+                <div key={v.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Ticket size={16} color={isExpired ? T.ashFaint : T.good} className="flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="text-[13px] font-medium truncate" style={{ ...body, color: T.ash }}>{v.fieldName || "Unknown field"}</div>
+                        <ClaimedBadge fieldId={v.fieldId} size={12} />
+                        {isExpired && (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
+                            EXPIRED
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>
+                        {v.givenByCallsign ? `Gift from ${v.givenByCallsign}` : v.source === "teamTicket" ? `Unused ticket, "${v.sourceEventTitle || "an event"}"` : v.kind === "freeEntry" && !v.sourceEventId ? "Gift from the field" : `From "${v.sourceEventTitle || "a canceled event"}"`}
+                        {v.expiresAt?.toDate ? ` · ${isExpired ? "expired" : "expires"} ${v.expiresAt.toDate().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-[14px] font-semibold" style={{ ...mono, color: isExpired ? T.ashFaint : T.good }}>
+                      {v.kind === "freeEntry" ? "FREE ENTRY" : v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
+                    </div>
+                    {canGiveVoucher(v) && (
+                      <button onClick={() => setGivingVoucher(v)} className="text-[11px] font-semibold" style={{ ...display, color: T.accent }}>Give</button>
+                    )}
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+            {givingVoucher && <GiveVoucherSheet voucher={givingVoucher} onClose={() => setGivingVoucher(null)} />}
+          </>
+        )}
+
+        <Eyebrow>Family</Eyebrow>
+        <button onClick={onOpenChildProfiles} className="w-full flex items-center gap-3 px-4 py-3.5 mb-5 text-left transition-transform duration-100 active:scale-[0.98]" style={cardStyle}>
+          {dependents.length > 0 ? (
+            <span className="flex flex-shrink-0">
+              {dependents.slice(0, 3).map((d, i) => (
+                <span
+                  key={d.id || i}
+                  className="w-8 h-8 flex items-center justify-center text-[13px] font-semibold"
+                  style={{ ...display, marginLeft: i ? -8 : 0, background: i % 2 ? T.tint : T.panelAlt, color: T.ash, borderRadius: 999, border: `2px solid ${T.panel}` }}
+                >
+                  {(d.callsign || d.fullName || "?").charAt(0).toUpperCase()}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="w-8 h-8 flex items-center justify-center flex-shrink-0" style={{ background: T.tint, borderRadius: 999 }}>
+              <Users size={16} color={T.accent} />
+            </span>
+          )}
+          <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+            <span className="text-[15px] font-semibold" style={{ ...display, color: T.ash }}>Child Profiles</span>
+            <span className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+              {dependents.length > 0 ? `${dependents.length} ${dependents.length === 1 ? "profile" : "profiles"}` : "Add your kids to book and track their patches"}
+            </span>
+          </span>
+          <ChevronRight size={16} color={T.ashFaint} />
+        </button>
+
+        {isOwner && (
+          <button onClick={onOpenSecretPatchQR} className="w-full flex items-center justify-center gap-2 py-3 mb-5 text-[13px] font-medium" style={{ ...body, color: T.ashDim, border: `1px dashed ${T.line}`, borderRadius: T.rCard }}>
+            <Shield size={15} color={T.ashDim} /> Secret Agent QR
+          </button>
+        )}
+      </div>
+      {showInvite && <InviteSheet referralUrl={referralUrl} onClose={() => setShowInvite(false)} />}
+      <BottomNav active="profile" onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+// Referral QR + link, opened from Profile's "Invite friends" button.
+function InviteSheet({ referralUrl, onClose }) {
+  const { T, display, body } = useTheme();
+  const [qr, setQr] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  useEffect(() => {
+    if (!referralUrl) return;
+    QRCode.toDataURL(referralUrl, { width: 400, margin: 4, color: { dark: "#002C48", light: "#FFFFFF" } /* fixed — always scannable regardless of theme */ }).then(setQr);
+  }, [referralUrl]);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be blocked in some contexts — the QR (and
+      // Share, where supported) still work.
+    }
+  };
+  const handleShare = async () => {
+    try {
+      await navigator.share({ title: "Join me on Atlas", text: "Find and book airsoft games on Atlas.", url: referralUrl });
+    } catch {
+      // Player closed the share sheet — nothing to do.
+    }
+  };
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 flex items-end" style={{ background: "rgba(0,0,0,0.5)", zIndex: 1600 }}>
+      <div
+        role="dialog"
+        aria-label="Invite friends"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full px-6 pt-3 flex flex-col items-center"
+        style={{ background: T.void, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: "calc(28px + env(safe-area-inset-bottom))" }}
+      >
+        <div className="w-full flex items-center justify-between mb-3">
+          <h2 className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>Invite friends</h2>
+          <button onClick={onClose} aria-label="Close" className="w-9 h-9 -mr-2 flex items-center justify-center">
+            <X size={18} color={T.ashDim} />
+          </button>
+        </div>
+        <div className="p-2 mb-3" style={{ background: "#FFFFFF", borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+          {qr ? <img src={qr} alt="Invite QR code" style={{ width: 200, height: 200, display: "block" }} /> : <div style={{ width: 200, height: 200 }} />}
+        </div>
+        <p className="text-[13px] text-center mb-1" style={{ ...body, color: T.ashDim, maxWidth: 290 }}>
+          Let a friend scan this, or send them your link to invite them to Atlas.
+        </p>
+        <p className="text-[11px] font-semibold mb-4" style={{ ...body, color: T.ashFaint }}>Share with a friend — not for check-in.</p>
+        <div className={`w-full grid gap-2.5 ${canShare ? "grid-cols-2" : "grid-cols-1"}`}>
+          <button
+            onClick={handleCopy}
+            className="py-3 text-[13px] font-semibold flex items-center justify-center gap-2"
+            style={{ ...display, background: copied ? T.good : T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}
+          >
+            <Copy size={15} color={T.inverse} /> {copied ? "Copied!" : "Copy link"}
+          </button>
+          {canShare && (
+            <button
+              onClick={handleShare}
+              className="py-3 text-[13px] font-semibold flex items-center justify-center gap-2"
+              style={{ ...display, background: T.panel, color: T.ash, border: `1px solid ${T.line}`, borderRadius: T.rPill }}
+            >
+              <Share2 size={15} color={T.ash} /> Share…
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsRow({ icon: Icon, iconColor, label, value, valueColor, onClick, href, expanded, first }) {
+  const { T, body, mono } = useTheme();
+  const cls = "w-full flex items-center gap-3 text-left" + (first ? "" : " border-t");
+  const style = { minHeight: 52, borderColor: T.line };
+  const inner = (
+    <>
+      {Icon && <Icon size={18} color={iconColor || T.ashDim} className="flex-shrink-0" />}
+      <span className="flex-1 text-[14px] font-medium" style={{ ...body, color: T.ash }}>{label}</span>
+      {value && <span className="text-[12px] truncate" style={{ ...mono, color: valueColor || T.ashDim, maxWidth: 170 }}>{value}</span>}
+      {href ? (
+        <ExternalLink size={14} color={T.ashFaint} className="flex-shrink-0" />
+      ) : onClick ? (
+        <ChevronRight size={15} color={T.ashFaint} className="flex-shrink-0" style={{ transform: expanded ? "rotate(90deg)" : "none" }} />
+      ) : null}
+    </>
+  );
+  if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls} style={style}>{inner}</a>;
+  if (onClick) return <button onClick={onClick} className={cls} style={style}>{inner}</button>;
+  return <div className={cls} style={style}>{inner}</div>;
+}
+
+// Account, preferences and support — moved off the Profile page
+// (2026-11-09). Reached from the gear in Profile's header; Profile's
+// "Verify" banner opens this with the verify panel already expanded.
+function SettingsScreen({ profile, user, onBack, onOpenAccount, onOpenAppearance, onLogout, changePassword, updateLanguage, sendVerificationEmail, syncEmailVerification, initialVerifyOpen = false }) {
+  const { T, display, body, mono, savedTheme } = useTheme();
+  const cardStyle = { background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd };
   const LANGUAGES = ["English", "Spanish", "French"]; // covers major US + Canadian languages relevant here
+  const currentLanguage = profile?.language || "English";
+
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -8600,10 +8963,10 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAcco
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // "Verify Email" menu item — only shown while profile.verified isn't true.
+  // "Verify Email" row — only shown while profile.verified isn't true.
   // The welcome email is the only other place a player gets a link, so this
   // is the way back in if they lost it or it expired.
-  const [showVerifyPanel, setShowVerifyPanel] = useState(false);
+  const [showVerifyPanel, setShowVerifyPanel] = useState(initialVerifyOpen);
   const [verifyBusy, setVerifyBusy] = useState(""); // "", "send", "check"
   const [verifyMsg, setVerifyMsg] = useState(null); // { tone: "good" | "alert" | "dim", text }
 
@@ -8671,159 +9034,32 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAcco
     }
   };
 
+  const inputStyle = { ...body, background: T.void, border: `1px solid ${T.line}`, borderRadius: T.rTight, color: T.ash };
+
   return (
     <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
-      <ScreenHeader title="Profile" />
+      <div className="px-6 pt-2 pb-4 flex items-center" style={{ borderBottom: `1px solid ${T.line}` }}>
+        <button onClick={onBack} aria-label="Back" className="w-9 h-9 -ml-2 flex items-center justify-center">
+          <ChevronLeft size={20} color={T.ash} />
+        </button>
+        <h1 className="flex-1 text-center text-[18px] font-semibold mr-9" style={{ ...display, color: T.ash }}>Settings</h1>
+      </div>
       <div className="px-6 pt-4">
-        {cardBeta && myCard && !myCard.hiRes && <CardPhotoPrompt onUpload={handleAvatarPick} />}
-        <div className="p-4 flex items-center gap-3 mb-2" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-          {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
-          <button onClick={handleAvatarPick} className="relative w-14 h-14 flex-shrink-0" disabled={avatarUploading}>
-            {profile?.avatarUrl ? (
-              <div
-                className="w-14 h-14"
-                style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 4 }}
-              />
-            ) : (
-              <div
-                className="w-14 h-14 flex items-center justify-center text-[18px] font-semibold"
-                style={{ ...display, background: T.panelAlt, borderRadius: 4, color: T.ash }}
-              >
-                {initial}
-              </div>
-            )}
-            <div
-              className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center"
-              style={{ background: T.cta, borderRadius: 3, border: `2px solid ${T.panel}` }}
-            >
-              {avatarUploading ? (
-                <span className="text-[8px]" style={{ ...mono, color: T.inverse }}>…</span>
-              ) : (
-                <Camera size={10} color={T.inverse} strokeWidth={2.5} />
-              )}
-            </div>
-          </button>
-          <div>
-            <span className="text-[16px] font-semibold inline-flex items-center gap-1.5" style={{ ...display, color: T.ash }}>
-              {profile?.callsign || "Loading…"}
-              {profile?.verified && <BadgeCheck size={15} color={T.inverse} fill={T.accent} />}
-              {profile?.featuredPatch && (
-                <img
-                  src={profile.featuredPatch.imageUrl}
-                  alt={`${profile.featuredPatch.name} patch`}
-                  className="w-5 h-5"
-                  style={{ objectFit: "contain" }}
-                />
-              )}
-            </span>
-            <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>{user?.email}</div>
-          </div>
-        </div>
-        {avatarError && <p className="text-[11px] mb-3" style={{ ...body, color: T.alert }}>{avatarError}</p>}
-        {!avatarError && <div className="mb-3" />}
-
-        <Eyebrow>Your Stats</Eyebrow>
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>
-              {profile?.createdAt?.toDate ? profile.createdAt.toDate().getFullYear() : "—"}
-            </div>
-            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Member Since</div>
-          </div>
-          <div className="p-3 text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{pastEventsCount}</div>
-            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Past Events</div>
-          </div>
-          <button onClick={onOpenPatches} className="p-3 text-center transition-transform duration-100 active:scale-[0.97]" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{patches?.length || 0}</div>
-            <div className="text-[10px]" style={{ ...body, color: T.ashFaint }}>Patches</div>
-          </button>
-        </div>
-
-        <Eyebrow>Invite Friends</Eyebrow>
-        <div className="p-4 mb-5 flex flex-col items-center text-center" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-          {referralQr && <img src={referralQr} alt="Referral QR code" className="mb-3" style={{ width: 140, height: 140 }} />}
-          <p className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>
-            Share this code or let someone scan it to invite them to Atlas.
-          </p>
-          <p className="text-[11px] font-semibold mb-3 -mt-2" style={{ ...body, color: T.ashFaint }}>
-            Share with a friend — not for check-in.
-          </p>
-          <button
-            onClick={handleCopyReferral}
-            className="w-full py-2.5 text-[13px] font-semibold"
-            style={{ ...display, background: copied ? T.good : T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}
-          >
-            {copied ? "Copied!" : "Copy Invite Link"}
-          </button>
-        </div>
-
-        {vouchers && vouchers.length > 0 && (
-          <>
-            <Eyebrow>Vouchers</Eyebrow>
-            <div className="mb-5 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-              {vouchers.map((v) => {
-                // No sweep job flips status to "expired" in Firestore —
-                // this is purely a time comparison for display. The real
-                // enforcement (rejecting an expired voucher at
-                // redemption) happens server-side in bookEventWithVoucher.
-                const isExpired = v.expiresAt && v.expiresAt.toDate() < new Date();
-                return (
-                <div key={v.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Ticket size={16} color={isExpired ? T.ashFaint : T.good} className="flex-shrink-0" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <div className="text-[13px] font-medium truncate" style={{ ...body, color: T.ash }}>{v.fieldName || "Unknown field"}</div>
-                        <ClaimedBadge fieldId={v.fieldId} size={12} />
-                        {isExpired && (
-                          <span className="text-[9px] font-semibold px-1.5 py-0.5" style={{ ...mono, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
-                            EXPIRED
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] truncate" style={{ ...body, color: T.ashFaint }}>
-                        {v.givenByCallsign ? `Gift from ${v.givenByCallsign}` : v.source === "teamTicket" ? `Unused ticket, "${v.sourceEventTitle || "an event"}"` : v.kind === "freeEntry" && !v.sourceEventId ? "Gift from the field" : `From "${v.sourceEventTitle || "a canceled event"}"`}
-                        {v.expiresAt?.toDate ? ` · ${isExpired ? "expired" : "expires"} ${v.expiresAt.toDate().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0 text-right">
-                    <div className="text-[14px] font-semibold" style={{ ...mono, color: isExpired ? T.ashFaint : T.good }}>
-                      {v.kind === "freeEntry" ? "FREE ENTRY" : v.amountCents % 100 === 0 ? `$${v.amountCents / 100}` : `$${(v.amountCents / 100).toFixed(2)}`}
-                    </div>
-                    {canGiveVoucher(v) && (
-                      <button onClick={() => setGivingVoucher(v)} className="text-[11px] font-semibold" style={{ ...display, color: T.accent }}>Give</button>
-                    )}
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-            {givingVoucher && <GiveVoucherSheet voucher={givingVoucher} onClose={() => setGivingVoucher(null)} />}
-          </>
-        )}
-
-        <Eyebrow>Account Settings</Eyebrow>
-        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-          <ProfileRow label="Email" value={user?.email} static />
+        <Eyebrow>Account</Eyebrow>
+        <div className="px-4 mb-5" style={cardStyle}>
+          <SettingsRow first icon={User} label="My Account" value={profile?.callsign} onClick={onOpenAccount} />
+          <SettingsRow icon={Mail} label="Email" value={user?.email} />
           {profile && profile.verified !== true && (
-            <div>
-              <button
+            <>
+              <SettingsRow
+                icon={BadgeCheck}
+                iconColor={T.accent}
+                label="Verify Email"
+                value="Not verified"
+                valueColor={T.alert}
+                expanded={showVerifyPanel}
                 onClick={() => { setShowVerifyPanel(!showVerifyPanel); setVerifyMsg(null); }}
-                className="w-full flex items-center justify-between py-3.5 border-t"
-                style={{ borderColor: T.line }}
-              >
-                <span className="text-[14px] font-medium inline-flex items-center gap-1.5" style={{ ...body, color: T.ash }}>
-                  <BadgeCheck size={15} color={T.accent} />
-                  Verify Email
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>Not verified</span>
-                  <ChevronRight size={15} color={T.ashFaint} style={{ transform: showVerifyPanel ? "rotate(90deg)" : "none" }} />
-                </div>
-              </button>
+              />
               {showVerifyPanel && (
                 <div className="pb-4 flex flex-col gap-2.5">
                   <p className="text-[12.5px] leading-relaxed" style={{ ...body, color: T.ashDim }}>
@@ -8852,156 +9088,93 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAcco
                   )}
                 </div>
               )}
-            </div>
-          )}
-          <button onClick={onOpenAccount} className="w-full flex items-center justify-between py-3.5">
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>My Account</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{profile?.callsign}</span>
-              <ChevronRight size={15} color={T.ashFaint} />
-            </div>
-          </button>
-          <button onClick={onOpenChildProfiles} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Child Profiles</span>
-            <div className="flex items-center gap-2">
-              {dependentCount > 0 && <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{dependentCount}</span>}
-              <ChevronRight size={15} color={T.ashFaint} />
-            </div>
-          </button>
-          {cardBeta && (
-            <>
-              <button onClick={onOpenMyCard} className="w-full flex items-center justify-between py-3.5">
-                <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>My Card</span>
-                <ChevronRight size={15} color={T.ashFaint} />
-              </button>
-              <button onClick={onOpenDeck} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
-                <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Deck</span>
-                <ChevronRight size={15} color={T.ashFaint} />
-              </button>
             </>
           )}
-          <button onClick={onOpenPatches} className={`w-full flex items-center justify-between py-3.5${cardBeta ? " border-t" : ""}`} style={cardBeta ? { borderColor: T.line } : undefined}>
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Patches</span>
-            <ChevronRight size={15} color={T.ashFaint} />
-          </button>
-          <button onClick={onOpenActiveAchievements} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Active Achievements</span>
-            <ChevronRight size={15} color={T.ashFaint} />
-          </button>
-          <button onClick={onOpenYearInReview} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Year in Review</span>
-            <ChevronRight size={15} color={T.ashFaint} />
-          </button>
-          <button onClick={onOpenScanRedeem} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Scan a Code</span>
-            <ChevronRight size={15} color={T.ashFaint} />
-          </button>
-          {user?.uid === ATLAS_OWNER_UID && (
-            <button onClick={onOpenSecretPatchQR} className="w-full flex items-center justify-between py-3.5 border-t" style={{ borderColor: T.line }}>
-              <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Secret Agent QR</span>
-              <ChevronRight size={15} color={T.ashFaint} />
-            </button>
+          <SettingsRow
+            icon={Lock}
+            label="Change Password"
+            expanded={showPasswordForm}
+            onClick={() => { setShowPasswordForm(!showPasswordForm); setPasswordError(""); setPasswordSuccess(false); }}
+          />
+          {showPasswordForm && (
+            <form onSubmit={submitPasswordChange} className="flex flex-col gap-2.5 pb-4">
+              <input
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                type="password"
+                autoComplete="current-password"
+                placeholder="Current password"
+                className="px-4 py-3 text-[14px] outline-none"
+                style={inputStyle}
+              />
+              <input
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                type="password"
+                autoComplete="new-password"
+                placeholder="New password"
+                className="px-4 py-3 text-[14px] outline-none"
+                style={inputStyle}
+              />
+              <input
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                type="password"
+                autoComplete="new-password"
+                placeholder="Confirm new password"
+                className="px-4 py-3 text-[14px] outline-none"
+                style={inputStyle}
+              />
+              {passwordError && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{passwordError}</p>}
+              {passwordSuccess && <p className="text-[12px]" style={{ ...body, color: T.good }}>Password updated.</p>}
+              <button
+                type="submit"
+                disabled={passwordSaving}
+                className="w-full py-3 font-semibold text-[13px]"
+                style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm, opacity: passwordSaving ? 0.6 : 1 }}
+              >
+                {passwordSaving ? "Updating…" : "Update Password"}
+              </button>
+            </form>
           )}
         </div>
 
-        <FeedbackPanel />
-
-        <button
-          onClick={() => { setShowPasswordForm(!showPasswordForm); setPasswordError(""); setPasswordSuccess(false); }}
-          className="w-full flex items-center justify-between py-3 px-4 mb-6"
-          style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}
-        >
-          <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Change Password</span>
-          <ChevronRight size={15} color={T.ashFaint} style={{ transform: showPasswordForm ? "rotate(90deg)" : "none" }} />
-        </button>
-
-        {showPasswordForm && (
-          <form onSubmit={submitPasswordChange} className="flex flex-col gap-2.5 mb-6 -mt-4">
-            <input
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              type="password"
-              autoComplete="current-password"
-              placeholder="Current password"
-              className="px-4 py-3 text-[14px] bg-transparent outline-none"
-              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-            />
-            <input
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              type="password"
-              autoComplete="new-password"
-              placeholder="New password"
-              className="px-4 py-3 text-[14px] bg-transparent outline-none"
-              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-            />
-            <input
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              type="password"
-              autoComplete="new-password"
-              placeholder="Confirm new password"
-              className="px-4 py-3 text-[14px] bg-transparent outline-none"
-              style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-            />
-            {passwordError && <p className="text-[12px]" style={{ ...body, color: T.alert }}>{passwordError}</p>}
-            {passwordSuccess && <p className="text-[12px]" style={{ ...body, color: T.good }}>Password updated.</p>}
-            <button
-              type="submit"
-              disabled={passwordSaving}
-              className="w-full py-3 font-semibold text-[13px]"
-              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd, opacity: passwordSaving ? 0.6 : 1 }}
-            >
-              {passwordSaving ? "Updating…" : "Update Password"}
-            </button>
-          </form>
-        )}
-
-        <Eyebrow>Support & Preferences</Eyebrow>
-        <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-          <button onClick={onOpenAppearance} className="w-full flex items-center justify-between py-3.5">
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Appearance</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{lookName(savedTheme)}</span>
-              <ChevronRight size={15} color={T.ashFaint} />
+        <Eyebrow>Preferences</Eyebrow>
+        <div className="px-4 mb-5" style={cardStyle}>
+          <SettingsRow first icon={Palette} label="Appearance" value={lookName(savedTheme)} onClick={onOpenAppearance} />
+          <div className="py-3.5 border-t flex flex-col gap-2.5" style={{ borderColor: T.line }}>
+            <div className="flex items-center gap-3">
+              <Globe size={18} color={T.ashDim} className="flex-shrink-0" />
+              <span className="flex-1 text-[14px] font-medium" style={{ ...body, color: T.ash }}>Language</span>
             </div>
-          </button>
-          <button onClick={() => setShowLanguagePicker(!showLanguagePicker)} className="w-full flex items-center justify-between py-3.5">
-            <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Language</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{profile?.language || "English"}</span>
-              <ChevronRight size={15} color={T.ashFaint} style={{ transform: showLanguagePicker ? "rotate(90deg)" : "none" }} />
-            </div>
-          </button>
-          <ProfileRow label="FAQs" />
-          <ProfileRow label="Report a concern" value="Join our Discord" href="https://discord.gg/hR8EntGsq" />
-        </div>
-
-        {showLanguagePicker && (
-          <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className="flex gap-2 mb-2">
-              {LANGUAGES.map((lang) => (
-                <button
-                  key={lang}
-                  onClick={() => updateLanguage(lang)}
-                  className="px-3 py-1.5 text-[12px] font-medium"
-                  style={{
-                    ...body,
-                    border: `1px solid ${(profile?.language || "English") === lang ? T.accent : T.line}`,
-                    background: (profile?.language || "English") === lang ? T.accent : "transparent",
-                    color: (profile?.language || "English") === lang ? T.inverse : T.ashDim,
-                    borderRadius: T.rPill,
-                  }}
-                >
-                  {lang}
-                </button>
-              ))}
+            <div role="radiogroup" aria-label="Language" className="grid grid-cols-3 gap-1 p-1" style={{ background: T.void, borderRadius: T.rPill }}>
+              {LANGUAGES.map((lang) => {
+                const on = currentLanguage === lang;
+                return (
+                  <button
+                    key={lang}
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => updateLanguage(lang)}
+                    className="py-2 text-[12px] font-semibold"
+                    style={{ ...body, background: on ? T.cta : "transparent", color: on ? T.inverse : T.ashDim, borderRadius: T.rPill }}
+                  >
+                    {lang}
+                  </button>
+                );
+              })}
             </div>
             <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
               This saves your preference for later — the app doesn't translate its text yet, that's coming.
             </p>
           </div>
-        )}
+        </div>
+
+        <Eyebrow>Support</Eyebrow>
+        <div className="px-4 mb-2.5" style={cardStyle}>
+          <SettingsRow first icon={AlertTriangle} label="Report a concern" value="Discord" href="https://discord.gg/hR8EntGsq" />
+        </div>
+        <FeedbackPanel />
 
         <button
           onClick={onLogout}
@@ -9011,7 +9184,6 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAcco
           <LogOut size={15} /> Log out
         </button>
       </div>
-      <BottomNav active="profile" onNavigate={onNavigate} />
     </div>
   );
 }
@@ -10403,10 +10575,14 @@ function AppShell() {
   const openScanRedeem = () => push("scanRedeem");
   const openMyCard = () => push("myCard");
   const openAppearance = () => push("appearance");
+  // Settings (2026-11-09): Profile's "Verify" banner opens it with the
+  // verify panel already expanded; the gear opens it plain.
+  const [settingsVerifyOpen, setSettingsVerifyOpen] = useState(false);
+  const openSettings = (verify = false) => { setSettingsVerifyOpen(verify === true); push("settings"); };
   // Trying a skin on: the whole app switches to it and lands on Explore so
   // the player can tap around. Exit restores their saved look.
   const startSkinPreview = (id) => { setPreviewTheme(id); setStack(["home"]); };
-  const exitSkinPreview = () => { setPreviewTheme(null); setStack(["profile", "appearance"]); };
+  const exitSkinPreview = () => { setPreviewTheme(null); setStack(["profile", "settings", "appearance"]); };
   const cardBetaMe = useCardBeta(user?.uid);
   const openDeck = (ownerUid = null) => { setDeckOwnerId(ownerUid); setDeckHighlight(null); push("deck"); };
   const { card: myCardForCrop } = useCardOwner("adult", adjustingCardPhoto ? user?.uid : null);
@@ -10715,27 +10891,37 @@ function AppShell() {
         profile={profile}
         user={user}
         onNavigate={goTab}
-        onOpenAppearance={openAppearance}
-        onOpenAccount={openAccount}
+        onOpenSettings={openSettings}
         onOpenChildProfiles={openChildProfiles}
-        dependentCount={dependents.length}
+        dependents={dependents}
         onOpenPatches={openPatches}
         onOpenActiveAchievements={openActiveAchievements}
+        achievementRows={activeAchievementRows}
         onOpenYearInReview={openYearInReview}
         onOpenSecretPatchQR={openSecretPatchQR}
         onOpenScanRedeem={openScanRedeem}
         onOpenMyCard={openMyCard}
-        onOpenDeck={() => openDeck(null)}
-        onLogout={handleLogout}
-        changePassword={changePassword}
         uploadAvatar={uploadAvatar}
-        updateLanguage={updateLanguage}
         favorites={favorites}
         events={events}
         patches={patches}
         vouchers={myVouchers}
+      />
+    );
+  } else if (screen === "settings") {
+    content = (
+      <SettingsScreen
+        profile={profile}
+        user={user}
+        onBack={pop}
+        onOpenAccount={openAccount}
+        onOpenAppearance={openAppearance}
+        onLogout={handleLogout}
+        changePassword={changePassword}
+        updateLanguage={updateLanguage}
         sendVerificationEmail={sendVerificationEmail}
         syncEmailVerification={syncEmailVerification}
+        initialVerifyOpen={settingsVerifyOpen}
       />
     );
   } else if (screen === "account") {
