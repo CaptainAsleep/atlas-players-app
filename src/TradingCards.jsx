@@ -17,6 +17,7 @@ import { httpsCallable } from "firebase/functions";
 import { db, functions as firebaseFunctions } from "./lib/firebase";
 import { useTheme } from "./hooks/useTheme";
 import { cropBackground, CARD_ASPECT } from "./lib/cardCrop";
+import { Crop, ImagePlus, Layers, Lock, QrCode, RefreshCw, Repeat2, Waves } from "lucide-react";
 
 export const CARD_BETA_UIDS = new Set([
   "lg4HMLTJvsPfSEN1pvNhMV4fbct1", // Atlas
@@ -875,6 +876,14 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
   const [sharing, setSharing] = useState(null); // { card, childPublicId }
   const consent = useCardConsent(user?.uid);
   const [askConsent, setAskConsent] = useState(false);
+  const deckCount = useDeckCount(user?.uid);
+  const canShare = !!card?.photoUrl && consent.optedIn;
+  // One line under Share saying what's in the way (most important first).
+  const shareHint = !card ? null
+    : !card.photoUrl ? "Add a photo to share your card."
+    : !consent.loading && !consent.optedIn ? "Your card is private. Opt in below to share it."
+    : !card.hiRes ? "Your card photo is low-res. Add a sharper one."
+    : null;
 
   return (
     <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
@@ -883,24 +892,21 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
         <p className="px-6 pt-6 text-[13px]" style={{ ...body, color: T.ashFaint }}>{loading ? "Loading…" : "Card not found."}</p>
       ) : (
         <div className="flex flex-col items-center pt-3 px-5">
-          <div className="text-[11px] uppercase" style={{ ...body, color: T.ashFaint, letterSpacing: "0.14em" }}>Drag to spin · double-tap to flip</div>
           <SpinCard card={card} total={total} scale={scale} idle={idle} controlsRef={ctl} />
-          <div className="flex gap-2 flex-wrap justify-center mt-2">
-            <Pill onClick={() => ctl.current?.flip()}>Flip</Pill>
-            <Pill onClick={() => ctl.current?.spin()}>Spin</Pill>
-            <Pill onClick={() => setIdle((v) => !v)}>{idle ? "Sway: on" : "Sway: off"}</Pill>
+          <CardControls onFlip={() => ctl.current?.flip()} onSpin={() => ctl.current?.spin()} sway={idle} onSway={() => setIdle((v) => !v)} />
+          <div className="w-full flex flex-col items-center gap-2.5 mt-5" style={{ maxWidth: 360 }}>
+            <button disabled={!canShare} onClick={() => setSharing({ card })} className="w-full flex items-center justify-center gap-2 py-3.5 text-[15px] font-semibold"
+              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: canShare ? T.shadowMd : "none", opacity: canShare ? 1 : 0.45 }}>
+              {canShare ? <QrCode size={18} strokeWidth={2.2} /> : <Lock size={16} strokeWidth={2.2} />} Share my card
+            </button>
+            {shareHint && <div className="text-[12px] text-center -mt-0.5" style={{ ...body, color: T.ashDim }}>{shareHint}</div>}
+            <div className="w-full grid grid-cols-2 gap-2.5">
+              <SecondaryAction icon={Layers} onClick={onOpenDeck}>My deck{deckCount ? ` · ${deckCount}` : ""}</SecondaryAction>
+              {card.hiRes
+                ? <SecondaryAction icon={Crop} onClick={onAdjustCardPhoto}>Adjust photo</SecondaryAction>
+                : <SecondaryAction icon={ImagePlus} onClick={onUploadPhoto}>{card.photoUrl ? "Sharper photo" : "Add photo"}</SecondaryAction>}
+            </div>
           </div>
-          <div className="flex gap-2 flex-wrap justify-center mt-3">
-            <Pill primary disabled={!card.photoUrl || !consent.optedIn} onClick={() => setSharing({ card })}>Share my card</Pill>
-            <Pill onClick={onOpenDeck}>My deck</Pill>
-          </div>
-          {!card.photoUrl && (
-            <p className="text-[12px] mt-3 text-center" style={{ ...body, color: T.ashDim }}>Add a photo to share your card. <button onClick={onUploadPhoto} className="underline" style={{ color: T.accent }}>Upload one</button></p>
-          )}
-          {card.photoUrl && !card.hiRes && <div className="w-full mt-4"><CardPhotoPrompt onUpload={onUploadPhoto} /></div>}
-          {card.hiRes && (
-            <button onClick={onAdjustCardPhoto} className="mt-3 text-[12px] underline" style={{ ...body, color: T.accent }}>Adjust card photo</button>
-          )}
           {!consent.loading && (
             <div className="w-full mt-4 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, border: `1px solid ${T.line}` }}>
               <div className="flex-1">
@@ -924,6 +930,32 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
       {sharing && <ShareCardSheet card={sharing.card} total={total} childPublicId={sharing.childPublicId} onClose={() => setSharing(null)} />}
       {askConsent && user?.uid && <CardConsentModal uid={user.uid} onClose={() => setAskConsent(false)} />}
     </div>
+  );
+}
+
+// Flip / Spin / Sway as one quiet toolbar right under the card.
+function CardControls({ onFlip, onSpin, sway, onSway }) {
+  const { T, body } = useTheme();
+  const btn = (active) => ({ ...body, color: active ? T.accent : T.ash, background: active ? T.panelAlt : "transparent", borderRadius: T.rPill });
+  return (
+    <div className="flex flex-col items-center mt-2">
+      <div className="flex items-center p-1 gap-0.5" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: T.rPill, boxShadow: T.shadowSm }}>
+        <button onClick={onFlip} className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-semibold" style={btn(false)}><Repeat2 size={15} /> Flip</button>
+        <button onClick={onSpin} className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-semibold" style={btn(false)}><RefreshCw size={14} /> Spin</button>
+        <button onClick={onSway} aria-pressed={sway} className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-semibold" style={btn(sway)}><Waves size={15} /> Sway</button>
+      </div>
+      <div className="text-[10.5px] uppercase mt-2" style={{ ...body, color: T.ashFaint, letterSpacing: "0.12em" }}>Drag to spin · double-tap to flip</div>
+    </div>
+  );
+}
+
+function SecondaryAction({ icon: Icon, onClick, children }) {
+  const { T, display } = useTheme();
+  return (
+    <button onClick={onClick} className="flex items-center justify-center gap-2 py-3 text-[13px] font-semibold"
+      style={{ ...display, background: T.panel, color: T.ash, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
+      <Icon size={16} strokeWidth={2} /> {children}
+    </button>
   );
 }
 
@@ -1270,10 +1302,6 @@ export function RankUpWatcher({ uid }) {
 
 // Count for a "Deck (N)" button on a public profile.
 export function useDeckCount(collectorUid) {
-  const [n, setN] = useState(null);
-  useEffect(() => {
-    if (!collectorUid) return undefined;
-    return onSnapshot(query(collection(db, "cardCollections"), where("collectorUid", "==", collectorUid)), (s) => setN(s.size), () => setN(null));
-  }, [collectorUid]);
-  return n;
+  const { cards, loading } = useDeck(collectorUid);
+  return !collectorUid || loading ? null : cards.length;
 }
