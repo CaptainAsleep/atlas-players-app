@@ -225,10 +225,58 @@ export const CardSound = {
   },
   flick(at = 0) { const c = this.ac(); if (c) this.noise(c.currentTime + at, 0.03, "bandpass", 2200 + Math.random() * 1800, 1.4, 0.35); },
   thump(at = 0) { const c = this.ac(); if (!c) return; this.noise(c.currentTime + at, 0.12, "lowpass", 260, 1, 0.9); this.noise(c.currentTime + at, 0.05, "bandpass", 1500, 1, 0.25); },
-  whoosh(len = 0.6) {
+  // Airy whoosh: wide noise band that swells in, sweeps up and back down,
+  // pans across and trails off. No sharp attack (that's what made the old one
+  // sound like a clap).
+  whoosh(len = 0.6, { delay = 0, gain = 0.32, from = -0.6, to = 0.6 } = {}) {
     const c = this.ac(); if (!c) return;
-    const t = c.currentTime, f = this.noise(t, len, "bandpass", 300, 0.8, 0.22);
-    f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(2600, t + len * 0.8);
+    const t = c.currentTime + delay;
+    const src = c.createBufferSource();
+    src.buffer = this.buf; src.loop = true;
+    const bp = c.createBiquadFilter();
+    bp.type = "bandpass"; bp.Q.value = 0.6;
+    bp.frequency.setValueAtTime(380, t);
+    bp.frequency.exponentialRampToValueAtTime(1500, t + len * 0.45);
+    bp.frequency.exponentialRampToValueAtTime(520, t + len);
+    const lp = c.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 3000;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + len * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    let out = g;
+    if (c.createStereoPanner) {
+      const pan = c.createStereoPanner();
+      pan.pan.setValueAtTime(from, t);
+      pan.pan.linearRampToValueAtTime(to, t + len);
+      g.connect(pan);
+      out = pan;
+    }
+    src.connect(bp).connect(lp).connect(g);
+    out.connect(c.destination);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + len + 0.05);
+  },
+  flipWhoosh() { this.whoosh(0.65, { gain: 0.3 }); },
+  // Two full turns: a pass per turn, the second softer and the other way.
+  spinWhoosh() {
+    this.whoosh(0.85, { gain: 0.32 });
+    this.whoosh(0.95, { delay: 0.75, gain: 0.22, from: 0.6, to: -0.6 });
+  },
+  // Opening a card to look at it: a soft rising shimmer plus a faint breath of air.
+  reveal() {
+    const c = this.ac(); if (!c) return;
+    const t = c.currentTime;
+    [[1046.5, 0], [1318.5, 0.07], [1568, 0.14], [2093, 0.21]].forEach(([f, d]) => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(0.08, t + d + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 1.1);
+      o.connect(g).connect(c.destination);
+      o.start(t + d); o.stop(t + d + 1.15);
+    });
+    this.whoosh(0.5, { gain: 0.1 });
   },
   chime() {
     const c = this.ac(); if (!c) return;
@@ -415,8 +463,8 @@ function useSpinner(stageRef, cardRef, { idle = true, startY = -18 } = {}) {
     const S = { rotY: startY, rotX: 6, vY: 0, vX: 0, drag: false, idle, idleT: 0, anim: null, last: 0, lastTap: 0, lx: 0, ly: 0, lt: 0 };
     const to = (target, dur) => { S.anim = { from: S.rotY, to: target, start: performance.now(), dur }; S.last = performance.now(); };
     controls.current = {
-      flip() { to(Math.round(S.rotY / 180) * 180 + 180, 800); CardSound.whoosh(0.5); },
-      spin() { to(Math.round(S.rotY / 180) * 180 + 720, 1800); CardSound.whoosh(1); },
+      flip(silent) { to(Math.round(S.rotY / 180) * 180 + 180, 800); if (!silent) CardSound.flipWhoosh(); },
+      spin() { to(Math.round(S.rotY / 180) * 180 + 720, 1800); CardSound.spinWhoosh(); },
       setIdle(v) { S.idle = v; },
     };
     const down = (e) => { S.drag = true; S.anim = null; S.lx = e.clientX; S.ly = e.clientY; S.lt = performance.now(); S.vX = S.vY = 0; stage.setPointerCapture?.(e.pointerId); };
@@ -574,8 +622,8 @@ export function CardViewer({ card, total, onClose }) {
   const { T, body } = useTheme();
   const scale = useScaleFor(0.82, 0.62);
   const ctl = useRef(null);
-  // Opens on the back, then flips to the face.
-  useEffect(() => { const t = setTimeout(() => ctl.current?.flip(), 120); return () => clearTimeout(t); }, []);
+  // Opens on the back, then flips to the face, with the "reveal" shimmer.
+  useEffect(() => { const t = setTimeout(() => { CardSound.reveal(); ctl.current?.flip(true); }, 120); return () => clearTimeout(t); }, []);
   useHideBottomNav();
   return createPortal(
     <div className="fixed inset-0 flex flex-col items-center justify-center" style={{ background: "rgba(3,5,10,0.92)", zIndex: 2100 }}>
