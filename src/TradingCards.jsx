@@ -626,8 +626,8 @@ function ShareCardSheet({ card, total, childPublicId, onClose }) {
         <div className="w-full h-full grid place-items-center" style={{ background: "#fff", borderRadius: 22, boxShadow: "0 20px 50px rgba(37,99,235,.35)" }}>
           {qr ? <img src={qr} alt="Card code" style={{ width: 200, height: 200, imageRendering: "pixelated" }} /> : <span className="text-[12px]" style={{ ...body, color: "#64748b" }}>{error || "Making a code…"}</span>}
           {qr && (
-            <div className="absolute grid place-items-center" style={{ width: 44, height: 44, borderRadius: 10, background: "#1e40af", boxShadow: "0 0 0 4px #fff" }}>
-              <AtlasLogo className="" fill="#fff" />
+            <div className="absolute grid place-items-center" style={{ left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 44, height: 44, borderRadius: 10, background: "#1e40af", boxShadow: "0 0 0 4px #fff" }}>
+              <svg viewBox={LOGO_VB} width="30" height="30" aria-hidden="true"><path d={LOGO_OUTLINE} fill="#050b18" fillRule="evenodd" /><path d={LOGO_FILL} fill="#fff" fillRule="evenodd" /></svg>
             </div>
           )}
         </div>
