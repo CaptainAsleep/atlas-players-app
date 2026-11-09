@@ -39,9 +39,9 @@ import { httpsCallable } from "firebase/functions";
 import { functions as firebaseFunctions } from "./lib/firebase";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
 // Paid skins (2026-11-09) — scope: project doc claude/atlas-skins-scope.md.
-import { AppearanceScreen, SkinPreviewChrome, SkinPurchaseSheet, SkinAddonPanel, EMPTY_SKIN_PICK, skinPickRequest } from "./Skins";
+import { AppearanceScreen, SkinPreviewChrome, SkinPurchaseSheet, SkinAddonPanel, EMPTY_SKIN_PICK, skinPickRequest, SkinsLaunchAnnouncement } from "./Skins";
 import SkinTexture, { SkinHeaderBand } from "./SkinTexture";
-import { useOwnedSkins, saveAppearance, setSkinDropAlerts } from "./hooks/useSkins";
+import { useOwnedSkins, saveAppearance, setSkinDropAlerts, markAnnouncementSeen } from "./hooks/useSkins";
 import { lookName, isPaidSkin } from "./skins";
 
 /* ---------- design tokens ---------- */
@@ -10322,6 +10322,22 @@ function AppShell() {
     }
     setEquipBusy(false);
   };
+  // "New: Skins" launch pop-up — once per account, on the Explore screen,
+  // a beat after landing (see the render below for what it waits behind).
+  const [skinsIntroHidden, setSkinsIntroHidden] = useState(false);
+  const [skinsIntroReady, setSkinsIntroReady] = useState(false);
+  const skinsIntroSeen = !!profile?.seenAnnouncements?.skinsLaunch;
+  useEffect(() => {
+    if (screen !== "home" || !profile || skinsIntroSeen) { setSkinsIntroReady(false); return undefined; }
+    const t = setTimeout(() => setSkinsIntroReady(true), 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, !!profile, skinsIntroSeen]);
+  const closeSkinsIntro = (openSkins) => {
+    setSkinsIntroHidden(true);
+    if (user) markAnnouncementSeen(user.uid, "skinsLaunch").catch((err) => console.warn("markAnnouncementSeen:", err?.message || err));
+    if (openSkins) push("appearance");
+  };
   const toggleSkinDropAlerts = (on) => {
     if (!user) return;
     setSkinDropAlerts(user.uid, on).catch((err) => console.error("skinDropAlerts:", err));
@@ -11074,6 +11090,12 @@ function AppShell() {
         />
       )}
       {needRefresh && <UpdateAvailableToast onRefresh={refreshNow} />}
+      {user && profile && !installGate && skinsIntroReady && !skinsIntroHidden && !skinsIntroSeen && screen === "home"
+        && profile.acceptedTermsVersion === CURRENT_TERMS_VERSION && profile.completedOnboarding !== false
+        && unseenForOverlay.length === 0 && !noticeToShow && !(graduateToken && !graduatePromptHidden)
+        && !previewTheme && !skinSheetReq && !collectedCard && (
+        <SkinsLaunchAnnouncement onOpen={() => closeSkinsIntro(true)} onDismiss={() => closeSkinsIntro(false)} />
+      )}
       {user && profile && !installGate && previewTheme && !skinSheetReq && (
         <SkinPreviewChrome owned={ownedSkins} onExit={exitSkinPreview} onBuy={setSkinSheetReq} onEquip={equipLook} />
       )}

@@ -40,3 +40,10 @@ export async function startSkinCheckout(req) {
   const result = await call(req);
   return result.data.url;
 }
+
+// One-time in-app announcements (2026-11-09). users/{uid}.seenAnnouncements
+// is a map of announcement id -> true, so each one shows once per account,
+// on any device. First entry: "skinsLaunch".
+export async function markAnnouncementSeen(uid, id) {
+  await updateDoc(doc(db, "users", uid), { [`seenAnnouncements.${id}`]: true });
+}

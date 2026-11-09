@@ -7,7 +7,7 @@ import { FREE_LOOKS, SKINS, COLLECTIONS, skinById, isOnSale, bundleOffer, fmtSki
 import { startSkinCheckout } from "./hooks/useSkins";
 
 // Paid skins (2026-11-09). Scope: project doc claude/atlas-skins-scope.md.
-// Screens: Appearance (Profile → Appearance), the preview chrome shown
+// Screens: Appearance (Profile → Settings → Appearance), the preview chrome shown
 // while a skin is being tried on, the purchase sheet (checkout → waiting on
 // the webhook → unlocked), and the booking add-on panel.
 
@@ -92,7 +92,7 @@ function Eyebrow({ children, right }) {
 
 const fmtSaleEnd = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-// ── Profile → Appearance ────────────────────────────────────────────────
+// ── Profile → Settings → Appearance ────────────────────────────────────────────────
 export function AppearanceScreen({ owned, ownedLoaded, onBack, onPreview, onBuy, onEquip, equipBusy, equipError, dropAlerts, onToggleDropAlerts }) {
   const { T, display, body, mono, savedTheme } = useTheme();
   useAllSkinFonts();
@@ -134,7 +134,7 @@ export function AppearanceScreen({ owned, ownedLoaded, onBack, onPreview, onBuy,
   return (
     <div className="h-full overflow-y-auto pb-28" style={{ background: T.void }}>
       <div className="px-4 pt-3 pb-2 flex items-center gap-3">
-        <button onClick={onBack} aria-label="Back to Profile" className="w-11 h-11 flex items-center justify-center" style={{ background: T.panel, borderRadius: 999, boxShadow: T.shadowMd }}>
+        <button onClick={onBack} aria-label="Back" className="w-11 h-11 flex items-center justify-center" style={{ background: T.panel, borderRadius: 999, boxShadow: T.shadowMd }}>
           <ChevronLeft size={20} color={T.ash} />
         </button>
         <h1 className="text-[22px] font-semibold" style={{ ...display, color: T.ash }}>Appearance</h1>
@@ -367,7 +367,7 @@ export function SkinPurchaseSheet({ req, owned, onClose, onEquip }) {
         <div className="flex flex-col items-center gap-1.5">
           <span className="text-[11px] font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.18em", color: T.alert }}>{target.ids.length > 1 ? "SKINS UNLOCKED" : "SKIN UNLOCKED"}</span>
           <span className="text-[36px] font-bold leading-none" style={{ ...display, color: T.ash }}>{target.ids.length > 1 ? `${target.ids.length} new skins` : skinById(primary)?.name}</span>
-          <span className="text-[14px] max-w-[280px]" style={{ fontFamily: "'Inter', sans-serif", color: T.ashDim }}>Yours to keep. Switch any time from Profile → Appearance.</span>
+          <span className="text-[14px] max-w-[280px]" style={{ fontFamily: "'Inter', sans-serif", color: T.ashDim }}>Yours to keep. Switch any time from Profile → Settings → Appearance.</span>
         </div>
         <div className="mt-auto w-full flex flex-col gap-1.5">
           <button type="button" onClick={() => { onEquip(primary); onClose(); }} className="h-[52px] text-[17px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: 999 }}>
@@ -504,6 +504,45 @@ export function SkinAddonPanel({ owned, value, onChange }) {
       <span className="text-[11px] leading-snug" style={{ ...body, color: T.ashFaint }}>
         {total > 0 ? `Adds ${fmtSkinPrice(total)} to this checkout. ` : ""}Skins are non-refundable and stay yours if this booking is canceled.
       </span>
+    </div>
+  );
+}
+
+// ── "New: Skins" launch announcement (2026-11-09) ───────────────────────
+// Shown once per account (users/{uid}.seenAnnouncements.skinsLaunch) on the
+// Explore screen; AppShell decides when. Fixed neutral styling, like the
+// preview chrome, so it looks the same whatever look the player has on.
+export function SkinsLaunchAnnouncement({ onOpen, onDismiss }) {
+  useAllSkinFonts();
+  const fan = ["ridgeline", "ridgeline-black", "m81", "gunmetal", "neon"];
+  const offer = bundleOffer([]);
+  return (
+    <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="skins-launch-title">
+      <button type="button" aria-label="Close" onClick={onDismiss} className="absolute inset-0 w-full h-full" style={{ background: "rgba(0,0,0,0.6)" }} />
+      <div className="relative w-full max-w-[420px] mx-3 mb-3 sm:mb-0 px-5 pt-6 pb-5 flex flex-col gap-4" style={{ background: "#0C0D0F", color: "#FFFFFF", borderRadius: 26, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 30px 60px -20px rgba(0,0,0,0.8)", fontFamily: "'Inter', sans-serif" }}>
+        <div aria-hidden="true" className="relative h-[176px] flex justify-center">
+          {fan.map((id, i) => {
+            const off = i - 2;
+            return (
+              <div key={id} className="absolute top-2" style={{ width: 96, transform: `translateX(${off * 58}px) rotate(${off * 7}deg) translateY(${Math.abs(off) * 8}px)`, zIndex: 10 - Math.abs(off), borderRadius: 12, overflow: "hidden", boxShadow: "0 12px 24px -10px rgba(0,0,0,0.8)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                <MiniPreview lookId={id} height={150} radius={12} compact />
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex flex-col gap-1.5 text-center items-center">
+          <span className="text-[11px] font-semibold px-2.5 py-1" style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.16em", background: "#19F0FF", color: "#08060F", borderRadius: 999 }}>NEW</span>
+          <h2 id="skins-launch-title" className="text-[26px] font-bold leading-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Make Atlas yours</h2>
+          <p className="text-[14px] leading-relaxed max-w-[320px]" style={{ color: "rgba(255,255,255,0.75)" }}>
+            Skins restyle the whole app. Five are out now — Ridgeline, Ridgeline Black, M81 Woodland, Gun Metal and Neon — at $0.99 each{offer ? `, or all five for ${fmtSkinPrice(offer.priceCents)}` : ""}. Try any of them on before you buy.
+          </p>
+          <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.55)" }}>Light and Dark stay free. Find skins any time in Profile → Settings → Appearance.</p>
+        </div>
+        <div className="flex flex-col gap-1">
+          <button type="button" onClick={onOpen} className="h-[52px] text-[15px] font-semibold" style={{ background: "#FFFFFF", color: "#0C0D0F", borderRadius: 999, fontFamily: "'Space Grotesk', sans-serif" }}>See the skins</button>
+          <button type="button" onClick={onDismiss} className="h-11 text-[14px] font-semibold" style={{ color: "rgba(255,255,255,0.8)" }}>Not now</button>
+        </div>
+      </div>
     </div>
   );
 }
