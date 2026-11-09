@@ -37,6 +37,11 @@ import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
 import { functions as firebaseFunctions } from "./lib/firebase";
 import { ThemeProvider, useTheme } from "./hooks/useTheme";
+// Paid skins (2026-11-09) — scope: project doc claude/atlas-skins-scope.md.
+import { AppearanceScreen, SkinPreviewChrome, SkinPurchaseSheet, SkinAddonPanel, EMPTY_SKIN_PICK, skinPickRequest } from "./Skins";
+import SkinTexture, { SkinHeaderBand } from "./SkinTexture";
+import { useOwnedSkins, saveAppearance, setSkinDropAlerts } from "./hooks/useSkins";
+import { lookName, isPaidSkin } from "./skins";
 
 /* ---------- design tokens ---------- */
 // Theme-aware now — see src/theme.js (LIGHT_T/DARK_T) and
@@ -956,8 +961,8 @@ function FieldsMap({ fields, onOpenField, userLocation }) {
     <div className="mx-6 mb-4 h-72 overflow-hidden" style={{ borderRadius: 6, border: `1px solid ${T.line}` }}>
       <MapContainer center={center} zoom={9} style={{ width: "100%", height: "100%", background: T.void }} zoomControl={false} markerZoomAnimation={false}>
         <TileLayer
-          url={theme === "dark" ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://tile.openstreetmap.org/{z}/{x}/{y}.png"}
-          attribution={theme === "dark" ? "&copy; OpenStreetMap contributors &copy; CARTO" : "&copy; OpenStreetMap contributors"}
+          url={T.isDark ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://tile.openstreetmap.org/{z}/{x}/{y}.png"}
+          attribution={T.isDark ? "&copy; OpenStreetMap contributors &copy; CARTO" : "&copy; OpenStreetMap contributors"}
         />
         <FitToPins points={pins} />
         <MarkerClusterGroup chunkedLoading spiderfyOnMaxZoom={false} showCoverageOnHover={false} maxClusterRadius={60}>
@@ -1249,8 +1254,8 @@ function LocationCard({ label, name, claimed, address, lat, lng, phone }) {
             touchZoom={false}
           >
             <TileLayer
-              url={theme === "dark" ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://tile.openstreetmap.org/{z}/{x}/{y}.png"}
-              attribution={theme === "dark" ? "&copy; OpenStreetMap contributors &copy; CARTO" : "&copy; OpenStreetMap contributors"}
+              url={T.isDark ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://tile.openstreetmap.org/{z}/{x}/{y}.png"}
+              attribution={T.isDark ? "&copy; OpenStreetMap contributors &copy; CARTO" : "&copy; OpenStreetMap contributors"}
             />
             <Marker position={[lat, lng]} icon={fieldPinIcon} />
           </MapContainer>
@@ -1669,8 +1674,10 @@ function HomeScreen({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       className="h-full overflow-y-auto pb-24"
-      style={{ backgroundColor: T.void }}
+      style={{ backgroundColor: T.void, position: "relative", zIndex: 0 }}
     >
+      {/* Skins with a texture fade it in behind the greeting (z -1, under everything). */}
+      <SkinHeaderBand T={T} />
       <div
         className="flex items-center justify-center overflow-hidden"
         style={{ height: pullDistance, transition: refreshing ? "none" : "height 200ms ease-out" }}
@@ -1719,24 +1726,29 @@ function HomeScreen({
         <div
           className="mx-6 p-4 mb-4"
           style={{
-            background: theme === "dark"
-              ? "linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))"
-              : "linear-gradient(155deg, #FFFFFF 0%, #EEF2F8 100%)",
+            // Per-look tokens (theme.js) — Light/Dark values are exactly
+            // what this card drew before; skins add a texture + scrim.
+            background: T.heroBg,
             borderRadius: T.rHero,
             boxShadow: T.shadowLg,
-            border: theme === "dark" ? "1px solid rgba(255,255,255,0.12)" : "none",
+            border: T.heroBorder,
             position: "relative",
             overflow: "hidden",
+            // Own stacking context, so the texture (z -1) sits under the
+            // card's text instead of over it.
+            zIndex: 0,
           }}
         >
-          <div style={{ position: "absolute", top: -30, right: -30, width: 110, height: 110, borderRadius: "50%", background: theme === "dark" ? "rgba(182,255,61,0.14)" : "rgba(21,84,184,0.08)" }} />
-          {theme === "dark" && (
+          {T.texture && <SkinTexture T={T} width={360} height={220} seedOffset={7} style={{ zIndex: -1 }} />}
+          {T.heroScrim && <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: T.heroScrim, zIndex: -1, pointerEvents: "none" }} />}
+          <div style={{ position: "absolute", top: -30, right: -30, width: 110, height: 110, borderRadius: "50%", background: T.heroGlow }} />
+          {T.heroMotif === "radar" && (
             // Night Ops radar motif — dark mode only, matches the concept
             // artboard's hero card. Purely decorative, pointer-events off.
             <svg width="180" height="180" viewBox="0 0 180 180" style={{ position: "absolute", right: -50, top: -30, opacity: 0.4, pointerEvents: "none" }}>
-              <circle cx="90" cy="90" r="82" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 6" fill="none" opacity="0.5" />
-              <circle cx="90" cy="90" r="54" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 6" fill="none" opacity="0.4" />
-              <circle cx="90" cy="90" r="26" stroke="#B6FF3D" strokeWidth="1" fill="none" opacity="0.3" />
+              <circle cx="90" cy="90" r="82" stroke={T.motifColor} strokeWidth="1" strokeDasharray="2 6" fill="none" opacity="0.5" />
+              <circle cx="90" cy="90" r="54" stroke={T.motifColor} strokeWidth="1" strokeDasharray="2 6" fill="none" opacity="0.4" />
+              <circle cx="90" cy="90" r="26" stroke={T.motifColor} strokeWidth="1" fill="none" opacity="0.3" />
             </svg>
           )}
           <div className="flex items-center justify-between mb-3">
@@ -1871,7 +1883,7 @@ function HomeScreen({
                   // box (same fix as the owner app's event editor). That
                   // native appearance also enforces a touch-friendly
                   // minimum height, so an explicit height compensates.
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: theme === "dark" ? "dark" : "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: T.isDark ? "dark" : "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
                 />
               </div>
               <div>
@@ -1881,7 +1893,7 @@ function HomeScreen({
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   className="w-full px-3 py-2 text-[13px] bg-transparent outline-none"
-                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: theme === "dark" ? "dark" : "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
+                  style={{ ...body, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: T.isDark ? "dark" : "light", boxSizing: "border-box", minWidth: 0, maxWidth: "100%", display: "block", WebkitAppearance: "none", appearance: "none", height: "48px" }}
                 />
               </div>
             </div>
@@ -2046,7 +2058,7 @@ function HomeScreen({
             value={selectedState || ""}
             onChange={(e) => setSelectedState(e.target.value)}
             className="text-[12px] font-medium px-2 py-1 outline-none"
-            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: theme === "dark" ? "dark" : "light" }}
+            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash, colorScheme: T.isDark ? "dark" : "light" }}
           >
             {!selectedState && <option value="">Detecting…</option>}
             {Object.values(US_STATES)
@@ -2403,6 +2415,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // `maxPerPerson` (default 1) x attendees caps one booking. The server
   // re-checks both (createBookingCheckout's hold transaction).
   const [rentalQty, setRentalQty] = useState({});
+  // Skin add-on (2026-11-09): optional skins on this booking's checkout.
+  const [skinPick, setSkinPick] = useState(EMPTY_SKIN_PICK);
+  const { owned: ownedSkinsHere } = useOwnedSkins(user?.uid);
   const setRentalCount = (id, qty) => setRentalQty((prev) => {
     const next = { ...prev };
     if (qty > 0) next[id] = qty; else delete next[id];
@@ -2552,6 +2567,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const voucherCoversCost = !!bestFieldVoucher && voucherCovers(bestFieldVoucher);
   const bestVoucherIsFreeEntry = bestFieldVoucher?.kind === "freeEntry";
   const usingVoucher = applyVoucher && voucherCoversCost;
+  // Skins only ride along on a booking that goes through Stripe: hidden on
+  // voucher-paid and $0 bookings (no payment to attach them to — the
+  // Appearance screen sells them there instead).
+  const skinAddonOn = isPaidEvent && !usingVoucher && !myBooking && !bookingClosed && !ev.canceled;
   const [checkoutOpenedInfo, setCheckoutOpenedInfo] = useState(false);
   // The Stripe Checkout URL, once the waiver is saved and the session is
   // created. The player opens it with a second tap on "Continue to
@@ -2605,7 +2624,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalPicks, attendeeDependentIds, groupPicks, guardianPlaying);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalPicks, attendeeDependentIds, groupPicks, guardianPlaying, skinAddonOn ? skinPickRequest(skinPick) : null);
         // Two-tap checkout (2026-10-14). This used to pre-open a blank tab
         // at tap time and point it at Stripe once the URL came back. On
         // some phones, opening that tab backgrounded Atlas and paused it
@@ -2791,13 +2810,13 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               style={{ background: "transparent", cursor: "zoom-in" }}
             />
           )}
-          {theme === "dark" && (
+          {T.heroMotif === "radar" && (
             // Night Ops radar motif — dark mode only, matches the concept
             // artboard's Event Detail hero. Purely decorative.
             <svg width="300" height="300" viewBox="0 0 300 300" style={{ position: "absolute", left: "50%", top: -20, transform: "translateX(-50%)", opacity: 0.3, pointerEvents: "none" }}>
-              <circle cx="150" cy="150" r="140" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 7" fill="none" />
-              <circle cx="150" cy="150" r="98" stroke="#B6FF3D" strokeWidth="1" strokeDasharray="2 7" fill="none" opacity="0.7" />
-              <circle cx="150" cy="150" r="56" stroke="#B6FF3D" strokeWidth="1" fill="none" opacity="0.5" />
+              <circle cx="150" cy="150" r="140" stroke={T.motifColor} strokeWidth="1" strokeDasharray="2 7" fill="none" />
+              <circle cx="150" cy="150" r="98" stroke={T.motifColor} strokeWidth="1" strokeDasharray="2 7" fill="none" opacity="0.7" />
+              <circle cx="150" cy="150" r="56" stroke={T.motifColor} strokeWidth="1" fill="none" opacity="0.5" />
             </svg>
           )}
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
@@ -3210,6 +3229,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               onSetQty: setRentalCount,
             }}
           />
+
+          {skinAddonOn && !fieldUnclaimed && !checkoutOpenedInfo && user && (
+            <SkinAddonPanel owned={ownedSkinsHere} value={skinPick} onChange={setSkinPick} />
+          )}
 
           {ev.sourceUrl && (
             <a
@@ -8493,8 +8516,8 @@ function FeedbackPanel() {
   );
 }
 
-function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenActiveAchievements, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onOpenMyCard, onOpenDeck, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
-  const { T, display, body, mono, theme, setTheme } = useTheme();
+function ProfileScreen({ profile, user, onNavigate, onOpenAppearance, onOpenAccount, onOpenChildProfiles, dependentCount, onOpenPatches, onOpenActiveAchievements, onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onOpenMyCard, onOpenDeck, onLogout, changePassword, uploadAvatar, updateLanguage, favorites, events, patches, vouchers, sendVerificationEmail, syncEmailVerification }) {
+  const { T, display, body, mono, savedTheme } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -8564,7 +8587,6 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
-  const [showAppearancePicker, setShowAppearancePicker] = useState(false);
   const LANGUAGES = ["English", "Spanish", "French"]; // covers major US + Canadian languages relevant here
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -8932,11 +8954,11 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
 
         <Eyebrow>Support & Preferences</Eyebrow>
         <div className="px-4 mb-2 divide-y" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-          <button onClick={() => setShowAppearancePicker(!showAppearancePicker)} className="w-full flex items-center justify-between py-3.5">
+          <button onClick={onOpenAppearance} className="w-full flex items-center justify-between py-3.5">
             <span className="text-[14px] font-medium" style={{ ...body, color: T.ash }}>Appearance</span>
             <div className="flex items-center gap-2">
-              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{theme === "dark" ? "Dark" : "Light"}</span>
-              <ChevronRight size={15} color={T.ashFaint} style={{ transform: showAppearancePicker ? "rotate(90deg)" : "none" }} />
+              <span className="text-[12px]" style={{ ...mono, color: T.ashDim }}>{lookName(savedTheme)}</span>
+              <ChevronRight size={15} color={T.ashFaint} />
             </div>
           </button>
           <button onClick={() => setShowLanguagePicker(!showLanguagePicker)} className="w-full flex items-center justify-between py-3.5">
@@ -8949,35 +8971,6 @@ function ProfileScreen({ profile, user, onNavigate, onOpenAccount, onOpenChildPr
           <ProfileRow label="FAQs" />
           <ProfileRow label="Report a concern" value="Join our Discord" href="https://discord.gg/hR8EntGsq" />
         </div>
-
-        {showAppearancePicker && (
-          <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            <div className="flex gap-2 mb-2">
-              {[
-                { key: "light", label: "Light" },
-                { key: "dark", label: "Dark" },
-              ].map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setTheme(opt.key)}
-                  className="px-3 py-1.5 text-[12px] font-medium"
-                  style={{
-                    ...body,
-                    border: `1px solid ${theme === opt.key ? T.accent : T.line}`,
-                    background: theme === opt.key ? T.accent : "transparent",
-                    color: theme === opt.key ? T.inverse : T.ashDim,
-                    borderRadius: T.rPill,
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px]" style={{ ...body, color: T.ashFaint }}>
-              Dark uses the "Night Ops" look — dark liquid-glass panels, night-vision green and blaze-orange accents.
-            </p>
-          </div>
-        )}
 
         {showLanguagePicker && (
           <div className="mb-6 p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -10105,6 +10098,57 @@ function AppShell() {
   const { bookings: myBookings, bookingsLoading: myBookingsLoading } = useMyBookings(user?.uid);
   const { bookEvent, cancelBooking, createBookingCheckout } = useBookingActions();
   const { vouchers: myVouchers } = useMyVouchers(user?.uid);
+
+  // ── Paid skins (2026-11-09) ──────────────────────────────────────────
+  const { savedTheme, previewTheme, setTheme: applyLook, setPreviewTheme, syncFromAccount } = useTheme();
+  const { owned: ownedSkins, loaded: ownedSkinsLoaded } = useOwnedSkins(user?.uid);
+  const [skinSheetReq, setSkinSheetReq] = useState(null); // { skinIds } | { bundle: true }
+  const [equipBusy, setEquipBusy] = useState(false);
+  const [equipError, setEquipError] = useState("");
+  // The account's saved look wins over this device's copy. An account
+  // with none yet (everyone before skins) keeps the device look and gets
+  // it copied up — unless it's a paid skin this account doesn't own.
+  useEffect(() => {
+    if (!user || !profile) return;
+    const acct = profile.appearance;
+    if (acct === "light" || acct === "dark" || isPaidSkin(acct)) {
+      syncFromAccount(acct);
+      return;
+    }
+    if (!ownedSkinsLoaded) return;
+    if (isPaidSkin(savedTheme) && !ownedSkins.includes(savedTheme)) {
+      applyLook("light");
+      return;
+    }
+    if (savedTheme !== "light") {
+      saveAppearance(user.uid, savedTheme).catch((err) => console.warn("appearance backfill:", err?.message || err));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, profile?.appearance, !!profile, ownedSkinsLoaded]);
+  useEffect(() => {
+    if (!user) { setPreviewTheme(null); setSkinSheetReq(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+  const equipLook = async (id) => {
+    if (!user) return;
+    const prev = savedTheme;
+    setEquipError("");
+    setEquipBusy(true);
+    applyLook(id);
+    setPreviewTheme(null);
+    try {
+      await saveAppearance(user.uid, id);
+    } catch (err) {
+      console.error("equip look failed:", err);
+      applyLook(prev);
+      setEquipError("Couldn't switch looks — try again.");
+    }
+    setEquipBusy(false);
+  };
+  const toggleSkinDropAlerts = (on) => {
+    if (!user) return;
+    setSkinDropAlerts(user.uid, on).catch((err) => console.error("skinDropAlerts:", err));
+  };
   const { noticeToShow, acknowledgeNotice } = useCancellationNotices(user?.uid);
   const { redeemVoucher } = useVoucherRedemption();
 
@@ -10353,6 +10397,11 @@ function AppShell() {
   const openSecretPatchQR = () => push("secretPatchQR");
   const openScanRedeem = () => push("scanRedeem");
   const openMyCard = () => push("myCard");
+  const openAppearance = () => push("appearance");
+  // Trying a skin on: the whole app switches to it and lands on Explore so
+  // the player can tap around. Exit restores their saved look.
+  const startSkinPreview = (id) => { setPreviewTheme(id); setStack(["home"]); };
+  const exitSkinPreview = () => { setPreviewTheme(null); setStack(["profile", "appearance"]); };
   const cardBetaMe = useCardBeta(user?.uid);
   const openDeck = (ownerUid = null) => { setDeckOwnerId(ownerUid); setDeckHighlight(null); push("deck"); };
   const { card: myCardForCrop } = useCardOwner("adult", adjustingCardPhoto ? user?.uid : null);
@@ -10661,6 +10710,7 @@ function AppShell() {
         profile={profile}
         user={user}
         onNavigate={goTab}
+        onOpenAppearance={openAppearance}
         onOpenAccount={openAccount}
         onOpenChildProfiles={openChildProfiles}
         dependentCount={dependents.length}
@@ -10756,6 +10806,21 @@ function AppShell() {
         onAdjustCardPhoto={() => setAdjustingCardPhoto(true)}
       />
     );
+  } else if (screen === "appearance") {
+    content = (
+      <AppearanceScreen
+        owned={ownedSkins}
+        ownedLoaded={ownedSkinsLoaded}
+        onBack={pop}
+        onPreview={startSkinPreview}
+        onBuy={setSkinSheetReq}
+        onEquip={equipLook}
+        equipBusy={equipBusy}
+        equipError={equipError}
+        dropAlerts={!!profile?.skinDropAlerts}
+        onToggleDropAlerts={toggleSkinDropAlerts}
+      />
+    );
   } else if (screen === "deck") {
     content = (
       <DeckScreen
@@ -10817,6 +10882,12 @@ function AppShell() {
         />
       )}
       {needRefresh && <UpdateAvailableToast onRefresh={refreshNow} />}
+      {user && profile && !installGate && previewTheme && !skinSheetReq && (
+        <SkinPreviewChrome owned={ownedSkins} onExit={exitSkinPreview} onBuy={setSkinSheetReq} onEquip={equipLook} />
+      )}
+      {user && profile && !installGate && skinSheetReq && (
+        <SkinPurchaseSheet key={JSON.stringify(skinSheetReq)} req={skinSheetReq} owned={ownedSkins} onClose={() => setSkinSheetReq(null)} onEquip={equipLook} />
+      )}
     </div>
     </SocialBadgeContext.Provider>
     </ClaimedFieldsContext.Provider>

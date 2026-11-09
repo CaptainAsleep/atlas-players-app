@@ -15,6 +15,7 @@ import { Resend } from "resend";
 import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { getStorage } from "firebase-admin/storage";
 import { SelectionError, resolveSelections, normalizeSelectionGroups, assertCapacity, snapshotSelections, selectionPairs } from "./selections.js";
+import { SkinError, normalizeSkinRequest, resolveSkinPurchase, skinKeyPart, skinMetadata, parseSkinMetadata, readSkinGrantState, writeSkinGrant } from "./skins.js";
 
 initializeApp();
 
@@ -626,7 +627,9 @@ function resolveVoucherAmountCents(booking, passFeeToPlayer) {
   const rentalsCents = (booking.selectedRentals || []).reduce(
     (sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents * qtyOf(r) : 0), 0
   );
-  const deduction = rentalsCents + (passFeeToPlayer ? feeCents : 0);
+  // Skins bought as a booking add-on are non-refundable and stay owned.
+  const skinCents = typeof booking.skinCents === "number" ? booking.skinCents : 0;
+  const deduction = rentalsCents + skinCents + (passFeeToPlayer ? feeCents : 0);
   return Math.max(0, (booking.amountPaidCents || 0) - deduction);
 }
 
@@ -773,6 +776,27 @@ export const createBookingCheckout = onCall(
     // Total fee across all N tickets (see computeBookingFeeCents) — this is
     // also exactly what goes on application_fee_amount below.
     const { perTicketFeeCents, bookingFeeCents } = computeBookingFeeCents(entryPriceCents, chargeableCents, attendeeCount, isMajor);
+    // Paid skins add-on (2026-11-09, functions/skins.js). Priced here from
+    // the server catalog and what the player already owns — never from the
+    // client. The skin money goes to Atlas: it's added to
+    // application_fee_amount below, so the field's transfer is unchanged.
+    // It's not part of chargeableCents, so it never grows Atlas's booking fee.
+    let skinReq = null;
+    let skinPriced = null;
+    try {
+      skinReq = normalizeSkinRequest(request.data?.skins);
+    } catch (err) {
+      throw new HttpsError("invalid-argument", err.message);
+    }
+    if (skinReq) {
+      const ownedSkinsSnap = await db.collection("users").doc(uid).collection("skins").get();
+      try {
+        skinPriced = resolveSkinPurchase(skinReq, ownedSkinsSnap.docs.map((d) => d.id));
+      } catch (err) {
+        if (err instanceof SkinError) throw new HttpsError("failed-precondition", err.message);
+        throw err;
+      }
+    }
     // Major events: the fee is never passed to the player, whatever (or
     // whether) the host's owners doc says — a host with no field never
     // picks a fee model, and the unset default would be pass-to-player.
@@ -838,9 +862,14 @@ export const createBookingCheckout = onCall(
           },
           quantity: r.qty,
         })),
+        // Skin add-on: one line per skin (or one for the bundle).
+        ...(skinPriced ? skinPriced.lineItems.map((li) => ({
+          price_data: { currency: "usd", product_data: { name: li.name }, unit_amount: li.unitCents },
+          quantity: 1,
+        })) : []),
       ],
       payment_intent_data: {
-        application_fee_amount: bookingFeeCents,
+        application_fee_amount: bookingFeeCents + (skinPriced ? skinPriced.totalCents : 0),
         transfer_data: { destination: ownerData.stripeConnectAccountId },
       },
       metadata: {
@@ -880,6 +909,9 @@ export const createBookingCheckout = onCall(
         // realistic handful of rental picks stays comfortably under that;
         // this isn't built to scale to a field with dozens of rentals.
         ...(selectedRentalDetails.length > 0 ? { selectedRentals: JSON.stringify(selectedRentalDetails) } : {}),
+        // skinIds / skinVia ("addon") / skinCents — the webhook grants these
+        // skins with the booking and counts skinCents in its total check.
+        ...skinMetadata(skinReq, skinPriced, "addon"),
       },
       success_url: "https://playerapp.airsoftatlas.app/?booking=success",
       cancel_url: "https://playerapp.airsoftatlas.app/?booking=cancelled",
@@ -900,6 +932,9 @@ export const createBookingCheckout = onCall(
     // The price tier is part of the key so a checkout opened before the
     // day-of price kicks in can never be handed back after it does.
     let idempotencyKey = `booking-checkout:${eventId}:${uid}${priceTier ? `:${priceTier}` : ""}`;
+    // A changed skin pick is a different request, so it gets its own key
+    // rather than tripping the mismatch-and-retry path below.
+    if (skinPriced) idempotencyKey = `${idempotencyKey}:${skinKeyPart(skinReq)}`;
 
     // Rental inventory hold (2026-10-24). Only when a picked item has a
     // per-event stock count — every other checkout skips this block and is
@@ -928,11 +963,11 @@ export const createBookingCheckout = onCall(
         const mine = holds.find((h) => h.uid === uid);
         // Same picks, still-live hold = a re-tap/relaunch: keep it (and its
         // session) instead of starting a second one.
-        if (mine && mine.expiresAtMs > nowMs && samePicks(mine.items, rentalPicks)) {
+        if (mine && mine.expiresAtMs > nowMs && samePicks(mine.items, rentalPicks) && (mine.skinsKey || "") === skinKeyPart(skinReq)) {
           return { expiresAtMs: mine.expiresAtMs, existingSessionId: mine.sessionId || null, isNew: false, previousSessionId: null };
         }
         const expiresAtMs = nowMs + RENTAL_HOLD_MS;
-        t.set(holdRef, { uid, items: rentalPicks, expiresAt: new Date(expiresAtMs), createdAt: new Date(nowMs), sessionId: null });
+        t.set(holdRef, { uid, items: rentalPicks, skinsKey: skinKeyPart(skinReq), expiresAt: new Date(expiresAtMs), createdAt: new Date(nowMs), sessionId: null });
         return { expiresAtMs, existingSessionId: null, isNew: true, previousSessionId: mine?.sessionId || null };
       });
       holdIsNew = hold.isNew;
@@ -999,6 +1034,66 @@ export const createBookingCheckout = onCall(
     }
 
     return { url: session.url };
+  }
+);
+
+// Paid skins (2026-11-09): the Appearance screen's own checkout, for a
+// single skin or The Originals bundle. A plain payment on Atlas's own
+// Stripe account (no field involved, so no transfer_data). Ownership is
+// granted only by stripeWebhook (handleSkinPurchasePaid), never here.
+// Scope: project doc claude/atlas-skins-scope.md.
+export const createSkinCheckout = onCall(
+  { secrets: [stripeSecretKey], invoker: "public" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to buy a skin.");
+    const uid = request.auth.uid;
+    let req;
+    try {
+      req = normalizeSkinRequest(request.data);
+    } catch (err) {
+      throw new HttpsError("invalid-argument", err.message);
+    }
+    if (!req) throw new HttpsError("invalid-argument", "Pick a skin first.");
+    const db = getFirestore();
+    const ownedSnap = await db.collection("users").doc(uid).collection("skins").get();
+    let priced;
+    try {
+      priced = resolveSkinPurchase(req, ownedSnap.docs.map((d) => d.id));
+    } catch (err) {
+      if (err instanceof SkinError) throw new HttpsError("failed-precondition", err.message);
+      throw err;
+    }
+    const stripe = new Stripe(stripeSecretKey.value());
+    const sessionParams = {
+      mode: "payment",
+      customer_email: request.auth.token?.email,
+      line_items: priced.lineItems.map((li) => ({
+        price_data: { currency: "usd", product_data: { name: li.name }, unit_amount: li.unitCents },
+        quantity: 1,
+      })),
+      metadata: { kind: "skin", firebaseUid: uid, ...skinMetadata(req, priced) },
+      success_url: "https://playerapp.airsoftatlas.app/?skin=success",
+      cancel_url: "https://playerapp.airsoftatlas.app/?skin=cancelled",
+    };
+    // Same double-charge protection as createBookingCheckout: a repeat of
+    // the identical request gets the original session back. A changed
+    // request under the same key (e.g. the bundle price dropped because
+    // they bought a skin meanwhile) retries once under a fresh key.
+    const idempotencyKey = `skin-checkout:${uid}:${skinKeyPart(req)}`;
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+    } catch (err) {
+      if (err.type !== "StripeIdempotencyError") throw err;
+      console.warn(`createSkinCheckout: idempotency key mismatch for ${uid}, retrying with a fresh key`);
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: `${idempotencyKey}:retry:${Date.now()}` });
+    }
+    // Stripe hands back the original session for a repeat request; once
+    // that one is paid it has no URL.
+    if (!session.url) {
+      throw new HttpsError("already-exists", "That purchase already went through — it can take a moment to show up.");
+    }
+    return { url: session.url, totalCents: priced.totalCents };
   }
 );
 
@@ -2060,6 +2155,11 @@ export const stripeWebhook = onRequest(
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object;
+          // Paid skins (2026-11-09): Appearance-screen purchases.
+          if (session.mode === "payment" && session.metadata?.kind === "skin") {
+            await handleSkinPurchasePaid(db, session);
+            break;
+          }
           // Team Bookings (2026-11-05): tickets bought for others. Checked
           // first — these sessions also carry an eventId.
           if (session.mode === "payment" && session.metadata?.kind === "teamTickets") {
@@ -2099,6 +2199,8 @@ export const stripeWebhook = onRequest(
             // Child-only booking: the parent holds no ticket of their own.
             // Only honoured when there are children to book for.
             const webhookGuardianPlaying = !(guardianPlayingMeta === "false" && dependentIds.length > 0);
+            // Skin add-on (2026-11-09): granted with the booking, below.
+            const skinMeta = parseSkinMetadata(session.metadata);
             const bookedAttendeeCount = (webhookGuardianPlaying ? 1 : 0) + dependentIds.length;
             // Payment data is untrusted until proven consistent: recompute
             // what this session SHOULD have charged from the tickets,
@@ -2110,7 +2212,8 @@ export const stripeWebhook = onRequest(
               const expectedTotal =
                 bookedAttendeeCount * Number(entryPriceCents || 0) +
                 parsedRentals.reduce((sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents * qtyOf(r) : 0), 0) +
-                (passFeeMeta === "true" ? Number(bookingFeeCents || 0) : 0);
+                (passFeeMeta === "true" ? Number(bookingFeeCents || 0) : 0) +
+                skinMeta.skinCents;
               if (expectedTotal !== session.amount_total) {
                 console.error(`stripeWebhook: amount mismatch for session ${session.id} (uid ${uid}, event ${eventId}) — expected ${expectedTotal}, Stripe charged ${session.amount_total}. NO booking created; needs manual review.`);
                 break;
@@ -2148,6 +2251,8 @@ export const stripeWebhook = onRequest(
                 walkOnNear ? t.get(db.collection("users").doc(uid).collection("bookings").limit(1)) : Promise.resolve(null),
               ]);
               if (existingBooking.exists) return; // already booked somehow — don't double up
+              // Skin add-on reads — before any write in this transaction.
+              const skinState = skinMeta.skinIds.length > 0 ? await readSkinGrantState(t, db, uid, session.id, skinMeta.skinIds) : null;
               const eventData = eventSnap.data();
               const profileData = profileSnap.data() || {};
               const now = new Date();
@@ -2205,6 +2310,10 @@ export const stripeWebhook = onRequest(
                 // own Stripe line item), so no separate rentals-total
                 // field is needed for the money side of this.
                 selectedRentals: parsedRentals,
+                // Skin add-on: what it cost (amountPaidCents above includes it)
+                // and which skins. Omitted when none, so other bookings keep
+                // exactly the shape they always had.
+                ...(skinMeta.skinCents > 0 ? { skinCents: skinMeta.skinCents, skinIds: skinMeta.skinIds } : {}),
                 // Organizer events: the full team/role snapshot. Omitted
                 // (not []) when there are none, so a field-event booking doc
                 // keeps exactly the shape it always had.
@@ -2230,6 +2339,9 @@ export const stripeWebhook = onRequest(
               t.update(eventRef, { bookedCount: (eventData?.bookedCount || 0) + bookedAttendeeCount });
               // Their rental hold becomes real booked stock now — release it.
               if (session.metadata?.rentalHold === "true") t.delete(eventRef.collection("rentalHolds").doc(uid));
+              if (skinState) {
+                writeSkinGrant(t, db, { uid, sessionId: session.id, skinIds: skinMeta.skinIds, via: skinMeta.via, amountCents: skinMeta.skinCents, eventId, now }, skinState);
+              }
             });
           }
           break;
@@ -5894,4 +6006,29 @@ async function removeChildCardCopies(db, publicId) {
     db.collection("cardShares").where("ownerId", "==", publicId).get(),
   ]);
   await commitInChunks(db, [...cols.docs, ...shares.docs].map((d) => (b) => b.delete(d.ref)));
+}
+
+// Paid skins (2026-11-09): grants an Appearance-screen purchase
+// (createSkinCheckout). Payment data is untrusted until it checks out: the
+// amount Stripe charged must match the server-priced total written into
+// metadata at checkout, or nothing is granted. Idempotent on session id.
+async function handleSkinPurchasePaid(db, session) {
+  const uid = session.metadata?.firebaseUid;
+  const meta = parseSkinMetadata(session.metadata);
+  if (!uid || meta.skinIds.length === 0) {
+    console.error(`stripeWebhook: skin session ${session.id} has no uid/skins in metadata — nothing granted.`);
+    return;
+  }
+  if (session.payment_status === "unpaid") {
+    console.warn(`stripeWebhook: skin session ${session.id} completed unpaid — nothing granted.`);
+    return;
+  }
+  if (meta.skinCents !== session.amount_total) {
+    console.error(`stripeWebhook: skin amount mismatch for session ${session.id} (uid ${uid}) — expected ${meta.skinCents}, Stripe charged ${session.amount_total}. NOTHING granted; needs manual review.`);
+    return;
+  }
+  await db.runTransaction(async (t) => {
+    const state = await readSkinGrantState(t, db, uid, session.id, meta.skinIds);
+    writeSkinGrant(t, db, { uid, sessionId: session.id, skinIds: meta.skinIds, via: meta.via, amountCents: meta.skinCents }, state);
+  });
 }

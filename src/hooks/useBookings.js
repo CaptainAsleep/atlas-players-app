@@ -148,7 +148,7 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentals, attendeeDependentIds, selections, guardianPlaying = true) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentals, attendeeDependentIds, selections, guardianPlaying = true, skins = null) {
     const call = httpsCallable(functions, "createBookingCheckout");
     // Same best-effort { lat, lng } (or null) as bookEvent — carried
     // through Checkout Session metadata since the webhook that actually
@@ -169,6 +169,9 @@ export function useBookingActions() {
       selections: selections && Object.keys(selections).length > 0 ? selections : null,
       // false = child-only booking (the parent isn't playing).
       guardianPlaying: guardianPlaying !== false,
+      // Skin add-on (2026-11-09): { skinIds } or { bundle: true }, ids only —
+      // the server prices it from its own catalog.
+      skins: skins || null,
     });
     return result.data.url;
   }

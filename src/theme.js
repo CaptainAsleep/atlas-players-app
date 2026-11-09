@@ -70,6 +70,19 @@ export const LIGHT_T = {
   overlayBtnText: "#002C48",
   scrim: "rgba(255,255,255,0.7)", // "Uploading…" wash over an avatar
   navActive: "rgba(0,44,72,0.08)", // active-tab pill in the bottom nav
+
+  // Per-look flags (paid skins, 2026-11-09). These replace the old
+  // theme === "dark" checks in App.jsx, so any look — free or paid — can
+  // say what it needs. Light values reproduce exactly what light mode
+  // drew before.
+  isDark: false, // native controls + map tiles
+  heroBg: "linear-gradient(155deg, #FFFFFF 0%, #EEF2F8 100%)", // Home next-game card
+  heroBorder: "none",
+  heroGlow: "rgba(21,84,184,0.08)", // the soft circle in the hero's corner
+  heroMotif: null, // "radar" = Night Ops rings on the hero + event header
+  motifColor: null,
+  texture: null, // "camo" | "brushed" | "grid" (see SkinTexture.jsx)
+  heroScrim: null, // wash over a textured hero so its text stays readable
 };
 
 export const DARK_T = {
@@ -118,6 +131,15 @@ export const DARK_T = {
   overlayBtnText: "#0A0C0F", // = inverse
   scrim: "rgba(10,12,15,0.7)",
   navActive: "rgba(255,255,255,0.10)",
+
+  isDark: true,
+  heroBg: "linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))",
+  heroBorder: "1px solid rgba(255,255,255,0.12)",
+  heroGlow: "rgba(182,255,61,0.14)",
+  heroMotif: "radar",
+  motifColor: "#B6FF3D",
+  texture: null,
+  heroScrim: null,
 };
 
 export const LIGHT_FONTS = {
@@ -139,3 +161,144 @@ export const DARK_FONTS = {
 export const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&family=Unbounded:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
 `;
+
+// ── Paid skins (2026-11-09) ──────────────────────────────────────────────
+// Scope: project doc claude/atlas-skins-scope.md. Each skin is a full token
+// set with every key LIGHT_T has (checked by scripts/check-skin-tokens),
+// built on whichever free look it's closest to so nothing is missed
+// (key parity and text contrast are checked as part of the build verification).
+// Catalog (names, prices, sale windows) lives in src/skins.js; this file
+// is only how each one looks. Textures only ever sit behind the Explore
+// header band and the next-game hero card, never behind text-heavy lists.
+const R = { rTight: 10, rCard: 16, rHero: 18, rFloat: 24, rMedia: 14, rPill: 999 };
+const darkShadows = (glow) => ({
+  shadowSm: "0 1px 2px rgba(0,0,0,0.30)",
+  shadowMd: glow ? `0 0 0 1px ${glow}, 0 8px 22px -8px rgba(0,0,0,0.55)` : "0 1px 2px rgba(0,0,0,0.30), 0 8px 20px -8px rgba(0,0,0,0.50)",
+  shadowLg: glow ? `0 0 0 1px ${glow}, 0 10px 28px -8px rgba(0,0,0,0.6)` : "0 1px 2px rgba(0,0,0,0.35), 0 10px 28px -8px rgba(0,0,0,0.55)",
+  shadowNav: "0 -8px 24px -8px rgba(0,0,0,0.45)",
+  shadowFloat: "0 6px 14px rgba(0,0,0,0.40), 0 24px 48px -12px rgba(0,0,0,0.65)",
+});
+
+export const SKIN_THEMES = {
+  ridgeline: {
+    T: {
+      ...LIGHT_T, ...R,
+      void: "#ECE5D3", panel: "#FAF7EE", panelAlt: "#E3DAC4", line: "#D3C8AE",
+      ash: "#2B2817", ashDim: "#575038", ashFaint: "#605A40",
+      accent: "#5C5A1E", good: "#2F6B2A", alert: "#963F18",
+      cta: "#3E4220", inverse: "#FAF7EE",
+      shadowSm: "0 1px 2px rgba(43,40,23,0.06)",
+      shadowMd: "0 1px 2px rgba(43,40,23,0.06), 0 8px 20px -8px rgba(43,40,23,0.22)",
+      shadowLg: "0 1px 2px rgba(43,40,23,0.07), 0 10px 28px -8px rgba(43,40,23,0.28)",
+      shadowNav: "0 -8px 24px -8px rgba(43,40,23,0.18)",
+      shadowFloat: "0 6px 14px rgba(43,40,23,0.18), 0 24px 48px -12px rgba(43,40,23,0.42)",
+      glassFill: "rgba(250,247,238,0.80)", glassBorder: "1px solid rgba(255,255,255,0.6)",
+      tint: "rgba(92,90,30,0.10)", tintGood: "rgba(47,107,42,0.12)",
+      onImageFill: "rgba(250,247,238,0.92)",
+      overlayFill: "rgba(43,40,23,0.97)", overlayBtnFill: "#FAF7EE", overlayBtnText: "#2B2817",
+      scrim: "rgba(250,247,238,0.7)", navActive: "rgba(62,66,32,0.12)",
+      isDark: false,
+      heroBg: "#E9DFC6", heroBorder: "1px solid #D3C8AE", heroGlow: "transparent",
+      texture: "camo", heroScrim: "linear-gradient(100deg, rgba(250,247,238,0.95) 0%, rgba(250,247,238,0.88) 55%, rgba(250,247,238,0.62) 100%)",
+      bandOpacity: 0.5,
+      camo: { seed: 11, base: "#C4B48C", layers: [["#A39465", 16, 54, 40], ["#7A774A", 14, 44, 32], ["#5B4A32", 12, 22, 16], ["#E0D4AE", 12, 18, 12]] },
+    },
+    fonts: { display: "'Barlow Condensed', sans-serif", body: "'Inter', sans-serif", mono: "'IBM Plex Mono', monospace" },
+  },
+  "ridgeline-black": {
+    T: {
+      ...DARK_T, ...R, ...darkShadows(null),
+      void: "#0D0E0F", panel: "#17191A", panelAlt: "#222528", line: "rgba(255,255,255,0.10)",
+      ash: "#EDEEEA", ashDim: "rgba(237,238,234,0.68)", ashFaint: "rgba(237,238,234,0.52)",
+      accent: "#D4D8CC", good: "#6FBF7E", alert: "#E08A3C",
+      cta: "#E4E6E0", inverse: "#0D0E0F",
+      glassFill: "rgba(23,25,26,0.76)", glassBorder: "1px solid rgba(255,255,255,0.12)",
+      tint: "rgba(212,216,204,0.12)", tintGood: "rgba(111,191,126,0.16)",
+      overlayFill: "rgba(13,14,15,0.97)", overlayBtnFill: "#E4E6E0", overlayBtnText: "#0D0E0F",
+      scrim: "rgba(13,14,15,0.7)", navActive: "rgba(255,255,255,0.10)",
+      isDark: true,
+      heroBg: "#1B1D1E", heroBorder: "1px solid rgba(255,255,255,0.10)", heroGlow: "transparent",
+      heroMotif: null, motifColor: null,
+      texture: "camo", heroScrim: "linear-gradient(100deg, rgba(13,14,15,0.88) 0%, rgba(13,14,15,0.66) 60%, rgba(13,14,15,0.38) 100%)",
+      bandOpacity: 0.85,
+      camo: { seed: 23, base: "#1B1D1E", layers: [["#2B2E30", 16, 54, 40], ["#393C3F", 13, 42, 30], ["#0F1011", 12, 22, 16], ["#4A4E51", 11, 16, 11]] },
+    },
+    fonts: { display: "'Barlow Condensed', sans-serif", body: "'Inter', sans-serif", mono: "'JetBrains Mono', monospace" },
+  },
+  m81: {
+    T: {
+      ...DARK_T, ...R, ...darkShadows(null),
+      void: "#1A1E15", panel: "#232920", panelAlt: "#2E3529", line: "rgba(237,233,218,0.12)",
+      ash: "#EDE9DA", ashDim: "rgba(237,233,218,0.70)", ashFaint: "rgba(237,233,218,0.60)",
+      accent: "#D2BE82", good: "#8FBF5A", alert: "#F2884F",
+      cta: "#D2BE82", inverse: "#1A1E15",
+      glassFill: "rgba(35,41,32,0.80)", glassBorder: "1px solid rgba(210,190,130,0.20)",
+      tint: "rgba(210,190,130,0.14)", tintGood: "rgba(143,191,90,0.16)",
+      onImageFill: "rgba(26,30,21,0.62)",
+      overlayFill: "rgba(26,30,21,0.97)", overlayBtnFill: "#D2BE82", overlayBtnText: "#1A1E15",
+      scrim: "rgba(26,30,21,0.7)", navActive: "rgba(210,190,130,0.16)",
+      isDark: true,
+      heroBg: "#4C5A33", heroBorder: "1px solid rgba(210,190,130,0.30)", heroGlow: "transparent",
+      heroMotif: null, motifColor: null,
+      texture: "camo", heroScrim: "linear-gradient(100deg, rgba(20,23,15,0.90) 0%, rgba(20,23,15,0.70) 60%, rgba(20,23,15,0.40) 100%)",
+      bandOpacity: 0.55,
+      camo: { seed: 81, base: "#55663B", layers: [["#A3946B", 14, 66, 26], ["#5D4631", 14, 60, 24], ["#1E1E19", 14, 34, 12]] },
+    },
+    fonts: { display: "'Saira Stencil One', sans-serif", body: "'Inter', sans-serif", mono: "'JetBrains Mono', monospace" },
+  },
+  gunmetal: {
+    T: {
+      ...DARK_T, ...R, ...darkShadows(null),
+      void: "#16191D", panel: "#22262C", panelAlt: "#2C3138", line: "rgba(255,255,255,0.10)",
+      ash: "#E6E9ED", ashDim: "rgba(230,233,237,0.68)", ashFaint: "rgba(230,233,237,0.60)",
+      accent: "#9DB4CC", good: "#5CC28A", alert: "#F68A62",
+      cta: "#C9D1DA", inverse: "#121417",
+      glassFill: "rgba(34,38,44,0.82)", glassBorder: "1px solid rgba(255,255,255,0.16)",
+      tint: "rgba(157,180,204,0.14)", tintGood: "rgba(92,194,138,0.16)",
+      overlayFill: "rgba(22,25,29,0.97)", overlayBtnFill: "#C9D1DA", overlayBtnText: "#121417",
+      scrim: "rgba(22,25,29,0.7)", navActive: "rgba(157,180,204,0.16)",
+      isDark: true,
+      heroBg: "linear-gradient(135deg, #3A4048 0%, #262A30 55%, #1E2227 100%)", heroBorder: "1px solid rgba(255,255,255,0.16)", heroGlow: "transparent",
+      heroMotif: null, motifColor: null,
+      texture: "brushed", heroScrim: "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.25) 100%)",
+      bandOpacity: 1,
+    },
+    fonts: { display: "'Chakra Petch', sans-serif", body: "'Inter', sans-serif", mono: "'JetBrains Mono', monospace" },
+  },
+  neon: {
+    T: {
+      ...DARK_T, ...R, ...darkShadows("rgba(25,240,255,0.14)"),
+      void: "#08060F", panel: "#130F22", panelAlt: "#1C1733", line: "rgba(25,240,255,0.20)",
+      ash: "#F5F2FF", ashDim: "rgba(245,242,255,0.70)", ashFaint: "rgba(245,242,255,0.54)",
+      accent: "#FF5AE1", good: "#3DFF9E", alert: "#FFE14D",
+      cta: "#19F0FF", inverse: "#08060F",
+      glassFill: "rgba(19,15,34,0.80)", glassBorder: "1px solid rgba(255,61,219,0.45)",
+      tint: "rgba(255,90,225,0.14)", tintGood: "rgba(61,255,158,0.14)",
+      overlayFill: "rgba(8,6,15,0.97)", overlayBtnFill: "#19F0FF", overlayBtnText: "#08060F",
+      scrim: "rgba(8,6,15,0.7)", navActive: "rgba(25,240,255,0.14)",
+      isDark: true,
+      heroBg: "#130F22", heroBorder: "1px solid rgba(255,61,219,0.60)", heroGlow: "rgba(255,61,219,0.22)",
+      heroMotif: null, motifColor: null,
+      texture: "grid", heroScrim: null,
+      bandOpacity: 1,
+    },
+    fonts: { display: "'Orbitron', sans-serif", body: "'Inter', sans-serif", mono: "'JetBrains Mono', monospace" },
+  },
+};
+
+// Loaded only when a skin is previewed or equipped (see useTheme), so the
+// free looks don't pay for four extra font families.
+export const SKIN_FONT_URLS = {
+  ridgeline: "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap",
+  "ridgeline-black": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap",
+  m81: "https://fonts.googleapis.com/css2?family=Saira+Stencil+One&display=swap",
+  gunmetal: "https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap",
+  neon: "https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&display=swap",
+};
+
+// Any look id -> { T, fonts }. Unknown ids fall back to Light.
+export function resolveLook(id) {
+  if (id === "dark") return { T: DARK_T, fonts: DARK_FONTS };
+  if (SKIN_THEMES[id]) return SKIN_THEMES[id];
+  return { T: LIGHT_T, fonts: LIGHT_FONTS };
+}
