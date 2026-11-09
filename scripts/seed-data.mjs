@@ -6911,6 +6911,7 @@ I HAVE READ THE ABOVE WAIVER AND RELEASE AND BY SIGNING IT AGREE IT IS MY INTENT
   },
   {
     id: "futureball-2026-11-14-open-play",
+    draft: true, // hidden 2026-11-09 per Michael: Futureball runs Saturday outside Atlas; only Sun Nov 15 is on Atlas
     fieldId: "futureball",
     fieldName: "Futureball",
     title: "Open Play",
