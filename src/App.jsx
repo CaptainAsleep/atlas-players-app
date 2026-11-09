@@ -6773,6 +6773,9 @@ function SecretPatchScreen({ onBack }) {
 // 2026-11-08: "Scan a Code" — one scanner for patch codes, trading-card
 // codes (?card=, beta only server-side) and referral links (explained, not redeemed).
 function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected }) {
+  const cardBeta = useCardBeta(user?.uid);
+  const cardBetaRef = useRef(cardBeta);
+  cardBetaRef.current = cardBeta;
   const { T, display, body, mono } = useTheme();
   const containerRef = useRef(null);
   const scannerRef = useRef(null);
@@ -6806,6 +6809,11 @@ function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected }) {
             if (busyRef.current) return;
             busyRef.current = true;
             const cardToken = parseCardToken(decodedText);
+            if (cardToken && !cardBetaRef.current) {
+              setStatus({ ok: false, message: "That code isn't recognized." });
+              setTimeout(() => { setStatus(null); busyRef.current = false; }, 2600);
+              return;
+            }
             if (cardToken) {
               const r = await collectCardCode(cardToken);
               if (r.ok) {
@@ -6818,7 +6826,7 @@ function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected }) {
               return;
             }
             if (/[?&]ref=/.test(decodedText)) {
-              setStatus({ ok: false, message: "That's a referral link — it's for signing up, not a patch or card." });
+              setStatus({ ok: false, message: cardBetaRef.current ? "That's a referral link — it's for signing up, not a patch or card." : "That's a referral link — it's for signing up, not a patch." });
               setTimeout(() => { setStatus(null); busyRef.current = false; }, 2600);
               return;
             }
@@ -8177,6 +8185,7 @@ function ClaimChildProfileModal({ token, user, onClose, onDismiss, sendVerificat
 }
 
 function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAvatar, deleteAccount }) {
+  const cardBeta = useCardBeta(user?.uid);
   const { T, display, body, mono } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
@@ -8286,7 +8295,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
 
       <div className="px-6 pt-6 flex flex-col items-center">
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-        {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
+        {cropFile && <PhotoCropper file={cropFile} withCardStep={cardBeta} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
         <button onClick={handleAvatarPick} className="relative w-20 h-20 mb-2" disabled={avatarUploading}>
           {profile?.avatarUrl ? (
             <div className="w-20 h-20" style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 40 }} />
@@ -8606,7 +8615,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildP
         {/* Identity */}
         <div className="p-5 mb-2" style={{ background: T.heroBg, border: T.heroBorder, borderRadius: T.rHero, boxShadow: T.shadowLg }}>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-          {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
+          {cropFile && <PhotoCropper file={cropFile} withCardStep={cardBeta} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
           <div className="flex items-center gap-4">
             <button onClick={handleAvatarPick} aria-label="Change profile photo" className="relative flex-shrink-0" style={{ width: 76, height: 76 }} disabled={avatarUploading}>
               {profile?.avatarUrl ? (
@@ -9312,6 +9321,7 @@ const ONBOARDING_FREQUENCIES = ["This is my first time", "A few times a year", "
 // confirmed, so nothing is lost if someone closes the app partway through;
 // only the final "finish" call needs to succeed for the gate to lift.
 function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvatar, completeOnboarding }) {
+  const cardBeta = useCardBeta(user?.uid);
   const { T, display, body, mono } = useTheme();
   const STEPS = ["name", "callsign", "photo", "eventTypes", "frequency"];
   const [step, setStep] = useState(0);
@@ -9477,7 +9487,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
               </button>
               {avatarError && <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{avatarError}</p>}
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-              {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
+              {cropFile && <PhotoCropper file={cropFile} withCardStep={cardBeta} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
             </div>
           </>
         )}
@@ -10603,7 +10613,7 @@ function AppShell() {
   const openDeck = (ownerUid = null) => { setDeckOwnerId(ownerUid); setDeckHighlight(null); push("deck"); };
   const { card: myCardForCrop } = useCardOwner("adult", adjustingCardPhoto ? user?.uid : null);
   useEffect(() => {
-    if (!cardLinkToken || !user || !profile) return;
+    if (!cardLinkToken || !user || !profile || !cardBetaMe) return;
     const t = cardLinkToken;
     setCardLinkToken(null);
     try { localStorage.removeItem("atlas_card"); } catch { /* storage blocked */ }
@@ -10611,7 +10621,7 @@ function AppShell() {
       if (r.ok) setCollectedCard(r);
       else setCardLinkError(r.message);
     });
-  }, [cardLinkToken, user, profile]);
+  }, [cardLinkToken, user, profile, cardBetaMe]);
   const openTeam = (teamId) => {
     setActiveTeamId(teamId);
     push("team");

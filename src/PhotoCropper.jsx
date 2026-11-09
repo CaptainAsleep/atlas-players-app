@@ -72,7 +72,8 @@ function CropFrame({ url, aspect, frameAspect, crop, setCrop, round, width }) {
   );
 }
 
-export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspect, initialCardCrop, onCancel, onSave }) {
+// withCardStep=false (players outside the card beta): one step, no card wording.
+export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspect, initialCardCrop, onCancel, onSave, withCardStep = true }) {
   const { T, display, body, mono } = useTheme();
   const [img, setImg] = useState(null);
   const [url, setUrl] = useState(mode === "card" ? imageUrl : null);
@@ -127,11 +128,14 @@ export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspec
           renderCrop(img, 1, profileCrop, PROFILE_OUT),
           renderScaled(img, ORIGINAL_MAX),
         ]);
+        // Card framing never touched (or the step was skipped): center it
+        // where the profile photo is centered.
+        const framed = cardTouched ? cardCrop : { x: profileCrop.x, y: profileCrop.y, zoom: 1 };
         await onSave({
           profileBlob,
           originalBlob: original.blob,
           aspect: original.width / original.height,
-          cardCrop: clampCrop(aspect, CARD_ASPECT, cardCrop),
+          cardCrop: clampCrop(aspect, CARD_ASPECT, framed),
         });
       }
     } catch (err) {
@@ -152,7 +156,7 @@ export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspec
   return createPortal(
     <div className="fixed inset-0 flex flex-col items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.92)", zIndex: 2000 }}>
       <div className="text-[11px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.12em" }}>
-        {mode === "card" ? "Card photo" : step === "profile" ? "Step 1 of 2 · Profile photo" : "Step 2 of 2 · Card photo"}
+        {mode === "card" ? "Card photo" : !withCardStep ? "Profile photo" : step === "profile" ? "Step 1 of 2 · Profile photo" : "Step 2 of 2 · Card photo"}
       </div>
       <div className="text-[17px] font-semibold mb-1 text-center" style={{ ...display, color: "#fff" }}>
         {step === "profile" ? "Position your profile photo" : "Position your trading card photo"}
@@ -191,12 +195,12 @@ export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspec
           {step === "card" && mode !== "card" ? "Back" : "Cancel"}
         </button>
         <button
-          onClick={step === "profile" ? goToCard : save}
+          onClick={step === "profile" && withCardStep ? goToCard : save}
           disabled={saving || !url}
           className="flex-1 py-2.5 text-[13px] font-semibold"
           style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, opacity: saving || !url ? 0.6 : 1 }}
         >
-          {saving ? "Saving…" : step === "profile" ? "Next" : "Save"}
+          {saving ? "Saving…" : step === "profile" && withCardStep ? "Next" : "Save"}
         </button>
       </div>
     </div>,
