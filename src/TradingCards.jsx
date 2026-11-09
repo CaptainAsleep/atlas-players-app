@@ -318,7 +318,7 @@ export const TradingCardFaces = React.forwardRef(function TradingCardFaces({ car
               <div className="ac-name">{card?.callsign || "Player"}</div>
               <div className="ac-stats">
                 <div className="ac-stat"><b>{card?.circ ?? 0}</b><span>CIRCULATION</span></div>
-                <div className="ac-stat"><b>{card?.ops ?? 0}</b><span>OPS</span></div>
+                <div className="ac-stat"><b>{card?.ops ?? 0}</b><span>EVENTS</span></div>
                 <div className="ac-stat"><b>{card?.fields ?? 0}</b><span>FIELDS</span></div>
               </div>
             </div>
