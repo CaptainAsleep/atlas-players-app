@@ -37,7 +37,7 @@ export const SHARE_TTL_MS = 3 * 60 * 1000;
 export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected", "rankFloor"];
 
 // "diamond" is hand-set only (TIER_OVERRIDES); circulation never produces it.
-export const TIERS = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "diamond", "founder"];
+export const TIERS = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "onyx", "diamond", "founder"];
 
 export function isCardBeta(uid) {
   return !!uid && CARD_BETA_UIDS.has(uid);
@@ -178,7 +178,9 @@ export function collectMessage(reason) {
 // Diamond are hand-set only (TIER_OVERRIDES). Same numbers live in
 // src/TradingCards.jsx (RANK_TABLES) for the progress view — keep in sync.
 // ===========================================================================
-export const RANK_ORDER = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "diamond", "founder"];
+// Onyx (2026-11-09): hand-given, permanent, for Atlas ambassadors.
+export const RANK_ORDER = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "onyx", "diamond", "founder"];
+export const HAND_GIVEN_RANKS = ["legendary", "onyx", "diamond"];
 export const RANK_TABLES = {
   adult: [
     { rank: "common",   events: 3,   fields: 1,  circulation: 5,   patches: 0 },

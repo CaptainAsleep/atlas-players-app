@@ -43,6 +43,8 @@ const TIER_STYLE = {
   legendary: { label: "LEGENDARY", c: ["#ffb347", "#e8731c", "#ffe1a8", "#b8560f"], ink: "#2a1302" },
   // Diamond (Michael, 2026-11-08): hand-set only — the Founder card and
   // TIER_OVERRIDES in functions/cards.js. Never reached through circulation.
+  // Onyx (2026-11-09): hand-given, permanent, for Atlas ambassadors. Black glass with a violet sheen.
+  onyx:      { label: "ONYX",      c: ["#2a2733", "#060509", "#5e5774", "#121018"], ink: "#efeaff" },
   diamond:   { label: "DIAMOND",   c: ["#e8fbff", "#9be7ff", "#f4f0ff", "#b9c8ff"], ink: "#0b1f4d" },
   founder:   { label: "FOUNDER",   c: ["#e8fbff", "#9be7ff", "#f4f0ff", "#b9c8ff"], ink: "#0b1f4d" },
 };
@@ -51,7 +53,7 @@ const TITLE_LABEL = { most_popular: "MOST POPULAR", rarest: "RAREST" };
 // Rank v2 (Michael + Rogue, 2026-11-09). Same numbers as RANK_TABLES in
 // functions/cards.js, which is what actually sets a card's rank — keep in sync.
 // All criteria must be met. Legendary and Diamond are given by hand only.
-export const RANK_ORDER = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "diamond", "founder"];
+export const RANK_ORDER = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "onyx", "diamond", "founder"];
 export const RANK_TABLES = {
   adult: [
     { rank: "common",   events: 3,   fields: 1,  circulation: 5,   patches: 0 },
@@ -264,6 +266,8 @@ const CSS = `
 .ac-glare{position:absolute;inset:0;border-radius:16px;z-index:5;pointer-events:none;mix-blend-mode:overlay;opacity:var(--glare-o,.5);background:radial-gradient(circle at var(--gx,50%) var(--gy,30%),rgba(255,255,255,.75) 0%,rgba(255,255,255,.12) 28%,rgba(0,0,0,.25) 75%)}
 .ac-card[data-tier=unranked] .ac-holo{display:none}
 .ac-card[data-tier=diamond] .ac-front .ac-holo,.ac-card[data-tier=founder] .ac-front .ac-holo{opacity:calc(var(--holo-o,.3)*1.35)}
+.ac-card[data-tier=onyx] .ac-front .ac-holo{opacity:calc(var(--holo-o,.3)*1.2)}
+.ac-card[data-tier=onyx] .ac-frame::before{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;background:linear-gradient(115deg,rgba(255,255,255,0) 30%,rgba(214,200,255,.55) 45%,rgba(255,255,255,0) 60%);background-size:250% 100%;background-position:var(--foil-pos,50%) 0;mix-blend-mode:screen}
 .ac-card[data-tier=diamond] .ac-frame::after,.ac-card[data-tier=founder] .ac-frame::after,.ac-card[data-tier=founder] .ac-emb::after,.ac-card[data-tier=diamond] .ac-emb::after{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;mix-blend-mode:screen;animation:ac-twinkle 2.4s ease-in-out infinite;background:radial-gradient(circle at 12% 1.2%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 86% 1%,#fff 0 1.2px,transparent 3px),radial-gradient(circle at 98.6% 38%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 1.4% 63%,#fff 0 1.3px,transparent 3px),radial-gradient(circle at 71% 99%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 24% 98.8%,#fff 0 1.1px,transparent 2.6px),radial-gradient(circle at 99% 83%,#fff 0 1.1px,transparent 2.6px)}
 @keyframes ac-twinkle{0%,100%{opacity:.35}50%{opacity:1}}
 .ac-card[data-tier=common] .ac-holo{opacity:calc(var(--holo-o,.3)*.35)}
@@ -992,7 +996,7 @@ export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId }) {
 function RankPanel({ card }) {
   const { T, display, body, mono } = useTheme();
   const prog = rankProgress(card);
-  const handGiven = ["legendary", "diamond", "founder"].includes(card.tier);
+  const handGiven = ["legendary", "onyx", "diamond", "founder"].includes(card.tier);
   const color = (TIER_STYLE[card.tier] || TIER_STYLE.unranked).c[0];
   return (
     <div className="w-full mt-6 p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
@@ -1002,7 +1006,9 @@ function RankPanel({ card }) {
       </div>
       {handGiven ? (
         <p className="text-[12px]" style={{ ...body, color: T.ashDim }}>
-          {card.tier === "legendary" ? "Legendary is given by Atlas to standout members of the airsoft community." : "Diamond is reserved for Atlas founders and special members."}
+          {card.tier === "legendary" ? "Legendary is given by Atlas to standout members of the airsoft community."
+            : card.tier === "onyx" ? "Onyx is given for life to Atlas ambassadors."
+            : "Diamond is reserved for Atlas founders and special members."}
         </p>
       ) : prog ? (
         <>

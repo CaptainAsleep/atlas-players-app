@@ -151,11 +151,12 @@ for (const d of late) {
 // Ranks (Rank v2, 2026-11-09) now, instead of waiting for the hourly job.
 const pubs = (await db.collection("publicProfiles").get()).docs;
 const kids2 = (await db.collection("childPublicProfiles").get()).docs;
+const given = Object.fromEntries((await db.collection("cardRankOverrides").get()).docs.map((o) => [o.id, o.data().rank]));
 const tierOps = [];
 for (const [kind, docs] of [["adult", pubs], ["child", kids2]]) {
   for (const d of docs) {
     const data = d.data();
-    const rank = finalRank({ earned: earnedRank(rankInputs(data), kind), override: TIER_OVERRIDES[d.id], floor: data.rankFloor, founder: kind === "adult" && d.id === FOUNDER_UID });
+    const rank = finalRank({ earned: earnedRank(rankInputs(data), kind), override: given[d.id] || TIER_OVERRIDES[d.id], floor: data.rankFloor, founder: kind === "adult" && d.id === FOUNDER_UID });
     if (data.cardTier !== rank || data.cardTitle) {
       tierOps.push((b) => b.update(d.ref, { cardTier: rank, cardTitle: null }));
       console.log(`rank  ${String(data.callsign || d.id).padEnd(20)} ${data.cardTier || "-"} -> ${rank}`);

@@ -984,6 +984,12 @@ service cloud.firestore {
     match /childCardSerials/{id} {
       allow read, write: if false;
     }
+    // Hand-given card ranks (Legendary / Onyx / Diamond). Set only by
+    // scripts/set-card-rank.mjs with the admin key; the rank itself shows on
+    // the public profile's cardTier.
+    match /cardRankOverrides/{id} {
+      allow read, write: if false;
+    }
 
     // Friend requests. A top-level collection (not a subcollection under
     // either user) because a friendship spans two accounts, and neither

@@ -5697,14 +5697,23 @@ async function computeChildStats(db, guardianUid, dependentId) {
 
 // Rank v2: work out a card's rank from what's on its public doc and write it
 // if it changed. Hand-set ranks (Legendary, Diamond, Founder) always win.
+// Hand-given ranks: cardRankOverrides/{id} (set by scripts/set-card-rank.mjs),
+// else the code list cards.TIER_OVERRIDES.
+async function rankOverrideFor(db, id) {
+  const o = await db.collection("cardRankOverrides").doc(id).get().catch(() => null);
+  const r = o?.exists ? o.data().rank : null;
+  return cards.HAND_GIVEN_RANKS.includes(r) ? r : cards.TIER_OVERRIDES[id];
+}
+
 async function recomputeRank(db, kind, id) {
   const ref = db.collection(kind === "child" ? "childPublicProfiles" : "publicProfiles").doc(id);
   const snap = await ref.get();
   if (!snap.exists) return null;
   const d = snap.data();
+  const handGiven = await rankOverrideFor(db, id);
   const rank = cards.finalRank({
     earned: cards.earnedRank(cards.rankInputs(d), kind),
-    override: cards.TIER_OVERRIDES[id],
+    override: handGiven,
     floor: d.rankFloor,
     founder: kind !== "child" && id === cards.FOUNDER_UID,
   });
@@ -5852,13 +5861,14 @@ export const collectCard = onCall(async (request) => {
 // after a deploy). The old circulation-percentile tiers and titles are gone.
 export const refreshCardTiers = onSchedule({ schedule: "every 60 minutes", timeZone: "America/Detroit" }, async () => {
   const db = getFirestore();
-  const [adults, kids] = await Promise.all([db.collection("publicProfiles").get(), db.collection("childPublicProfiles").get()]);
+  const [adults, kids, overrides] = await Promise.all([db.collection("publicProfiles").get(), db.collection("childPublicProfiles").get(), db.collection("cardRankOverrides").get()]);
+  const given = Object.fromEntries(overrides.docs.map((o) => [o.id, o.data().rank]).filter(([, r]) => cards.HAND_GIVEN_RANKS.includes(r)));
   const ops = [];
   const plan = (kind, d) => {
     const data = d.data();
     const rank = cards.finalRank({
       earned: cards.earnedRank(cards.rankInputs(data), kind),
-      override: cards.TIER_OVERRIDES[d.id],
+      override: given[d.id] || cards.TIER_OVERRIDES[d.id],
       floor: data.rankFloor,
       founder: kind !== "child" && d.id === cards.FOUNDER_UID,
     });
