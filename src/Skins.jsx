@@ -7,6 +7,8 @@ import { FREE_LOOKS, SKINS, COLLECTIONS, skinById, isOnSale, bundleOffer, fmtSki
 import { startSkinCheckout } from "./hooks/useSkins";
 
 // Paid skins (2026-11-09). Scope: project doc claude/atlas-skins-scope.md.
+// Layering: the bottom nav and the event booking bar sit at zIndex 1000,
+// so the preview bar is 1100 and every full-screen skin overlay is 1200.
 // Screens: Appearance (Profile → Settings → Appearance), the preview chrome shown
 // while a skin is being tried on, the purchase sheet (checkout → waiting on
 // the webhook → unlocked), and the booking add-on panel.
@@ -283,7 +285,7 @@ export function SkinPreviewChrome({ owned, onExit, onBuy, onEquip }) {
   const glass = { background: "rgba(12,13,15,0.90)", border: "1px solid rgba(255,255,255,0.16)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", color: "#FFFFFF" };
   return (
     <>
-      <div className="fixed left-3 right-3 z-[65] p-3.5 flex flex-col gap-3" style={{ ...glass, bottom: 92, borderRadius: 22, boxShadow: "0 24px 48px -12px rgba(0,0,0,0.6)" }}>
+      <div className="fixed left-3 right-3 z-[1100] p-3.5 flex flex-col gap-3" style={{ ...glass, bottom: 92, borderRadius: 22, boxShadow: "0 24px 48px -12px rgba(0,0,0,0.6)" }}>
         <div className="flex items-center justify-between -mt-1 -mr-1">
           <span className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.12em", color: "rgba(255,255,255,0.8)" }}>
             <Eye size={14} /> PREVIEW
@@ -360,7 +362,7 @@ export function SkinPurchaseSheet({ req, owned, onClose, onEquip }) {
     const { T, fonts } = resolveLook(primary);
     const display = asFont(fonts.display);
     return (
-      <div className="fixed inset-0 z-[80] flex flex-col items-center text-center px-7 pt-20 pb-10 gap-5" style={{ background: withAlpha(T.void, 0.96) || T.void }} role="dialog" aria-label="Skin unlocked">
+      <div className="fixed inset-0 z-[1200] flex flex-col items-center text-center px-7 pt-20 pb-10 gap-5" style={{ background: withAlpha(T.void, 0.96) || T.void }} role="dialog" aria-label="Skin unlocked">
         <div className="w-44 flex-shrink-0" style={{ borderRadius: 18, overflow: "hidden", boxShadow: "0 30px 60px -20px rgba(0,0,0,0.6)" }}>
           <MiniPreview lookId={primary} height={260} radius={18} />
         </div>
@@ -381,7 +383,7 @@ export function SkinPurchaseSheet({ req, owned, onClose, onEquip }) {
 
   const navy = "#002C48";
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col justify-end" role="dialog" aria-label={`Unlock ${target.title}`}>
+    <div className="fixed inset-0 z-[1200] flex flex-col justify-end" role="dialog" aria-label={`Unlock ${target.title}`}>
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 w-full h-full" style={{ background: "rgba(0,0,0,0.55)" }} />
       <div className="relative px-5 pt-2.5 pb-7 flex flex-col gap-4" style={{ background: "#FFFFFF", color: navy, borderRadius: "24px 24px 0 0", fontFamily: "'Inter', sans-serif" }}>
         <span aria-hidden="true" className="self-center" style={{ width: 40, height: 5, borderRadius: 999, background: "#D2D2CB" }} />
@@ -517,7 +519,7 @@ export function SkinsLaunchAnnouncement({ onOpen, onDismiss }) {
   const fan = ["ridgeline", "ridgeline-black", "m81", "gunmetal", "neon"];
   const offer = bundleOffer([]);
   return (
-    <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="skins-launch-title">
+    <div className="fixed inset-0 z-[1200] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="skins-launch-title">
       <button type="button" aria-label="Close" onClick={onDismiss} className="absolute inset-0 w-full h-full" style={{ background: "rgba(0,0,0,0.6)" }} />
       <div className="relative w-full max-w-[420px] mx-3 mb-3 sm:mb-0 px-5 pt-6 pb-5 flex flex-col gap-4" style={{ background: "#0C0D0F", color: "#FFFFFF", borderRadius: 26, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 30px 60px -20px rgba(0,0,0,0.8)", fontFamily: "'Inter', sans-serif" }}>
         <div aria-hidden="true" className="relative h-[176px] flex justify-center">
