@@ -18,10 +18,10 @@ export const CARD_BETA_UIDS = new Set([
 ]);
 export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 
-// Hand-set tiers that skip the circulation ranking (like Founder). Rogue asked
-// to be Legendary (Michael, 2026-11-08). Remove before cards open to everyone:
-// otherwise her card says Legendary no matter how many decks it's in.
-export const TIER_OVERRIDES = { "4gaohQb6ddMvdSNdhlDp75eMZke2": "legendary" };
+// Hand-set tiers that skip the circulation ranking (like Founder). Rogue is
+// Diamond (Michael, 2026-11-08; was Legendary). Decide before cards open to
+// everyone: her card shows Diamond no matter how many decks it's in.
+export const TIER_OVERRIDES = { "4gaohQb6ddMvdSNdhlDp75eMZke2": "diamond" };
 
 // Fewer collections than this = Unranked (Michael, 2026-11-08).
 export const RANKED_MIN = 5;
@@ -34,7 +34,8 @@ export const SHARE_TTL_MS = 3 * 60 * 1000;
 // Server-owned fields on a public profile. Mirrored in firestore.rules.
 export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected"];
 
-export const TIERS = ["unranked", "common", "rare", "epic", "legendary", "founder"];
+// "diamond" is hand-set only (TIER_OVERRIDES); circulation never produces it.
+export const TIERS = ["unranked", "common", "rare", "epic", "legendary", "diamond", "founder"];
 
 export function isCardBeta(uid) {
   return !!uid && CARD_BETA_UIDS.has(uid);

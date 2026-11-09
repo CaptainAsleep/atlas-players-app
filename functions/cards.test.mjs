@@ -125,7 +125,7 @@ test("serial backfill: oldest first, missing dates first, existing numbers kept"
 test("hand-set tier overrides skip the ranking and titles", async () => {
   const { TIER_OVERRIDES } = await import("./cards.js");
   const uid = Object.keys(TIER_OVERRIDES)[0];
-  assert.equal(TIER_OVERRIDES[uid], "legendary");
+  assert.equal(TIER_OVERRIDES[uid], "diamond");
   const { tiers, titles } = computeTiers([
     { key: "rogue", circulation: 500, override: "legendary", serial: 2 },
     { key: "x", circulation: 6, serial: 9 },

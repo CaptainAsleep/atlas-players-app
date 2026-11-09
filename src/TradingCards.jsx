@@ -39,7 +39,10 @@ const TIER_STYLE = {
   rare:      { label: "RARE",      c: ["#60a5fa", "#93c5fd", "#2563eb", "#bfdbfe"], ink: "#0b1f4d" },
   epic:      { label: "EPIC",      c: ["#c084fc", "#f0abfc", "#7c3aed", "#e9d5ff"], ink: "#2e1065" },
   legendary: { label: "LEGENDARY", c: ["#f6d365", "#fda085", "#c084fc", "#60a5fa"], ink: "#111" },
-  founder:   { label: "FOUNDER",   c: ["#f5d77a", "#9a7420", "#fff3c4", "#5c4512"], ink: "#1a1405" },
+  // Diamond (Michael, 2026-11-08): hand-set only — the Founder card and
+  // TIER_OVERRIDES in functions/cards.js. Never reached through circulation.
+  diamond:   { label: "DIAMOND",   c: ["#e8fbff", "#9be7ff", "#f4f0ff", "#b9c8ff"], ink: "#0b1f4d" },
+  founder:   { label: "FOUNDER",   c: ["#e8fbff", "#9be7ff", "#f4f0ff", "#b9c8ff"], ink: "#0b1f4d" },
 };
 const TITLE_LABEL = { most_popular: "MOST POPULAR", rarest: "RAREST" };
 
@@ -219,6 +222,9 @@ const CSS = `
 .ac-holo{position:absolute;inset:0;z-index:4;pointer-events:none;mix-blend-mode:color-dodge;opacity:var(--holo-o,.3);background:repeating-linear-gradient(var(--foil-angle,135deg),rgba(255,0,140,0) 0px,rgba(255,0,140,.22) 12px,rgba(0,255,220,.22) 24px,rgba(255,240,0,.22) 36px,rgba(120,80,255,.22) 48px,rgba(255,0,140,0) 60px);background-size:200% 200%;background-position:var(--foil-pos,50%) var(--foil-pos-y,50%)}
 .ac-glare{position:absolute;inset:0;z-index:5;pointer-events:none;mix-blend-mode:overlay;opacity:var(--glare-o,.5);background:radial-gradient(circle at var(--gx,50%) var(--gy,30%),rgba(255,255,255,.75) 0%,rgba(255,255,255,.12) 28%,rgba(0,0,0,.25) 75%)}
 .ac-card[data-tier=unranked] .ac-holo{display:none}
+.ac-card[data-tier=diamond] .ac-front .ac-holo,.ac-card[data-tier=founder] .ac-front .ac-holo{opacity:calc(var(--holo-o,.3)*1.35)}
+.ac-card[data-tier=diamond] .ac-frame::after,.ac-card[data-tier=founder] .ac-frame::after,.ac-card[data-tier=founder] .ac-emb::after{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;mix-blend-mode:screen;animation:ac-twinkle 2.4s ease-in-out infinite;background:radial-gradient(circle at 12% 1.2%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 86% 1%,#fff 0 1.2px,transparent 3px),radial-gradient(circle at 98.6% 38%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 1.4% 63%,#fff 0 1.3px,transparent 3px),radial-gradient(circle at 71% 99%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 24% 98.8%,#fff 0 1.1px,transparent 2.6px),radial-gradient(circle at 99% 83%,#fff 0 1.1px,transparent 2.6px)}
+@keyframes ac-twinkle{0%,100%{opacity:.35}50%{opacity:1}}
 .ac-card[data-tier=common] .ac-holo{opacity:calc(var(--holo-o,.3)*.35)}
 .ac-bk{position:absolute;inset:0;border-radius:16px;padding:9px;background:linear-gradient(160deg,#3b82f6,#1e3a8a 60%,#0b1f4d)}
 .ac-bk-in{position:relative;width:100%;height:100%;border-radius:10px;overflow:hidden;background:radial-gradient(90% 60% at 50% 42%,#2563eb 0%,#1e40af 40%,#0b1f4d 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
@@ -229,10 +235,10 @@ const CSS = `
 .ac-back .ac-holo{opacity:calc(var(--holo-o,.3)*.6)}
 .ac-emb{position:absolute;inset:0;border-radius:16px;padding:9px;background:linear-gradient(var(--foil-angle,135deg),var(--r1),var(--r2),var(--r3),var(--r4),var(--r1));background-size:300% 300%;background-position:var(--foil-pos,50%) 50%}
 .ac-emb-in{position:relative;width:100%;height:100%;border-radius:10px;overflow:hidden;background:radial-gradient(80% 60% at 50% 42%,rgba(255,255,255,.06),rgba(0,0,0,0) 60%,rgba(0,0,0,.45) 100%),repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 2px,rgba(0,0,0,0) 2px 4px),repeating-linear-gradient(-45deg,rgba(0,0,0,.18) 0 1px,rgba(0,0,0,0) 1px 3px),#0c2a45;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
-.ac-emb-in::before{content:"";position:absolute;inset:9px;border-radius:7px;border:2px dashed rgba(245,215,122,.55);pointer-events:none}
+.ac-emb-in::before{content:"";position:absolute;inset:9px;border-radius:7px;border:2px dashed rgba(214,244,255,.6);pointer-events:none}
 .ac-patch{width:68%;filter:drop-shadow(0 2px 1px rgba(0,0,0,.55)) drop-shadow(0 10px 14px rgba(0,0,0,.5));position:relative;z-index:1;margin-top:-6px}
-.ac-emb-ed{font:800 8.5px/1 Inter;letter-spacing:.34em;padding-left:.34em;color:#f5d77a;margin-top:-8px}
-.ac-emb-tag{position:absolute;bottom:20px;left:0;right:0;text-align:center;font:700 8px/1 Inter,sans-serif;letter-spacing:.24em;color:rgba(245,215,122,.75)}
+.ac-emb-ed{font:800 8.5px/1 Inter;letter-spacing:.34em;padding-left:.34em;color:#d6f4ff;margin-top:-8px}
+.ac-emb-tag{position:absolute;bottom:20px;left:0;right:0;text-align:center;font:700 8px/1 Inter,sans-serif;letter-spacing:.24em;color:rgba(214,244,255,.8)}
 .ac-card[data-tier=founder] .ac-back .ac-holo{opacity:calc(var(--holo-o,.3)*.35)}
 .ac-stage{touch-action:none;cursor:grab;display:flex;justify-content:center}
 .ac-stage:active{cursor:grabbing}
@@ -288,6 +294,7 @@ function AtlasLogo({ className, fill = "url(#ac-lg)", outline = "#050b18" }) {
 
 // The card, at design size 300x420. `flat` = front only (deck stacks).
 export const TradingCardFaces = React.forwardRef(function TradingCardFaces({ card, total, flat = false, tierOverride }, ref) {
+  useCardStyles();
   const tier = tierOverride || card?.tier || "unranked";
   const isFounder = tier === "founder";
   const photoStyle = card?.photoUrl ? cropBackground(card.photoUrl, card.aspect, CARD_ASPECT, card.crop) : null;
