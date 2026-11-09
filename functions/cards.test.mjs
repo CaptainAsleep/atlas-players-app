@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import * as cards from "./cards.js";
 import {
   RANKED_MIN, SHARE_TTL_MS, CARD_SERVER_KEYS, isCardBeta, FOUNDER_UID, newShareToken, isWellFormedShareToken,
   adultCardStats, childCardStats, sameStats, computeTiers, collectProblem, collectionDocId, planSerials, collectMessage,
@@ -160,4 +161,19 @@ test("rank v2: earned ranks, all criteria, kids table, overrides, floor", async 
   assert.equal(finalRank({ earned: "epic", floor: "rare" }), "epic");          // and can still climb
   assert.equal(finalRank({ earned: "common", floor: "diamond" }), "common");   // a floor can't grant a hand-set rank
   assert.deepEqual(rankInputs({ cardStats: { ops: 4, fields: 2, patches: 7 }, circulation: 9 }), { events: 4, fields: 2, circulation: 9, patches: 7 });
+});
+
+test("likeness consent: only the current version + exact terms are accepted", () => {
+  const ok = { choice: "in", version: cards.CARD_CONSENT.version, termsHash: cards.CARD_CONSENT.sha256 };
+  assert.equal(cards.consentProblem(ok), null);
+  assert.equal(cards.consentProblem({ ...ok, choice: "out" }), null);
+  assert.equal(cards.consentProblem({ ...ok, choice: "maybe" }), "choice");
+  assert.equal(cards.consentProblem({ ...ok, version: "old" }), "terms");
+  assert.equal(cards.consentProblem({ ...ok, termsHash: "0".repeat(64) }), "terms");
+  assert.equal(cards.consentProblem(), "choice");
+  assert.equal(cards.consentIsCurrentIn({ choice: "in", version: cards.CARD_CONSENT.version }), true);
+  assert.equal(cards.consentIsCurrentIn({ choice: "out", version: cards.CARD_CONSENT.version }), false);
+  assert.equal(cards.consentIsCurrentIn({ choice: "in", version: "old" }), false);
+  assert.equal(cards.consentIsCurrentIn(null), false);
+  assert.ok(cards.CARD_SERVER_KEYS.includes("cardOptOut"));
 });

@@ -966,7 +966,7 @@ service cloud.firestore {
       // card stats and collected count are written only by Cloud Functions
       // (they drive rarity). A player can't set them on create or change them.
       allow create: if request.auth != null && request.auth.uid == uid
-        && !request.resource.data.keys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor']);
+        && !request.resource.data.keys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor', 'cardOptOut']);
       allow delete: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && (
         // Same verified-forgery carve-out as users/{userId} above — the
@@ -974,7 +974,7 @@ service cloud.firestore {
         // guard, not just the source doc.
         (request.auth.uid == uid
           && (request.resource.data.get('verified', false) != true || request.auth.token.email_verified == true)
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor']))
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor', 'cardOptOut']))
         ||
         // Anyone signing up with this player's referral link can bump
         // their referral count by exactly 1 — narrow, single-field,
@@ -1020,6 +1020,16 @@ service cloud.firestore {
     match /cardBeta/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
+    }
+    // Likeness consent (2026-11-09): your current answer, readable only by
+    // you so the app knows whether to ask. Written only by setCardConsent.
+    // The history underneath is the audit trail — nobody reads it from an app.
+    match /cardConsents/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+      match /history/{entryId} {
+        allow read, write: if false;
+      }
     }
 
     // Friend requests. A top-level collection (not a subcollection under

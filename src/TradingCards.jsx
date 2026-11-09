@@ -122,6 +122,7 @@ export function toCard(kind, id, d) {
     aspect: hasCardPhoto ? d.cardPhotoAspect || 1 : 1,
     crop: hasCardPhoto ? d.cardCrop || null : null,
     hiRes: hasCardPhoto,
+    optedOut: !!d.cardOptOut,
   };
 }
 
@@ -157,7 +158,7 @@ export function useDeck(collectorUid) {
         const s = await getDoc(ownerRef(r.ownerKind, r.ownerId)).catch(() => null);
         return s?.exists() ? toCard(r.ownerKind, r.ownerId, s.data()) : null;
       }));
-      if (alive) setState({ cards: cards.filter(Boolean), loading: false });
+      if (alive) setState({ cards: cards.filter((c) => c && !c.optedOut), loading: false });
     }, () => alive && setState({ cards: [], loading: false }));
     return () => { alive = false; unsub(); };
   }, [collectorUid]);
@@ -615,6 +616,125 @@ export function CardPhotoPrompt({ onUpload }) {
 }
 
 // ---------------------------------------------------------------------------
+// Likeness consent (2026-11-09). Asked once per terms version, of every card
+// tester; "out" keeps the card private. The words below are hashed and the
+// server only accepts CARD_CONSENT in functions/cards.js — change a word and
+// you must bump the version and hash in both places (everyone is re-asked).
+// ---------------------------------------------------------------------------
+
+export const CARD_CONSENT_VERSION = "2026-11-09.v1";
+export const CARD_CONSENT_TERMS = [
+  "I'm 18 or older, I'm the person in my card photo, and I have the right to use that photo.",
+  "I give Atlas permission to show my callsign, card photo, likeness, serial number, rank and Atlas stats on my trading card inside the Atlas app. This permission is non-exclusive, royalty-free and revocable.",
+  "My card can be shown to players who collect it, in their decks, and on their public profiles.",
+  "Atlas won't use my card in ads, marketing or merchandise, and won't sell it or let it be bought, sold or traded for money, without asking me separately.",
+  "I won't be paid for this use.",
+  "Atlas can't control screenshots or copies that other people make outside the app.",
+  "I can withdraw this permission at any time from Profile → My Card. When I do, Atlas stops showing my card to other players and stops it from being shared.",
+  "Atlas keeps a record of my choice, the date, and the version of these terms I saw.",
+];
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function useCardConsent(uid) {
+  const [s, setS] = useState({ loading: !!uid, choice: null, version: null, error: false });
+  useEffect(() => {
+    if (!uid) { setS({ loading: false, choice: null, version: null, error: false }); return undefined; }
+    return onSnapshot(doc(db, "cardConsents", uid),
+      (snap) => { const d = snap.data() || {}; setS({ loading: false, choice: d.choice || null, version: d.version || null, error: false }); },
+      () => setS({ loading: false, choice: null, version: null, error: true }));
+  }, [uid]);
+  const current = s.version === CARD_CONSENT_VERSION;
+  return { ...s, answered: current && !!s.choice, optedIn: current && s.choice === "in" };
+}
+
+// The pop-up. Without onClose it can only be answered (first-time ask);
+// with onClose (from My Card) it also has a close button.
+export function CardConsentModal({ uid, onClose }) {
+  const { T, display, body, mono } = useTheme();
+  const { card } = useCardOwner("adult", uid);
+  const total = useCardsTotal();
+  const scale = useScaleFor(0.56, 0.3, 0.62);
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState("");
+  useHideBottomNav();
+  const answer = async (choice) => {
+    setBusy(choice);
+    setError("");
+    try {
+      const termsHash = await sha256Hex(CARD_CONSENT_TERMS.join("\n"));
+      await httpsCallable(firebaseFunctions, "setCardConsent")({ choice, version: CARD_CONSENT_VERSION, termsHash });
+      if (choice === "in") CardSound.reveal();
+      setBusy(null);
+      onClose?.(choice);
+    } catch (err) {
+      setBusy(null);
+      setError(err?.message || "Couldn't save your answer. Check your connection and try again.");
+    }
+  };
+  const dim = "rgba(255,255,255,0.72)";
+  const label = { ...mono, color: "rgba(255,255,255,0.55)", letterSpacing: "0.12em" };
+  return createPortal(
+    <div className="fixed inset-0 flex flex-col" role="dialog" aria-modal="true" aria-labelledby="card-consent-title"
+      style={{ zIndex: 2080, background: "radial-gradient(120% 80% at 50% 18%,#1b2440 0%,#0a0d18 60%,#05060b 100%)" }}>
+      {onClose && (
+        <button onClick={() => onClose()} className="absolute top-4 right-4 w-10 h-10 text-[18px]" style={{ zIndex: 1, color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 999 }} aria-label="Close">✕</button>
+      )}
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4 text-center">
+        <div className="text-[11px] font-semibold uppercase" style={{ ...mono, color: "#7aa2ff", letterSpacing: "0.2em" }}>Your Atlas trading card</div>
+        <div className="flex justify-center mt-2" style={{ minHeight: Math.round(H * scale) + 24 }}>
+          {card && <SpinCard card={card} total={total} scale={scale} />}
+        </div>
+        <h2 id="card-consent-title" className="text-[22px] font-semibold mt-1" style={{ ...display, color: "#fff" }}>Can we put your likeness on this card?</h2>
+        <p className="text-[13px] mt-2 mx-auto" style={{ ...body, color: dim, maxWidth: 340 }}>
+          This is your trading card. Other players collect it by scanning your code in person. Before anyone can, we need your OK to show your photo and callsign on it.
+        </p>
+        <div className="mt-4 mx-auto text-left p-4" style={{ maxWidth: 380, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
+          <div className="text-[11px] font-semibold uppercase mb-2" style={label}>If you tap “I'm in”</div>
+          <ul className="space-y-2">
+            {CARD_CONSENT_TERMS.map((t, i) => (
+              <li key={i} className="text-[12.5px] leading-snug flex gap-2" style={{ ...body, color: "rgba(255,255,255,0.86)" }}>
+                <span aria-hidden="true" style={{ color: "#7aa2ff" }}>•</span><span>{t}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="text-[11px] font-semibold uppercase mt-4 mb-1" style={label}>If you tap “I'm out”</div>
+          <p className="text-[12.5px] leading-snug" style={{ ...body, color: "rgba(255,255,255,0.86)" }}>
+            Your card stays private: other players can't see it, collect it or share it. Everything else in Atlas works as normal, and you can opt in later from Profile → My Card.
+          </p>
+          <div className="text-[10.5px] mt-4" style={{ ...mono, color: "rgba(255,255,255,0.4)" }}>Trading card likeness consent · version {CARD_CONSENT_VERSION}</div>
+        </div>
+      </div>
+      <div className="px-6 pt-3" style={{ background: "rgba(5,6,11,0.94)", borderTop: "1px solid rgba(255,255,255,0.1)", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+        {error && <div className="text-[12px] mb-2 text-center" style={{ ...body, color: "#fca5a5" }}>{error}</div>}
+        <div className="flex gap-3 mx-auto" style={{ maxWidth: 380 }}>
+          <button disabled={!!busy} onClick={() => answer("out")} className="flex-1 py-3.5 text-[15px] font-semibold"
+            style={{ ...display, color: "#fff", border: "1px solid rgba(255,255,255,0.35)", borderRadius: T.rPill, opacity: busy && busy !== "out" ? 0.5 : 1 }}>
+            {busy === "out" ? "Saving…" : "I'm out"}
+          </button>
+          <button disabled={!!busy} onClick={() => answer("in")} className="flex-1 py-3.5 text-[15px] font-semibold"
+            style={{ ...display, background: "#2563eb", color: "#fff", borderRadius: T.rPill, boxShadow: "0 8px 24px rgba(37,99,235,.45)", opacity: busy && busy !== "in" ? 0.5 : 1 }}>
+            {busy === "in" ? "Saving…" : "I'm in"}
+          </button>
+        </div>
+        <div className="text-[11px] mt-2 text-center" style={{ ...body, color: "rgba(255,255,255,0.5)" }}>You can change this anytime in Profile → My Card.</div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// App-level: asks any card tester who hasn't answered the current version.
+export function CardConsentGate({ uid }) {
+  const consent = useCardConsent(uid);
+  if (!uid || consent.loading || consent.error || consent.answered) return null;
+  return <CardConsentModal uid={uid} />;
+}
+
+// ---------------------------------------------------------------------------
 // Card viewer (full screen 3D)
 // ---------------------------------------------------------------------------
 
@@ -746,6 +866,8 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
   const ctl = useRef(null);
   const [idle, setIdle] = useState(true);
   const [sharing, setSharing] = useState(null); // { card, childPublicId }
+  const consent = useCardConsent(user?.uid);
+  const [askConsent, setAskConsent] = useState(false);
 
   return (
     <div className="h-full overflow-y-auto pb-24" style={{ backgroundColor: T.void }}>
@@ -762,7 +884,7 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
             <Pill onClick={() => setIdle((v) => !v)}>{idle ? "Sway: on" : "Sway: off"}</Pill>
           </div>
           <div className="flex gap-2 flex-wrap justify-center mt-3">
-            <Pill primary disabled={!card.photoUrl} onClick={() => setSharing({ card })}>Share my card</Pill>
+            <Pill primary disabled={!card.photoUrl || !consent.optedIn} onClick={() => setSharing({ card })}>Share my card</Pill>
             <Pill onClick={onOpenDeck}>My deck</Pill>
           </div>
           {!card.photoUrl && (
@@ -771,6 +893,17 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
           {card.photoUrl && !card.hiRes && <div className="w-full mt-4"><CardPhotoPrompt onUpload={onUploadPhoto} /></div>}
           {card.hiRes && (
             <button onClick={onAdjustCardPhoto} className="mt-3 text-[12px] underline" style={{ ...body, color: T.accent }}>Adjust card photo</button>
+          )}
+          {!consent.loading && (
+            <div className="w-full mt-4 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, border: `1px solid ${T.line}` }}>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>{consent.optedIn ? "Your card is shareable" : "Your card is private"}</div>
+                <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>
+                  {consent.optedIn ? "You've given Atlas permission to show your likeness on your card." : "Other players can't see, collect or share it until you opt in."}
+                </div>
+              </div>
+              <Pill primary={!consent.optedIn} onClick={() => setAskConsent(true)}>{consent.optedIn ? "Change" : "Opt in"}</Pill>
+            </div>
           )}
           <RankPanel card={card} />
           {publicChildren.length > 0 && (
@@ -782,6 +915,7 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
         </div>
       )}
       {sharing && <ShareCardSheet card={sharing.card} total={total} childPublicId={sharing.childPublicId} onClose={() => setSharing(null)} />}
+      {askConsent && user?.uid && <CardConsentModal uid={user.uid} onClose={() => setAskConsent(false)} />}
     </div>
   );
 }

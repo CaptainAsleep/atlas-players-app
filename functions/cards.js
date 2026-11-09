@@ -34,7 +34,20 @@ export const RANKED_MIN = 5;
 export const SHARE_TTL_MS = 3 * 60 * 1000;
 
 // Server-owned fields on a public profile. Mirrored in firestore.rules.
-export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected", "rankFloor"];
+export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected", "rankFloor", "cardOptOut"];
+
+// Likeness consent (2026-11-09). The app hashes the exact words it showed in
+// the consent pop-up and sends the hash with the answer; only this version
+// is accepted. Changing one word = new version + hash here AND in
+// src/TradingCards.jsx (CARD_CONSENT_TERMS / CARD_CONSENT_VERSION), and
+// everyone is asked again (an old "in" stops counting).
+export const CARD_CONSENT = { version: "2026-11-09.v1", sha256: "251156e0ae4403c5e0e597f8c6c5219cd0b51cc425ac3a32b825f413f81ac3ca" };
+export function consentProblem({ choice, version, termsHash } = {}) {
+  if (choice !== "in" && choice !== "out") return "choice";
+  if (version !== CARD_CONSENT.version || termsHash !== CARD_CONSENT.sha256) return "terms";
+  return null;
+}
+export const consentIsCurrentIn = (d) => !!d && d.choice === "in" && d.version === CARD_CONSENT.version;
 
 // "diamond" is hand-set only (TIER_OVERRIDES); circulation never produces it.
 export const TIERS = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "onyx", "diamond", "founder"];

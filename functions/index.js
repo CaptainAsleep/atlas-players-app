@@ -5913,6 +5913,15 @@ export const issueCardToken = onCall(async (request) => {
   const owner = await loadCardOwner(db, ownerKind, ownerId);
   if (!owner) throw new HttpsError("not-found", ownerKind === "child" ? "That child profile isn't public." : "Profile not found.");
   if (ownerKind === "child" && owner.guardianUid !== uid) throw new HttpsError("permission-denied", "That isn't your child's card.");
+  // Your own card can only be shown once you've said yes to the current
+  // likeness consent (setCardConsent). Kids' cards: parent consent is a
+  // separate, later step — unchanged here.
+  if (ownerKind === "adult") {
+    const consent = await db.collection("cardConsents").doc(uid).get();
+    if (!cards.consentIsCurrentIn(consent.exists ? consent.data() : null)) {
+      throw new HttpsError("failed-precondition", "Give Atlas permission to use your likeness on your card first (Profile → My Card).");
+    }
+  }
   const photo = owner.data.cardPhotoUrl || owner.data.avatarUrl;
   if (!photo) throw new HttpsError("failed-precondition", "Add a photo to share your card.");
   const token = cards.newShareToken(randomBytes);
@@ -5956,6 +5965,8 @@ export const collectCard = onCall(async (request) => {
       now: Date.now(), collectorUid: uid, collectorHasProfile: collectorPub.exists, ownerExists: !!owner, guardianUid,
     });
     if (problem) return { problem };
+    // Opted out after showing a code: the card can't be collected.
+    if (share.ownerKind === "adult" && owner.data.cardOptOut) return { problem: "gone" };
     const colRef = db.collection("cardCollections").doc(cards.collectionDocId(uid, share.ownerId));
     const existing = await t.get(colRef);
     const callsign = owner.data.callsign || "Player";
@@ -5972,6 +5983,45 @@ export const collectCard = onCall(async (request) => {
   if (result.problem) throw new HttpsError("failed-precondition", cards.collectMessage(result.problem), { reason: result.problem });
   if (!result.already) await recomputeRank(db, result.ownerKind, result.ownerId).catch((err) => console.error("rank after collect failed:", err));
   return result;
+});
+
+// { choice: "in" | "out", version, termsHash } → { choice }. The likeness
+// consent pop-up (2026-11-09). Keeps the current answer in cardConsents/{uid}
+// and every answer ever given in cardConsents/{uid}/history (append-only),
+// with the server time, the terms version and the hash of the exact words
+// shown. "out" hides the card: publicProfiles.cardOptOut (server key) makes
+// the app leave it out of every deck and viewer, open codes are deleted, and
+// issueCardToken / collectCard refuse it. Collected copies are kept (hidden),
+// so opting back in restores them.
+export const setCardConsent = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const db = getFirestore();
+  if (!(await cardBetaAllowed(db, uid))) throw new HttpsError("permission-denied", cards.collectMessage("not-beta"));
+  const { choice, version, termsHash } = request.data || {};
+  const problem = cards.consentProblem({ choice, version, termsHash });
+  if (problem === "choice") throw new HttpsError("invalid-argument", "Choose in or out.");
+  if (problem) throw new HttpsError("failed-precondition", "These terms have been updated. Close and reopen Atlas, then try again.");
+  const pubRef = db.collection("publicProfiles").doc(uid);
+  const pub = await pubRef.get();
+  if (!pub.exists) throw new HttpsError("failed-precondition", cards.collectMessage("no-profile"));
+  const record = {
+    uid, choice, version, termsSha256: termsHash,
+    at: FieldValue.serverTimestamp(),
+    userAgent: String(request.rawRequest?.headers?.["user-agent"] || "").slice(0, 300),
+  };
+  const consentRef = db.collection("cardConsents").doc(uid);
+  const ops = [
+    (b) => b.set(consentRef, record),
+    (b) => b.set(consentRef.collection("history").doc(), record),
+    (b) => b.update(pubRef, { cardOptOut: choice === "out" }),
+  ];
+  if (choice === "out") {
+    const open = await db.collection("cardShares").where("ownerId", "==", uid).get();
+    open.docs.filter((d) => d.data().ownerKind === "adult").forEach((d) => ops.push((b) => b.delete(d.ref)));
+  }
+  await commitInChunks(db, ops);
+  return { choice };
 });
 
 // Hourly: rarity tiers + the two titles. Only writes cards that changed.

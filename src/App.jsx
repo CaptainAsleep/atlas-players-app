@@ -32,7 +32,7 @@ import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./h
 import { useMyTicketHoldings, useMyEventTeamTickets } from "./hooks/useTeamTickets";
 import { EventTeamTickets, TicketOffersCard, GiveVoucherSheet, canGiveVoucher } from "./TeamTickets";
 import PhotoCropper from "./PhotoCropper";
-import { isCardBeta, useCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher, TIER_STYLE } from "./TradingCards";
+import { isCardBeta, useCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher, CardConsentGate, TIER_STYLE } from "./TradingCards";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
@@ -4495,13 +4495,13 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
 
         {cardBeta && theirCard && (
           <div className="flex gap-2 mb-3">
-            <button onClick={() => setViewingCard(true)} className="px-4 py-2 text-[12px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>View card</button>
+            {!theirCard.optedOut && <button onClick={() => setViewingCard(true)} className="px-4 py-2 text-[12px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>View card</button>}
             <button onClick={() => onOpenPlayerDeck?.(uid)} className="px-4 py-2 text-[12px] font-semibold" style={{ ...body, border: `1px solid ${T.line}`, color: T.ash, borderRadius: T.rPill }}>
               Deck{deckCount != null ? ` (${deckCount})` : ""}
             </button>
           </div>
         )}
-        {viewingCard && theirCard && <CardViewer card={theirCard} total={cardTotal} onClose={() => setViewingCard(false)} />}
+        {viewingCard && theirCard && !theirCard.optedOut && <CardViewer card={theirCard} total={cardTotal} onClose={() => setViewingCard(false)} />}
 
         {!isSelf && (
           <>
@@ -11049,6 +11049,7 @@ function AppShell() {
         <CancellationNoticeModal notice={noticeToShow} onDismiss={() => acknowledgeNotice(noticeToShow.id)} />
       )}
       {user && profile && !installGate && cardBetaMe && <RankUpWatcher uid={user.uid} />}
+      {user && profile && !installGate && cardBetaMe && <CardConsentGate uid={user.uid} />}
       {user && profile && !installGate && collectedCard && (
         <CardCollectedOverlay
           result={collectedCard}
