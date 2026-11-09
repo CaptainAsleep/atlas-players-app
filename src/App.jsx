@@ -2137,11 +2137,174 @@ const GUARDIAN_NOTICE_TEXT = "By signing, I am signing this waiver on behalf of 
 const guardianAbsentNoticeText = (fieldName) =>
   `You are not playing in this event. By booking, you confirm that you are the parent or legal guardian of each child listed, and you authorize them to take part whether or not you remain on site. You accept all risks and responsibilities described in this waiver on their behalf as if you were playing alongside them. You confirm the phone number on your account is correct and that you can be reached during the event, and you authorize ${fieldName || "the field"} to seek emergency medical treatment for your child if you cannot be reached.`;
 
+// Full-screen viewer for field/event banner images (2026-11-09). Banners
+// often carry event details or a field map, so players need to read them
+// at full size. The app's viewport meta sets user-scalable=no, so native
+// pinch-zoom is unavailable — this handles pinch, pan, double-tap and
+// mouse-wheel zoom itself. Closes via the X button or Escape only (not a
+// backdrop tap) so panning around a map can't accidentally dismiss it.
+function ImageViewer({ src, alt = "", onClose }) {
+  const { body } = useTheme();
+  const [t, setT] = useState({ s: 1, x: 0, y: 0 });
+  const [gesturing, setGesturing] = useState(false);
+  const tRef = useRef(t);
+  tRef.current = t;
+  const stageRef = useRef(null);
+  const imgRef = useRef(null);
+  const pointers = useRef(new Map());
+  const gesture = useRef(null);
+  const moved = useRef(false);
+  const lastTap = useRef(0);
+  const MAX = 5;
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const clampT = (s, x, y) => {
+    s = Math.min(MAX, Math.max(1, s));
+    if (s === 1) return { s: 1, x: 0, y: 0 };
+    const stage = stageRef.current, img = imgRef.current;
+    if (!stage || !img) return { s, x, y };
+    const maxX = Math.max(0, (img.offsetWidth * s - stage.clientWidth) / 2);
+    const maxY = Math.max(0, (img.offsetHeight * s - stage.clientHeight) / 2);
+    return { s, x: Math.min(maxX, Math.max(-maxX, x)), y: Math.min(maxY, Math.max(-maxY, y)) };
+  };
+  // Zoom to scale s, keeping the screen point (px, py) fixed under the finger/cursor.
+  const zoomAbout = (from, s, px, py) => {
+    const r = stageRef.current.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const lx = (px - cx - from.x) / from.s, ly = (py - cy - from.y) / from.s;
+    return clampT(s, px - cx - s * lx, py - cy - s * ly);
+  };
+  const pts = () => Array.from(pointers.current.values());
+  const startGesture = () => {
+    const p = pts(), cur = tRef.current;
+    if (p.length >= 2) {
+      gesture.current = { type: "pinch", d0: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1, mx0: (p[0].x + p[1].x) / 2, my0: (p[0].y + p[1].y) / 2, from: cur };
+    } else if (p.length === 1) {
+      gesture.current = { type: "pan", sx: p[0].x, sy: p[0].y, x0: cur.x, y0: cur.y };
+    } else gesture.current = null;
+  };
+  const onPointerDown = (e) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 1) moved.current = false;
+    else moved.current = true; // a second finger is never a tap
+    setGesturing(true);
+    startGesture();
+  };
+  const onPointerMove = (e) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    if (!g) return;
+    const p = pts();
+    if (g.type === "pinch" && p.length >= 2) {
+      const d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+      const mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
+      const s = Math.min(MAX, Math.max(1, g.from.s * (d / g.d0)));
+      const z = zoomAbout(g.from, s, g.mx0, g.my0);
+      setT(clampT(z.s, z.x + (mx - g.mx0), z.y + (my - g.my0)));
+    } else if (g.type === "pan") {
+      const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved.current = true;
+      if (tRef.current.s > 1) setT(clampT(tRef.current.s, g.x0 + dx, g.y0 + dy));
+    }
+  };
+  const onPointerUp = (e) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size > 0) { startGesture(); return; }
+    gesture.current = null;
+    setGesturing(false);
+    if (!moved.current) {
+      const now = Date.now();
+      if (now - lastTap.current < 300) {
+        lastTap.current = 0;
+        const cur = tRef.current;
+        setT(cur.s > 1 ? { s: 1, x: 0, y: 0 } : zoomAbout(cur, 2.5, e.clientX, e.clientY));
+      } else lastTap.current = now;
+    }
+  };
+  const onWheel = (e) => {
+    const cur = tRef.current;
+    setT(zoomAbout(cur, cur.s * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX, e.clientY));
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Full-size image"
+      className="fixed inset-0 flex flex-col"
+      style={{ background: "rgba(0,0,0,0.94)", zIndex: 2000 }}
+    >
+      <div
+        ref={stageRef}
+        className="flex-1 relative flex items-center justify-center overflow-hidden"
+        style={{ touchAction: "none", cursor: t.s > 1 ? "grab" : "zoom-in" }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onWheel={onWheel}
+      >
+        <img
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          draggable={false}
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
+            objectFit: "contain",
+            transform: `translate(${t.x}px, ${t.y}px) scale(${t.s})`,
+            transition: gesturing ? "none" : "transform 180ms ease-out",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            WebkitTouchCallout: "none",
+          }}
+        />
+      </div>
+      <button
+        onClick={onClose}
+        aria-label="Close image"
+        className="absolute right-4 w-10 h-10 flex items-center justify-center transition-transform duration-100 active:scale-90"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)", background: "rgba(255,255,255,0.15)", borderRadius: 999 }}
+      >
+        <X size={20} color="#FFFFFF" />
+      </button>
+      <div
+        className="flex items-center justify-between px-5 pt-3"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)" }}
+      >
+        <span className="text-[12px]" style={{ ...body, color: "rgba(255,255,255,0.6)" }}>
+          Pinch or double-tap to zoom
+        </span>
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[12px] font-semibold"
+          style={{ ...body, color: "#FFFFFF" }}
+        >
+          Open original
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favorited, onToggleFavorite, user, profile, signature, signWaiver, dependents = [], signedDependentIds = [], signedAbsentDependentIds = [],
   myBooking, myBookingLoading, whosGoing, whosGoingLoading, whosInterested, whosInterestedLoading, bookEvent, cancelBooking, createBookingCheckout,
   fieldVouchers, redeemVoucher, teamTicketsSlot = null }) {
   const { T, display, body, mono, theme } = useTheme();
   const statusLabel = field ? STATUS_LABEL[field.status] : null;
+  const heroImageUrl = ev.imageUrl || field?.imageUrl || null;
+  const [heroViewerOpen, setHeroViewerOpen] = useState(false);
   // isPast (calendar date) still decides how long a booked player's check-in
   // code shows (until midnight, so late check-ins work). Taking NEW bookings
   // stops earlier: at the event's end time, or start + 8h when there's no end
@@ -2615,8 +2778,19 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
 
   return (
     <div className="h-full flex flex-col" style={{ backgroundColor: T.void }}>
+      {heroViewerOpen && heroImageUrl && (
+        <ImageViewer src={heroImageUrl} alt={ev.title || "Event banner"} onClose={() => setHeroViewerOpen(false)} />
+      )}
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(ev.imageUrl || field?.imageUrl, ev.id || ev.title)}>
+          {heroImageUrl && (
+            <button
+              onClick={() => setHeroViewerOpen(true)}
+              aria-label="View banner full size"
+              className="absolute inset-0 w-full h-full"
+              style={{ background: "transparent", cursor: "zoom-in" }}
+            />
+          )}
           {theme === "dark" && (
             // Night Ops radar motif — dark mode only, matches the concept
             // artboard's Event Detail hero. Purely decorative.
@@ -2639,7 +2813,12 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               </button>
             </div>
           </div>
-          <div className="absolute bottom-4 left-5 right-5">
+          {heroImageUrl && (
+            <div className="absolute bottom-4 right-5 w-8 h-8 flex items-center justify-center pointer-events-none" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill }}>
+              <Maximize2 size={14} color={T.ash} />
+            </div>
+          )}
+          <div className={`absolute bottom-4 left-5 ${heroImageUrl ? "right-16" : "right-5"} pointer-events-none`}>
             <div className="flex gap-2 mb-2">
               {ev.type && <Tag>{ev.type}</Tag>}
               {(ev.isMajor || ev.showMajorTag) && <Tag>MAJOR</Tag>}
@@ -3400,6 +3579,7 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
   const { T, display, body, mono } = useTheme();
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [shareState, setShareState] = useState(null);
+  const [heroViewerOpen, setHeroViewerOpen] = useState(false);
   const handleShare = async () => {
     const fieldShareUrl = field?.id ? `https://playerapp.airsoftatlas.app/?field=${field.id}` : undefined;
     const result = await shareContent(field?.name, `${field?.name}${field?.city ? ` — ${field.city}` : ""}.`, fieldShareUrl);
@@ -3433,8 +3613,19 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
 
   return (
     <div className="h-full flex flex-col" style={{ backgroundColor: T.void }}>
+      {heroViewerOpen && field.imageUrl && (
+        <ImageViewer src={field.imageUrl} alt={field.name || "Field banner"} onClose={() => setHeroViewerOpen(false)} />
+      )}
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="h-60 relative" style={heroStyle(field.imageUrl, field.id)}>
+          {field.imageUrl && (
+            <button
+              onClick={() => setHeroViewerOpen(true)}
+              aria-label="View banner full size"
+              className="absolute inset-0 w-full h-full"
+              style={{ background: "transparent", cursor: "zoom-in" }}
+            />
+          )}
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pt-3">
             <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill, boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
               <ChevronLeft color={T.ash} size={19} />
@@ -3448,7 +3639,12 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
               </button>
             </div>
           </div>
-          <div className="absolute bottom-4 left-5 right-5">
+          {field.imageUrl && (
+            <div className="absolute bottom-4 right-5 w-8 h-8 flex items-center justify-center pointer-events-none" style={{ background: T.onImageFill, border: T.onImageBorder, backdropFilter: T.onImageBlur, WebkitBackdropFilter: T.onImageBlur, borderRadius: T.rPill }}>
+              <Maximize2 size={14} color={T.ash} />
+            </div>
+          )}
+          <div className={`absolute bottom-4 left-5 ${field.imageUrl ? "right-16" : "right-5"} pointer-events-none`}>
             <div className="flex gap-2 mb-2">
               {field.indoorOutdoor && <Tag>{field.indoorOutdoor.toUpperCase()}</Tag>}
               {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
