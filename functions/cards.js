@@ -35,7 +35,7 @@ export const SHARE_TTL_MS = 3 * 60 * 1000;
 export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected"];
 
 // "diamond" is hand-set only (TIER_OVERRIDES); circulation never produces it.
-export const TIERS = ["unranked", "common", "rare", "epic", "legendary", "diamond", "founder"];
+export const TIERS = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "diamond", "founder"];
 
 export function isCardBeta(uid) {
   return !!uid && CARD_BETA_UIDS.has(uid);

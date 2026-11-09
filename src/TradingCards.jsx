@@ -35,10 +35,12 @@ const LOGO_FILL = "M190.0 188.2 L189.6 189.8 L190.2 191.5 L215.6 243.6 L217.1 24
 
 const TIER_STYLE = {
   unranked:  { label: "UNRANKED",  c: ["#6b7280", "#4b5563", "#9ca3af", "#374151"], ink: "#fff" },
-  common:    { label: "COMMON",    c: ["#9ca3af", "#d1d5db", "#6b7280", "#e5e7eb"], ink: "#111" },
-  rare:      { label: "RARE",      c: ["#60a5fa", "#93c5fd", "#2563eb", "#bfdbfe"], ink: "#0b1f4d" },
-  epic:      { label: "EPIC",      c: ["#c084fc", "#f0abfc", "#7c3aed", "#e9d5ff"], ink: "#2e1065" },
-  legendary: { label: "LEGENDARY", c: ["#f6d365", "#fda085", "#c084fc", "#60a5fa"], ink: "#111" },
+  // Fortnite-style rank colors (Michael, 2026-11-09): gray, green, blue, purple, orange.
+  common:    { label: "COMMON",    c: ["#c9c9c9", "#8c8c8c", "#ececec", "#6b6b6b"], ink: "#151515" },
+  uncommon:  { label: "UNCOMMON",  c: ["#8ee04f", "#3f8f2a", "#c8f59a", "#2e6b1f"], ink: "#0d2306" },
+  rare:      { label: "RARE",      c: ["#5fc0ff", "#1e78d8", "#b5e3ff", "#155ba8"], ink: "#04203d" },
+  epic:      { label: "EPIC",      c: ["#cf7bff", "#8a2fc7", "#ecc8ff", "#5f1e8f"], ink: "#22073a" },
+  legendary: { label: "LEGENDARY", c: ["#ffb347", "#e8731c", "#ffe1a8", "#b8560f"], ink: "#2a1302" },
   // Diamond (Michael, 2026-11-08): hand-set only — the Founder card and
   // TIER_OVERRIDES in functions/cards.js. Never reached through circulation.
   diamond:   { label: "DIAMOND",   c: ["#e8fbff", "#9be7ff", "#f4f0ff", "#b9c8ff"], ink: "#0b1f4d" },
@@ -223,7 +225,7 @@ const CSS = `
 .ac-glare{position:absolute;inset:0;border-radius:16px;z-index:5;pointer-events:none;mix-blend-mode:overlay;opacity:var(--glare-o,.5);background:radial-gradient(circle at var(--gx,50%) var(--gy,30%),rgba(255,255,255,.75) 0%,rgba(255,255,255,.12) 28%,rgba(0,0,0,.25) 75%)}
 .ac-card[data-tier=unranked] .ac-holo{display:none}
 .ac-card[data-tier=diamond] .ac-front .ac-holo,.ac-card[data-tier=founder] .ac-front .ac-holo{opacity:calc(var(--holo-o,.3)*1.35)}
-.ac-card[data-tier=diamond] .ac-frame::after,.ac-card[data-tier=founder] .ac-frame::after,.ac-card[data-tier=founder] .ac-emb::after{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;mix-blend-mode:screen;animation:ac-twinkle 2.4s ease-in-out infinite;background:radial-gradient(circle at 12% 1.2%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 86% 1%,#fff 0 1.2px,transparent 3px),radial-gradient(circle at 98.6% 38%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 1.4% 63%,#fff 0 1.3px,transparent 3px),radial-gradient(circle at 71% 99%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 24% 98.8%,#fff 0 1.1px,transparent 2.6px),radial-gradient(circle at 99% 83%,#fff 0 1.1px,transparent 2.6px)}
+.ac-card[data-tier=diamond] .ac-frame::after,.ac-card[data-tier=founder] .ac-frame::after,.ac-card[data-tier=founder] .ac-emb::after,.ac-card[data-tier=diamond] .ac-emb::after{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;mix-blend-mode:screen;animation:ac-twinkle 2.4s ease-in-out infinite;background:radial-gradient(circle at 12% 1.2%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 86% 1%,#fff 0 1.2px,transparent 3px),radial-gradient(circle at 98.6% 38%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 1.4% 63%,#fff 0 1.3px,transparent 3px),radial-gradient(circle at 71% 99%,#fff 0 1.6px,transparent 3.5px),radial-gradient(circle at 24% 98.8%,#fff 0 1.1px,transparent 2.6px),radial-gradient(circle at 99% 83%,#fff 0 1.1px,transparent 2.6px)}
 @keyframes ac-twinkle{0%,100%{opacity:.35}50%{opacity:1}}
 .ac-card[data-tier=common] .ac-holo{opacity:calc(var(--holo-o,.3)*.35)}
 .ac-bk{position:absolute;inset:0;border-radius:16px;padding:9px;background:linear-gradient(160deg,#3b82f6,#1e3a8a 60%,#0b1f4d)}
@@ -235,10 +237,11 @@ const CSS = `
 .ac-back .ac-holo{opacity:calc(var(--holo-o,.3)*.6)}
 .ac-emb{position:absolute;inset:0;border-radius:16px;padding:9px;background:linear-gradient(var(--foil-angle,135deg),var(--r1),var(--r2),var(--r3),var(--r4),var(--r1));background-size:300% 300%;background-position:var(--foil-pos,50%) 50%}
 .ac-emb-in{position:relative;width:100%;height:100%;border-radius:10px;overflow:hidden;background:radial-gradient(80% 60% at 50% 42%,rgba(255,255,255,.06),rgba(0,0,0,0) 60%,rgba(0,0,0,.45) 100%),repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 2px,rgba(0,0,0,0) 2px 4px),repeating-linear-gradient(-45deg,rgba(0,0,0,.18) 0 1px,rgba(0,0,0,0) 1px 3px),#0c2a45;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
-.ac-emb-in::before{content:"";position:absolute;inset:9px;border-radius:7px;border:2px dashed rgba(214,244,255,.6);pointer-events:none}
+.ac-emb-founder .ac-emb-in::before{content:"";position:absolute;inset:9px;border-radius:7px;border:2px dashed rgba(214,244,255,.6);pointer-events:none}
 .ac-patch{width:68%;filter:drop-shadow(0 2px 1px rgba(0,0,0,.55)) drop-shadow(0 10px 14px rgba(0,0,0,.5));position:relative;z-index:1;margin-top:-6px}
 .ac-emb-ed{font:800 8.5px/1 Inter;letter-spacing:.34em;padding-left:.34em;color:#d6f4ff;margin-top:-8px}
 .ac-emb-tag{position:absolute;bottom:20px;left:0;right:0;text-align:center;font:700 8px/1 Inter,sans-serif;letter-spacing:.24em;color:rgba(214,244,255,.8)}
+.ac-emb:not(.ac-emb-founder) .ac-emb-in{gap:18px}
 .ac-card[data-tier=founder] .ac-back .ac-holo{opacity:calc(var(--holo-o,.3)*.35)}
 .ac-stage{touch-action:none;cursor:grab;display:flex;justify-content:center}
 .ac-stage:active{cursor:grabbing}
@@ -274,22 +277,6 @@ function useCardStyles() {
 function tierVars(tier) {
   const t = TIER_STYLE[tier] || TIER_STYLE.unranked;
   return { "--r1": t.c[0], "--r2": t.c[1], "--r3": t.c[2], "--r4": t.c[3], "--ink": t.ink };
-}
-
-function AtlasLogo({ className, fill = "url(#ac-lg)", outline = "#050b18" }) {
-  return (
-    <svg className={className} viewBox={LOGO_VB} aria-label="Atlas">
-      <defs>
-        <linearGradient id="ac-lg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#fff" />
-          <stop offset=".7" stopColor="#f0f8ff" />
-          <stop offset="1" stopColor="#cfe6ff" />
-        </linearGradient>
-      </defs>
-      <path d={LOGO_OUTLINE} fill={outline} fillRule="evenodd" />
-      <path d={LOGO_FILL} fill={fill} fillRule="evenodd" />
-    </svg>
-  );
 }
 
 // The card, at design size 300x420. `flat` = front only (deck stacks).
@@ -329,25 +316,15 @@ export const TradingCardFaces = React.forwardRef(function TradingCardFaces({ car
       </div>
       {!flat && (
         <div className="ac-face ac-back">
-          {isFounder ? (
-            <div className="ac-emb">
-              <div className="ac-emb-in">
-                <img className="ac-patch" src={`${import.meta.env.BASE_URL}card-patch.webp`} alt="Atlas patch" draggable={false} />
-                <div className="ac-word">ATLAS</div>
-                <div className="ac-emb-ed">FOUNDER EDITION</div>
-                <div className="ac-emb-tag">WELCOME TO THE FUTURE OF AIRSOFT</div>
-              </div>
+          {/* Every card shares this back (2026-11-09); only Founder gets the stitched border and edition line. */}
+          <div className={`ac-emb${isFounder ? " ac-emb-founder" : ""}`}>
+            <div className="ac-emb-in">
+              <img className="ac-patch" src={`${import.meta.env.BASE_URL}card-patch.webp`} alt="Atlas patch" draggable={false} />
+              <div className="ac-word">ATLAS</div>
+              {isFounder && <div className="ac-emb-ed">FOUNDER EDITION</div>}
+              <div className="ac-emb-tag">WELCOME TO THE FUTURE OF AIRSOFT</div>
             </div>
-          ) : (
-            <div className="ac-bk">
-              <div className="ac-bk-in">
-                <div className="ac-grid" />
-                <AtlasLogo className="ac-logo" />
-                <div className="ac-word">ATLAS</div>
-                <div className="ac-tag">WELCOME TO THE FUTURE OF AIRSOFT</div>
-              </div>
-            </div>
-          )}
+          </div>
           <div className="ac-holo" />
           <div className="ac-glare" />
         </div>
