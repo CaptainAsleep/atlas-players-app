@@ -6,6 +6,8 @@
 //          public profile; can be changed later without re-uploading)
 // mode "card" opens straight on step 2 for an already-uploaded photo.
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useHideBottomNav } from "./lib/hideNav";
 import { useTheme } from "./hooks/useTheme";
 import { DEFAULT_CROP, MIN_ZOOM, MAX_ZOOM, CARD_ASPECT, clampCrop, cropBackground, cropRect, loadImageFile, renderCrop, renderScaled } from "./lib/cardCrop";
 
@@ -82,6 +84,7 @@ export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspec
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [vw, setVw] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 390));
+  useHideBottomNav();
 
   useEffect(() => {
     const onResize = () => setVw(window.innerWidth);
@@ -146,8 +149,8 @@ export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspec
     return Math.max(180, Math.min(maxW, maxH * frameAspect));
   }, [vw, frameAspect]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.92)" }}>
+  return createPortal(
+    <div className="fixed inset-0 flex flex-col items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.92)", zIndex: 2000 }}>
       <div className="text-[11px] font-semibold uppercase mb-1" style={{ ...mono, color: T.ashFaint, letterSpacing: "0.12em" }}>
         {mode === "card" ? "Card photo" : step === "profile" ? "Step 1 of 2 · Profile photo" : "Step 2 of 2 · Card photo"}
       </div>
@@ -196,6 +199,7 @@ export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspec
           {saving ? "Saving…" : step === "profile" ? "Next" : "Save"}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

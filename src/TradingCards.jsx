@@ -9,6 +9,8 @@
 // share QR (refreshes every 30s), the "Collected" arrival, the deck (swipe,
 // tap to view, shuffle with sound) and the photo prompt.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useHideBottomNav } from "./lib/hideNav";
 import QRCode from "qrcode";
 import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -16,7 +18,10 @@ import { db, functions as firebaseFunctions } from "./lib/firebase";
 import { useTheme } from "./hooks/useTheme";
 import { cropBackground, CARD_ASPECT } from "./lib/cardCrop";
 
-export const CARD_BETA_UIDS = new Set(["lg4HMLTJvsPfSEN1pvNhMV4fbct1"]);
+export const CARD_BETA_UIDS = new Set([
+  "lg4HMLTJvsPfSEN1pvNhMV4fbct1", // Atlas
+  "4gaohQb6ddMvdSNdhlDp75eMZke2", // Rogue (2026-11-08)
+]);
 export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 export const isCardBeta = (uid) => !!uid && CARD_BETA_UIDS.has(uid);
 
@@ -500,7 +505,7 @@ function useToast() {
   const show = useCallback((m) => { setMsg(m); clearTimeout(toastTimer); toastTimer = setTimeout(() => setMsg(null), 3200); }, []);
   const { T, body } = useTheme();
   const node = msg ? (
-    <div className="fixed left-1/2 z-[70] px-4 py-2.5 text-[13px] font-medium" style={{ ...body, top: 70, transform: "translateX(-50%)", background: T.panel, color: T.ash, border: `1px solid ${T.line}`, borderRadius: 12, boxShadow: T.shadowMd, maxWidth: "90vw", width: "max-content" }}>
+    <div className="fixed left-1/2 px-4 py-2.5 text-[13px] font-medium" style={{ ...body, zIndex: 2200, top: 70, transform: "translateX(-50%)", background: T.panel, color: T.ash, border: `1px solid ${T.line}`, borderRadius: 12, boxShadow: T.shadowMd, maxWidth: "90vw", width: "max-content" }}>
       {msg}
     </div>
   ) : null;
@@ -532,8 +537,9 @@ export function CardViewer({ card, total, onClose }) {
   const ctl = useRef(null);
   // Opens on the back, then flips to the face.
   useEffect(() => { const t = setTimeout(() => ctl.current?.flip(), 120); return () => clearTimeout(t); }, []);
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center" style={{ background: "rgba(3,5,10,0.92)" }}>
+  useHideBottomNav();
+  return createPortal(
+    <div className="fixed inset-0 flex flex-col items-center justify-center" style={{ background: "rgba(3,5,10,0.92)", zIndex: 2100 }}>
       <button onClick={onClose} className="absolute top-4 right-4 w-10 h-10 text-[18px]" style={{ color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 999 }} aria-label="Close">✕</button>
       <div className="text-[11px] uppercase mb-1" style={{ ...body, color: "rgba(255,255,255,0.55)", letterSpacing: "0.14em" }}>Drag to spin · double-tap to flip</div>
       <SpinCard card={card} total={total} scale={scale} controlsRef={ctl} startY={-180} />
@@ -541,7 +547,8 @@ export function CardViewer({ card, total, onClose }) {
         <button onClick={() => ctl.current?.flip()} className="px-4 py-2.5 text-[12px] font-semibold" style={{ color: "#fff", border: "1px solid rgba(255,255,255,0.3)", borderRadius: T.rPill }}>Flip</button>
         <button onClick={() => ctl.current?.spin()} className="px-4 py-2.5 text-[12px] font-semibold" style={{ color: "#fff", border: "1px solid rgba(255,255,255,0.3)", borderRadius: T.rPill }}>Spin</button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -598,8 +605,9 @@ function ShareCardSheet({ card, total, childPublicId, onClose }) {
   }, [issue]);
   useEffect(() => { if (left === 0) issue(); }, [left, issue]);
 
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-6 text-center overflow-hidden" style={{ background: T.void }}>
+  useHideBottomNav();
+  return createPortal(
+    <div className="fixed inset-0 flex flex-col items-center justify-center px-6 text-center overflow-hidden" style={{ background: T.void, zIndex: 2000 }}>
       {toastNode}
       <button onClick={onClose} className="absolute top-4 right-4 w-10 h-10 text-[18px]" style={{ color: T.ash, border: `1px solid ${T.line}`, borderRadius: 999 }} aria-label="Close">✕</button>
       <div className="text-[11px] font-semibold uppercase" style={{ ...mono, color: T.accent, letterSpacing: "0.2em" }}>{childPublicId ? `${card.callsign}'s card` : "Your card"}</div>
@@ -634,7 +642,8 @@ function ShareCardSheet({ card, total, childPublicId, onClose }) {
       {collectors.length > 0 && (
         <div className="mt-4 text-[12px]" style={{ ...body, color: T.ashDim }}>Collected just now by {collectors.join(", ")}</div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -751,8 +760,9 @@ export function CardCollectedOverlay({ result, onClose, onOpenDeck }) {
     } else onOpenDeck();
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-6 text-center overflow-hidden" style={{ background: "radial-gradient(120% 80% at 50% 30%,#1b2440 0%,#0a0d18 60%,#05060b 100%)" }}>
+  useHideBottomNav();
+  return createPortal(
+    <div className="fixed inset-0 flex flex-col items-center justify-center px-6 text-center overflow-hidden" style={{ background: "radial-gradient(120% 80% at 50% 30%,#1b2440 0%,#0a0d18 60%,#05060b 100%)", zIndex: 2000 }}>
       <style>{"@keyframes ac-drop{0%{transform:translateY(-110vh) rotate(-25deg)}80%{transform:translateY(12px) rotate(3deg)}100%{transform:translateY(0) rotate(0)}}@keyframes ac-dropspin{0%{transform:rotateY(900deg) rotateX(20deg)}100%{transform:rotateY(0) rotateX(0)}}"}</style>
       <div className="relative flex justify-center" style={{ minHeight: H * scale + 20 }}>
         <div ref={burstRef} className="ac-burst" />
@@ -783,7 +793,8 @@ export function CardCollectedOverlay({ result, onClose, onOpenDeck }) {
         <button onClick={onClose} className="mt-3 text-[12px] underline" style={{ ...body, color: "rgba(255,255,255,0.6)" }}>Done</button>
       </div>
       {viewing && card && <CardViewer card={card} total={total} onClose={() => setViewing(false)} />}
-    </div>
+    </div>,
+    document.body
   );
 }
 

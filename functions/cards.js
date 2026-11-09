@@ -12,8 +12,16 @@
 
 // v1 is visible to these accounts only (Michael, 2026-11-08). Add a uid here
 // AND in src/TradingCards.jsx to let someone else test.
-export const CARD_BETA_UIDS = new Set(["lg4HMLTJvsPfSEN1pvNhMV4fbct1"]);
+export const CARD_BETA_UIDS = new Set([
+  "lg4HMLTJvsPfSEN1pvNhMV4fbct1", // Atlas
+  "4gaohQb6ddMvdSNdhlDp75eMZke2", // Rogue (2026-11-08)
+]);
 export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
+
+// Hand-set tiers that skip the circulation ranking (like Founder). Rogue asked
+// to be Legendary (Michael, 2026-11-08). Remove before cards open to everyone:
+// otherwise her card says Legendary no matter how many decks it's in.
+export const TIER_OVERRIDES = { "4gaohQb6ddMvdSNdhlDp75eMZke2": "legendary" };
 
 // Fewer collections than this = Unranked (Michael, 2026-11-08).
 export const RANKED_MIN = 5;
@@ -75,7 +83,8 @@ export function computeTiers(cards) {
   const tiers = {};
   const titles = {};
   const pool = (cards || []).filter((c) => c && c.key);
-  const ranked = pool.filter((c) => !c.founder && (c.circulation || 0) >= RANKED_MIN);
+  const fixed = (c) => c.founder || TIERS.includes(c.override);
+  const ranked = pool.filter((c) => !fixed(c) && (c.circulation || 0) >= RANKED_MIN);
   const circs = ranked.map((c) => c.circulation || 0).sort((a, b) => a - b);
   const n = circs.length;
   const lowerCount = (v) => {
@@ -85,13 +94,14 @@ export function computeTiers(cards) {
   };
   for (const c of pool) {
     if (c.founder) { tiers[c.key] = "founder"; continue; }
+    if (TIERS.includes(c.override)) { tiers[c.key] = c.override; continue; }
     const circ = c.circulation || 0;
     if (circ < RANKED_MIN) { tiers[c.key] = "unranked"; continue; }
     const p = lowerCount(circ) / n;
     tiers[c.key] = p < 0.05 ? "legendary" : p < 0.20 ? "epic" : p < 0.50 ? "rare" : "common";
   }
   const bySerial = (a, b) => (a.serial ?? Infinity) - (b.serial ?? Infinity);
-  const popular = pool.filter((c) => !c.founder && (c.circulation || 0) > 0)
+  const popular = pool.filter((c) => !fixed(c) && (c.circulation || 0) > 0)
     .sort((a, b) => (b.circulation || 0) - (a.circulation || 0) || bySerial(a, b))[0];
   if (popular) titles[popular.key] = "most_popular";
   const rarest = ranked.slice().sort((a, b) => (a.circulation || 0) - (b.circulation || 0) || bySerial(a, b))[0];

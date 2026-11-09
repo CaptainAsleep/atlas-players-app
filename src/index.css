@@ -36,6 +36,11 @@ html, body, #root {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* Full-screen overlays hide the floating bottom nav (src/lib/hideNav.js). */
+.atlas-hide-nav [data-bottom-nav] {
+  display: none !important;
+}
+
 .screen-transition {
   animation: screenIn 200ms ease-out;
 }

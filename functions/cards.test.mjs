@@ -121,3 +121,19 @@ test("serial backfill: oldest first, missing dates first, existing numbers kept"
   assert.deepEqual(again.assignments, [{ id: "z", signupNumber: 8 }]);
   assert.equal(again.total, 8);
 });
+
+test("hand-set tier overrides skip the ranking and titles", async () => {
+  const { TIER_OVERRIDES } = await import("./cards.js");
+  const uid = Object.keys(TIER_OVERRIDES)[0];
+  assert.equal(TIER_OVERRIDES[uid], "legendary");
+  const { tiers, titles } = computeTiers([
+    { key: "rogue", circulation: 500, override: "legendary", serial: 2 },
+    { key: "x", circulation: 6, serial: 9 },
+    { key: "y", circulation: 3, override: "bogus", serial: 10 },
+  ]);
+  assert.equal(tiers.rogue, "legendary");
+  assert.equal(titles.rogue, undefined);
+  assert.equal(tiers.x, "legendary"); // only ranked card
+  assert.equal(titles.x, "most_popular");
+  assert.equal(tiers.y, "unranked"); // unknown override ignored
+});

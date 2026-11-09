@@ -456,7 +456,7 @@ function BottomNav({ active, onNavigate }) {
     { key: "profile", label: "Profile", icon: User },
   ];
   return (
-    <div className="absolute bottom-4 left-4 right-4" style={{ background: T.glassFill, backdropFilter: T.glassBlur, WebkitBackdropFilter: T.glassBlur, border: T.glassBorder, borderRadius: T.rPill, boxShadow: T.shadowFloat, zIndex: 1000 }}>
+    <div data-bottom-nav className="absolute bottom-4 left-4 right-4" style={{ background: T.glassFill, backdropFilter: T.glassBlur, WebkitBackdropFilter: T.glassBlur, border: T.glassBorder, borderRadius: T.rPill, boxShadow: T.shadowFloat, zIndex: 1000 }}>
       <div className="flex justify-between px-4 pt-2.5 pb-3">
         {tabs.map((t) => {
           const Icon = t.icon;

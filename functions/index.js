@@ -5808,10 +5808,10 @@ export const refreshCardTiers = onSchedule({ schedule: "every 60 minutes", timeZ
   const db = getFirestore();
   const [adults, kids] = await Promise.all([db.collection("publicProfiles").get(), db.collection("childPublicProfiles").get()]);
   const all = [
-    ...adults.docs.map((d) => ({ key: `a:${d.id}`, ref: d.ref, data: d.data(), founder: d.id === cards.FOUNDER_UID })),
+    ...adults.docs.map((d) => ({ key: `a:${d.id}`, ref: d.ref, data: d.data(), founder: d.id === cards.FOUNDER_UID, override: cards.TIER_OVERRIDES[d.id] })),
     ...kids.docs.map((d) => ({ key: `c:${d.id}`, ref: d.ref, data: d.data(), founder: false })),
   ];
-  const { tiers, titles } = cards.computeTiers(all.map((c) => ({ key: c.key, circulation: c.data.circulation || 0, founder: c.founder, serial: c.data.signupNumber })));
+  const { tiers, titles } = cards.computeTiers(all.map((c) => ({ key: c.key, circulation: c.data.circulation || 0, founder: c.founder, override: c.override, serial: c.data.signupNumber })));
   const ops = [];
   for (const c of all) {
     const tier = tiers[c.key] || "unranked";

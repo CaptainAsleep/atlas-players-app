@@ -15,7 +15,7 @@
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { readFileSync } from "fs";
-import { planSerials, adultCardStats, childCardStats, computeTiers, sameStats, FOUNDER_UID } from "../functions/cards.js";
+import { planSerials, adultCardStats, childCardStats, computeTiers, sameStats, FOUNDER_UID, TIER_OVERRIDES } from "../functions/cards.js";
 
 const APPLY = process.argv.includes("--apply");
 const sa = JSON.parse(readFileSync(new URL("./serviceAccountKey.json", import.meta.url)));
@@ -150,10 +150,10 @@ for (const d of late) {
 const pubs = (await db.collection("publicProfiles").get()).docs;
 const kids2 = (await db.collection("childPublicProfiles").get()).docs;
 const all = [
-  ...pubs.map((d) => ({ key: `a:${d.id}`, ref: d.ref, data: d.data(), founder: d.id === FOUNDER_UID })),
+  ...pubs.map((d) => ({ key: `a:${d.id}`, ref: d.ref, data: d.data(), founder: d.id === FOUNDER_UID, override: TIER_OVERRIDES[d.id] })),
   ...kids2.map((d) => ({ key: `c:${d.id}`, ref: d.ref, data: d.data(), founder: false })),
 ];
-const { tiers, titles } = computeTiers(all.map((c) => ({ key: c.key, circulation: c.data.circulation || 0, founder: c.founder, serial: c.data.signupNumber })));
+const { tiers, titles } = computeTiers(all.map((c) => ({ key: c.key, circulation: c.data.circulation || 0, founder: c.founder, override: c.override, serial: c.data.signupNumber })));
 const tierOps = all.filter((c) => c.data.cardTier !== tiers[c.key] || (c.data.cardTitle || null) !== (titles[c.key] || null))
   .map((c) => (b) => b.update(c.ref, { cardTier: tiers[c.key], cardTitle: titles[c.key] || null }));
 for (let i = 0; i < tierOps.length; i += 400) {
