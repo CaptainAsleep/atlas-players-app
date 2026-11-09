@@ -148,24 +148,21 @@ export const LIGHT_FONTS = {
   mono: { fontFamily: "'IBM Plex Mono', monospace" },
 };
 
-export const DARK_FONTS = {
-  display: { fontFamily: "'Unbounded', sans-serif" },
-  body: { fontFamily: "'Plus Jakarta Sans', sans-serif" },
-  mono: { fontFamily: "'JetBrains Mono', monospace" },
-};
+// Dark mode uses the same type as Light (per Michael, 2026-11-09 — was
+// Unbounded / Plus Jakarta Sans / JetBrains Mono from the Night Ops concept).
+export const DARK_FONTS = LIGHT_FONTS;
 
-// Both themes' font families loaded together (unconditionally) so switching
-// themes never needs a fresh network fetch or risks a flash of unstyled
-// text — a modest extra one-time payload for a PWA that already loads 3
-// families today.
+// Loaded unconditionally: the shared type (Space Grotesk / Inter / IBM Plex
+// Mono) plus JetBrains Mono, which M81 and Neon use for labels. Skin
+// display fonts load on demand (SKIN_FONT_URLS below).
 export const FONTS = `
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&family=Unbounded:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&family=JetBrains+Mono:wght@500;600;700&display=swap');
 `;
 
 // ── Paid skins (2026-11-09) ──────────────────────────────────────────────
 // Scope: project doc claude/atlas-skins-scope.md. Each skin is a full token
-// set with every key LIGHT_T has (checked by scripts/check-skin-tokens),
-// built on whichever free look it's closest to so nothing is missed
+// set with every key LIGHT_T has, built on whichever free look it's
+// closest to so nothing is missed
 // (key parity and text contrast are checked as part of the build verification).
 // Catalog (names, prices, sale windows) lives in src/skins.js; this file
 // is only how each one looks. Textures only ever sit behind the Explore
@@ -204,7 +201,7 @@ export const SKIN_THEMES = {
       // "Field" pattern (SkinTexture.jsx), picked by Michael 2026-11-09.
       camo: { style: "field", seed: 3, base: "#CBBD96", layers: ["#AB9C6E", "#807C53", "#5F4C33", "#E3D8B6"], grain: "#3A3220", grainAmt: 0.22 },
     },
-    fonts: { display: "'Barlow Condensed', sans-serif", body: "'Inter', sans-serif", mono: "'IBM Plex Mono', monospace" },
+    fonts: LIGHT_FONTS, // same type as Light (per Michael, 2026-11-09)
   },
   "ridgeline-black": {
     T: {
@@ -225,7 +222,7 @@ export const SKIN_THEMES = {
       // "Field" pattern (SkinTexture.jsx), picked by Michael 2026-11-09.
       camo: { style: "field", seed: 3, base: "#1C1E1F", layers: ["#2C3032", "#3B3F42", "#111213", "#4E5357"], grain: "#FFFFFF", grainAmt: 0.10 },
     },
-    fonts: { display: "'Barlow Condensed', sans-serif", body: "'Inter', sans-serif", mono: "'JetBrains Mono', monospace" },
+    fonts: LIGHT_FONTS, // same type as Light (per Michael, 2026-11-09)
   },
   m81: {
     T: {
@@ -265,7 +262,7 @@ export const SKIN_THEMES = {
       texture: "brushed", heroScrim: "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.25) 100%)",
       bandOpacity: 1,
     },
-    fonts: { display: "'Chakra Petch', sans-serif", body: "'Inter', sans-serif", mono: "'JetBrains Mono', monospace" },
+    fonts: LIGHT_FONTS, // same type as Light (per Michael, 2026-11-09)
   },
   neon: {
     T: {
@@ -289,12 +286,10 @@ export const SKIN_THEMES = {
 };
 
 // Loaded only when a skin is previewed or equipped (see useTheme), so the
-// free looks don't pay for four extra font families.
+// free looks don't pay for extra font families. Ridgeline, Ridgeline
+// Black and Gun Metal use the shared type, so they need nothing here.
 export const SKIN_FONT_URLS = {
-  ridgeline: "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap",
-  "ridgeline-black": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap",
   m81: "https://fonts.googleapis.com/css2?family=Saira+Stencil+One&display=swap",
-  gunmetal: "https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap",
   neon: "https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&display=swap",
 };
 
