@@ -218,6 +218,13 @@ const achievementPatches = [
   { id: "my-first-booking", name: "My First Booking", imageFile: "myfirstbooking.png",
     details: "Book Your First Event Through Atlas",
     trigger: { type: "claimed_field_booking_count", count: 1 } },
+
+  { id: "duck-king", name: "Duck King", imageFile: "duckking.png",
+    details: "The Duck King", trigger: null },
+
+  { id: "100th-player", name: "100th Player", imageFile: "100thplayer.png",
+    details: "A 1-of-1 patch, awarded to the 100th player to join Atlas",
+    trigger: null },
 ];
 
 async function uploadAndSeed() {
