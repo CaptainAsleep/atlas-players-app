@@ -6231,3 +6231,56 @@ export const grantAlmostFamousOnCheckIn = onDocumentWritten("events/{eventId}/bo
     }).catch((e) => { if (e.code !== 6) console.error("grantAlmostFamousOnCheckIn", uid, e); });
   }
 });
+
+// --- Field "bookings live" flag (2026-11-10) -------------------------------
+// Players can't read owners/{uid} (private Stripe state), so until now the
+// player app had no way to tell whether a claimed field could actually take
+// paid bookings — a player only found out by tapping Reserve and getting
+// "This field hasn't finished payment setup yet." fields/{fieldId}.bookingsLive
+// is a public, server-owned mirror of the exact check createBookingCheckout
+// makes (owner payoutsEnabled + stripeConnectAccountId). The player app shows
+// the green "Bookings are now open" banner on every event at a field where
+// it's true, and a grayed "not open yet" state on paid events where it isn't.
+// firestore.rules refuses client writes to bookingsLive/bookingsLiveAt, so an
+// owner can't flip it on themselves. Backfill: scripts/backfill-field-bookings-live.mjs.
+function ownerBookingsLive(ownerData) {
+  return !!(ownerData?.payoutsEnabled && ownerData?.stripeConnectAccountId);
+}
+
+function bookingsLiveUpdate(isLive) {
+  return isLive
+    ? { bookingsLive: true, bookingsLiveAt: FieldValue.serverTimestamp() }
+    : { bookingsLive: false };
+}
+
+// Payouts flipped on/off (account.updated webhook, checkPayoutsStatus, or an
+// admin edit) -> update every field this owner holds.
+export const syncFieldBookingsLiveOnOwner = onDocumentWritten("owners/{uid}", async (event) => {
+  const wasLive = ownerBookingsLive(event.data?.before?.data());
+  const isLive = ownerBookingsLive(event.data?.after?.data());
+  if (wasLive === isLive) return;
+  const db = getFirestore();
+  const snap = await db.collection("fields").where("ownerId", "==", event.params.uid).get();
+  const stale = snap.docs.filter((d) => !!d.data().bookingsLive !== isLive);
+  if (stale.length === 0) return;
+  const batch = db.batch();
+  stale.forEach((d) => batch.update(d.ref, bookingsLiveUpdate(isLive)));
+  await batch.commit();
+});
+
+// A field changed hands (any claim path — client domain/unverified claim,
+// verifyWebsiteClaim, email-code claim, admin approval — or an unclaim) ->
+// take the new owner's current payout status. Only reacts to ownerId
+// changes, so its own bookingsLive write can't re-trigger it.
+export const syncFieldBookingsLiveOnClaim = onDocumentUpdated("fields/{fieldId}", async (event) => {
+  const before = event.data?.before?.data() || {};
+  const after = event.data?.after?.data() || {};
+  if ((before.ownerId || null) === (after.ownerId || null)) return;
+  let isLive = false;
+  if (after.ownerId) {
+    const ownerSnap = await getFirestore().collection("owners").doc(after.ownerId).get();
+    isLive = ownerBookingsLive(ownerSnap.data());
+  }
+  if (!!after.bookingsLive === isLive) return;
+  await event.data.after.ref.update(bookingsLiveUpdate(isLive));
+});

@@ -2607,6 +2607,26 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // so this never flashes true during the brief window before useFields()
   // resolves.
   const fieldUnclaimed = !fieldsLoading && !!field && !field.ownerId;
+  // Payout readiness (2026-11-10). fields/{id}.bookingsLive is a server-owned
+  // mirror of the field owner's Stripe payout status (syncFieldBookingsLiveOn*
+  // Cloud Functions) — the player app can't read owners/{uid} itself. When
+  // it's true, every event at that field gets the green "Bookings are now
+  // open" banner (per Michael: the visible sign a field has set up payouts).
+  // When a claimed field hasn't finished payouts yet, paid events show a
+  // blue "finishing setup" banner and a grayed button instead of a Reserve
+  // tap that can only fail. Free events don't need payouts (bookFreeEvent
+  // never checks), so they stay bookable. Majors are hosted by an organizer
+  // (hostOwnerId), not the field, so they're out of scope here.
+  const fieldHostedEvent = !(ev.isMajor && ev.hostOwnerId);
+  const fieldBookingsLive = fieldHostedEvent && !!field?.bookingsLive;
+  const eventMayCost = basePriceCents > 0
+    || (priceOptions?.choices || []).some((ch) => (ch.priceCents || 0) > 0)
+    || rentalsCents > 0;
+  const awaitingPayoutSetup = fieldHostedEvent && !fieldsLoading && !!field?.ownerId && !field.bookingsLive
+    && eventMayCost && !myBooking && !ev.canceled && !bookingClosed
+    // bookEventWithVoucher never touches Stripe, so a player holding credit
+    // for this field keeps the normal Reserve/Redeem button.
+    && !bestFieldVoucher;
 
   // Extracted so both a normal "Reserve This Event" tap AND a just-completed
   // waiver signature can trigger the same real booking action — signing is
@@ -2861,8 +2881,14 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               </p>
             </div>
           )}
-          {!ev.canceled && ev.bookingOpensAt && (
-            localDateStr() < ev.bookingOpensAt ? (
+          {awaitingPayoutSetup ? (
+            <div className="p-4" style={{ background: "rgba(21,84,184,0.08)", border: `1px solid ${T.accent}`, borderRadius: 6 }}>
+              <p className="text-[13px] font-medium" style={{ ...body, color: T.accent }}>
+                Bookings aren't open yet — this field is finishing its payment setup on Atlas.
+              </p>
+            </div>
+          ) : !ev.canceled && (ev.bookingOpensAt || (fieldBookingsLive && !bookingClosed)) && (
+            ev.bookingOpensAt && localDateStr() < ev.bookingOpensAt ? (
               <div className="p-4" style={{ background: "rgba(21,84,184,0.08)", border: `1px solid ${T.accent}`, borderRadius: 6 }}>
                 <p className="text-[13px] font-medium" style={{ ...body, color: T.accent }}>
                   Bookings will begin starting {formatDate(ev.bookingOpensAt)}.
@@ -3345,6 +3371,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         ) : fieldUnclaimed ? (
           <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
             Not Available
+          </span>
+        ) : awaitingPayoutSetup ? (
+          <span className="px-6 py-3 font-semibold text-[13px]" style={{ ...display, color: T.ashFaint, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
+            Bookings Not Open Yet
           </span>
         ) : (
           <button

@@ -201,13 +201,20 @@ service cloud.firestore {
     match /fields/{fieldId} {
       allow read: if true;
       allow create: if false; // fields are only added via the admin seed script
+      // bookingsLive/bookingsLiveAt (2026-11-10) are a server-owned mirror of
+      // the owner's Stripe payout status (syncFieldBookingsLiveOn* Cloud
+      // Functions) — players see a "Bookings are now open" banner off it, so
+      // no client (owner included) may write them on ANY path below.
+      // Admin SDK writes bypass this.
       // Claiming has three paths. All are written defensively with .get(key,
       // default) rather than plain dot-access — none of our existing field
       // docs have an ownerId/ownerEmailDomain key at all yet, and directly
       // reading a genuinely-missing field errors out the whole rule (which
       // Firestore treats as a silent deny) instead of safely reading as
       // "unset." .get() sidesteps that entirely.
-      allow update: if request.auth != null && (
+      allow update: if request.auth != null
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['bookingsLive', 'bookingsLiveAt'])
+        && (
         // Path 1: instant, verified claim — the field has a known owner
         // domain on file (real fields with a real website), and the
         // claiming account's own email matches it exactly. No manual
