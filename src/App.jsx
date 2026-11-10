@@ -6758,7 +6758,7 @@ function SecretPatchScreen({ onBack }) {
         </div>
       )}
       <p className="text-[13px] text-center mt-6 max-w-xs" style={{ ...body, color: T.ashDim }}>
-        Have a player scan this from their own Profile → Scan a Code. Same idempotent grant as everything
+        Have a player scan this from Profile → Patches → Scan a patch code (or the scan button at the top of Profile). Same idempotent grant as everything
         else — showing it to the same person twice is harmless, it won't duplicate.
       </p>
     </div>
@@ -6772,7 +6772,9 @@ function SecretPatchScreen({ onBack }) {
 // patches get added later.
 // 2026-11-08: "Scan a Code" — one scanner for patch codes, trading-card
 // codes (?card=, beta only server-side) and referral links (explained, not redeemed).
-function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected }) {
+// mode: "card" | "patch" | "any" — only the title and hint change; every
+// kind of Atlas code is still read.
+function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected, mode = "any" }) {
   const cardBeta = useCardBeta(user?.uid);
   const cardBetaRef = useRef(cardBeta);
   cardBetaRef.current = cardBeta;
@@ -6866,7 +6868,7 @@ function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected }) {
         <button onClick={onBack} className="w-9 h-9 -ml-2 flex items-center justify-center">
           <ChevronLeft size={20} color={T.ash} />
         </button>
-        <h1 className="flex-1 text-center text-[16px] font-semibold mr-9" style={{ ...display, color: T.ash }}>Scan a Code</h1>
+        <h1 className="flex-1 text-center text-[16px] font-semibold mr-9" style={{ ...display, color: T.ash }}>{mode === "card" && cardBeta ? "Scan a card" : mode === "patch" ? "Scan a patch code" : "Scan a Code"}</h1>
       </div>
 
       <div id="atlas-redeem-reader" ref={containerRef} className="flex-1 min-h-0" />
@@ -6878,7 +6880,7 @@ function RedeemScannerScreen({ onBack, user, grantPatch, onCardCollected }) {
           </div>
         ) : (
           <div className="py-3 text-center text-[13px]" style={{ ...body, color: T.ashFaint }}>
-            Point the camera at an Atlas code
+            {mode === "card" && cardBeta ? "Point the camera at the code on another player's phone" : mode === "patch" ? "Point the camera at the patch code" : "Point the camera at an Atlas code"}
           </div>
         )}
       </div>
@@ -6942,7 +6944,7 @@ function ActiveAchievementsScreen({ onBack, rows, loading, fields }) {
   );
 }
 
-function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeaturedPatch }) {
+function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeaturedPatch, onScan }) {
   const { T, display, body, mono } = useTheme();
   const featuredImageUrl = profile?.featuredPatch?.imageUrl;
   const [viewerIndex, setViewerIndex] = useState(null);
@@ -6966,9 +6968,15 @@ function PatchesScreen({ profile, user, onBack, patches, patchesLoading, setFeat
       </div>
 
       <div className="px-6 pt-4">
-        <p className="text-[12px] mb-4" style={{ ...body, color: T.ashFaint }}>
+        <p className="text-[12px] mb-3" style={{ ...body, color: T.ashFaint }}>
           Earned by checking in to events. Tap one to feature it next to your callsign.
         </p>
+        {onScan && (
+          <button onClick={onScan} className="w-full mb-4 flex items-center justify-center gap-2 py-3 text-[13px] font-semibold"
+            style={{ ...display, background: T.panel, color: T.ash, border: `1.5px solid ${T.accent}`, borderRadius: T.rPill }}>
+            <ScanLine size={16} strokeWidth={2.2} /> Scan a patch code
+          </button>
+        )}
 
         {patchesLoading ? (
           <div className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</div>
@@ -8908,7 +8916,7 @@ function InviteSheet({ referralUrl, onClose }) {
           {qr ? <img src={qr} alt="Invite QR code" style={{ width: 200, height: 200, display: "block" }} /> : <div style={{ width: 200, height: 200 }} />}
         </div>
         <p className="text-[13px] text-center mb-1" style={{ ...body, color: T.ashDim, maxWidth: 290 }}>
-          Let a friend scan this, or send them your link to invite them to Atlas.
+          Your friend scans this with their phone's camera — they don't need Atlas yet. Or send them your link.
         </p>
         <p className="text-[11px] font-semibold mb-4" style={{ ...body, color: T.ashFaint }}>Share with a friend — not for check-in.</p>
         <div className={`w-full grid gap-2.5 ${canShare ? "grid-cols-2" : "grid-cols-1"}`}>
@@ -10598,7 +10606,9 @@ function AppShell() {
   const openActiveAchievements = () => push("activeAchievements");
   const openYearInReview = () => push("yearInReview");
   const openSecretPatchQR = () => push("secretPatchQR");
-  const openScanRedeem = () => push("scanRedeem");
+  const [scanMode, setScanMode] = useState("any");
+  const openScan = (mode = "any") => { setScanMode(mode); push("scanRedeem"); };
+  const openScanRedeem = () => openScan("any");
   const openMyCard = () => push("myCard");
   const openAppearance = () => push("appearance");
   // Settings (2026-11-09): Profile's "Verify" banner opens it with the
@@ -10989,6 +10999,7 @@ function AppShell() {
         patches={patches}
         patchesLoading={patchesLoading}
         setFeaturedPatch={setFeaturedPatch}
+        onScan={() => openScan("patch")}
       />
     );
   } else if (screen === "activeAchievements") {
@@ -11011,7 +11022,7 @@ function AppShell() {
   } else if (screen === "secretPatchQR") {
     content = <SecretPatchScreen onBack={pop} />;
   } else if (screen === "scanRedeem") {
-    content = <RedeemScannerScreen onBack={pop} user={user} grantPatch={grantPatch} onCardCollected={(r) => { pop(); setCollectedCard(r); }} />;
+    content = <RedeemScannerScreen onBack={pop} user={user} grantPatch={grantPatch} mode={scanMode} onCardCollected={(r) => { pop(); setCollectedCard(r); }} />;
   } else if (screen === "myCard") {
     content = (
       <MyCardScreen
@@ -11021,6 +11032,7 @@ function AppShell() {
         onOpenDeck={() => openDeck(null)}
         onUploadPhoto={openAccount}
         onAdjustCardPhoto={() => setAdjustingCardPhoto(true)}
+        onScanCard={() => openScan("card")}
       />
     );
   } else if (screen === "appearance") {
@@ -11045,6 +11057,7 @@ function AppShell() {
         title={deckOwnerId && deckOwnerId !== user?.uid ? "Their deck" : "My Deck"}
         onBack={pop}
         highlightOwnerId={deckHighlight}
+        onScan={!deckOwnerId || deckOwnerId === user?.uid ? () => openScan("card") : undefined}
       />
     );
   }

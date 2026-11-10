@@ -17,7 +17,7 @@ import { httpsCallable } from "firebase/functions";
 import { db, functions as firebaseFunctions } from "./lib/firebase";
 import { useTheme } from "./hooks/useTheme";
 import { cropBackground, CARD_ASPECT } from "./lib/cardCrop";
-import { Crop, ImagePlus, Layers, Lock, QrCode, RefreshCw, Repeat2, Waves } from "lucide-react";
+import { Crop, ImagePlus, Layers, Lock, QrCode, RefreshCw, Repeat2, ScanLine, Waves } from "lucide-react";
 
 export const CARD_BETA_UIDS = new Set([
   "lg4HMLTJvsPfSEN1pvNhMV4fbct1", // Atlas
@@ -927,7 +927,7 @@ function ShareCardSheet({ card, total, childPublicId, onClose }) {
 // My Card
 // ---------------------------------------------------------------------------
 
-export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, onUploadPhoto, onAdjustCardPhoto }) {
+export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, onUploadPhoto, onAdjustCardPhoto, onScanCard }) {
   const { T, display, body, mono } = useTheme();
   const { card, loading } = useCardOwner("adult", user?.uid);
   const total = useCardsTotal();
@@ -958,10 +958,17 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
           <SpinCard card={card} total={total} scale={scale} idle={idle} controlsRef={ctl} />
           <CardControls onFlip={() => ctl.current?.flip()} onSpin={() => ctl.current?.spin()} sway={idle} onSway={() => setIdle((v) => !v)} />
           <div className="w-full flex flex-col items-center gap-2.5 mt-5" style={{ maxWidth: 360 }}>
-            <button disabled={!canShare} onClick={() => setSharing({ card })} className="w-full flex items-center justify-center gap-2 py-3.5 text-[15px] font-semibold"
-              style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: canShare ? T.shadowMd : "none", opacity: canShare ? 1 : 0.45 }}>
-              {canShare ? <QrCode size={18} strokeWidth={2.2} /> : <Lock size={16} strokeWidth={2.2} />} Share my card
-            </button>
+            {/* Give / get: share your card, or scan someone else's. */}
+            <div className="w-full grid grid-cols-2 gap-2.5">
+              <button disabled={!canShare} onClick={() => setSharing({ card })} className="flex items-center justify-center gap-2 py-3.5 text-[14px] font-semibold"
+                style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: canShare ? T.shadowMd : "none", opacity: canShare ? 1 : 0.45 }}>
+                {canShare ? <QrCode size={17} strokeWidth={2.2} /> : <Lock size={15} strokeWidth={2.2} />} Share my card
+              </button>
+              <button onClick={onScanCard} className="flex items-center justify-center gap-2 py-3.5 text-[14px] font-semibold"
+                style={{ ...display, background: T.panel, color: T.ash, border: `1.5px solid ${T.accent}`, borderRadius: T.rPill }}>
+                <ScanLine size={17} strokeWidth={2.2} /> Scan a card
+              </button>
+            </div>
             {shareHint && <div className="text-[12px] text-center -mt-0.5" style={{ ...body, color: T.ashDim }}>{shareHint}</div>}
             <div className="w-full grid grid-cols-2 gap-2.5">
               <SecondaryAction icon={Layers} onClick={onOpenDeck}>My deck{deckCount ? ` · ${deckCount}` : ""}</SecondaryAction>
@@ -1132,7 +1139,8 @@ export function CardCollectedOverlay({ result, onClose, onOpenDeck }) {
 // Deck
 // ---------------------------------------------------------------------------
 
-export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId }) {
+// onScan: only passed for your own deck.
+export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId, onScan }) {
   const { T, display, body, mono } = useTheme();
   useCardStyles();
   const { cards: loaded, loading } = useDeck(collectorUid);
@@ -1268,12 +1276,28 @@ export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId }) {
       <Header title={title || "Deck"} onBack={onBack} />
       <div className="flex items-center justify-between px-6 pt-4">
         <div className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{loading ? "…" : `${loaded.length} card${loaded.length === 1 ? "" : "s"}`}</div>
-        <button onClick={toggleMute} className="px-3 py-2 text-[11px] font-semibold uppercase" style={{ ...mono, color: T.ashDim, border: `1px solid ${T.line}`, borderRadius: T.rPill, letterSpacing: "0.08em" }}>
-          {muted ? "Sound off" : "Sound on"}
-        </button>
+        <div className="flex items-center gap-2">
+          {onScan && loaded.length > 0 && (
+            <button onClick={onScan} className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold" style={{ ...display, color: T.ash, border: `1.5px solid ${T.accent}`, borderRadius: T.rPill }}>
+              <ScanLine size={14} strokeWidth={2.2} /> Scan a card
+            </button>
+          )}
+          <button onClick={toggleMute} className="px-3 py-2 text-[11px] font-semibold uppercase" style={{ ...mono, color: T.ashDim, border: `1px solid ${T.line}`, borderRadius: T.rPill, letterSpacing: "0.08em" }}>
+            {muted ? "Sound off" : "Sound on"}
+          </button>
+        </div>
       </div>
       {!loading && loaded.length === 0 ? (
-        <p className="px-6 pt-6 text-[13px]" style={{ ...body, color: T.ashDim }}>No cards yet. Scan another player's card QR at your next game to start a deck.</p>
+        <div className="px-6 pt-6 flex flex-col items-start gap-4">
+          <p className="text-[13px]" style={{ ...body, color: T.ashDim }}>
+            {onScan ? "No cards yet. When another player shows you their card's code, scan it to add it to your deck." : "No cards yet."}
+          </p>
+          {onScan && (
+            <button onClick={onScan} className="flex items-center gap-2 px-5 py-3 text-[14px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowMd }}>
+              <ScanLine size={17} strokeWidth={2.2} /> Scan a card
+            </button>
+          )}
+        </div>
       ) : (
         <>
           <div
