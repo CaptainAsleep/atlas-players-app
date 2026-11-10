@@ -498,7 +498,6 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, sendPasswordReset, refe
   const [mode, setMode] = useState("signin"); // "signin" | "signup" | "reset"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [callsign, setCallsign] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // Forgot-password: the address a reset link was just requested for (shows
@@ -536,7 +535,10 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, sendPasswordReset, refe
     setBusy(true);
     try {
       if (mode === "signup") {
-        await signUp(email.trim(), password, callsign.trim(), referralCode);
+        // No callsign here — picked in the onboarding wizard's callsign step
+        // (same path Google sign-ups already take). Until then the profile
+        // carries the email-prefix default from createPlayerDocs.
+        await signUp(email.trim(), password, null, referralCode);
         localStorage.removeItem("atlas_referral"); // spent, don't keep applying it to future signups on this device
       } else {
         await signIn(email.trim(), password);
@@ -600,15 +602,6 @@ function LoginScreen({ signIn, signUp, signInWithGoogle, sendPasswordReset, refe
         </div>
       ) : (
       <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-        {mode === "signup" && (
-          <input
-            value={callsign}
-            onChange={(e) => setCallsign(e.target.value)}
-            placeholder="Callsign / Username"
-            className="px-4 py-3.5 text-[15px] bg-transparent outline-none"
-            style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }}
-          />
-        )}
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -9335,7 +9328,14 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
   const [step, setStep] = useState(0);
   const [firstName, setFirstName] = useState(profile?.firstName || "");
   const [lastName, setLastName] = useState(profile?.lastName || "");
-  const [callsign, setCallsign] = useState(profile?.callsign || "");
+  // Start blank when the profile still has the auto default (email prefix,
+  // set by createPlayerDocs) so nobody publishes part of their email by just
+  // tapping Continue. A callsign already chosen here (wizard reopened after a
+  // partial run) still prefills.
+  const autoCallsign = (user?.email || profile?.email || "").split("@")[0];
+  const [callsign, setCallsign] = useState(
+    profile?.callsign && profile.callsign !== autoCallsign ? profile.callsign : ""
+  );
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl || null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
