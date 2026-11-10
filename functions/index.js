@@ -8,6 +8,7 @@ import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebas
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as feedback from "./feedback.js";
 import * as cards from "./cards.js";
+import * as presets from "./accountPresets.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -6116,3 +6117,117 @@ async function handleSkinPurchasePaid(db, session) {
     writeSkinGrant(t, db, { uid, sessionId: session.id, skinIds: meta.skinIds, via: meta.via, amountCents: meta.skinCents }, state);
   });
 }
+
+// ===========================================================================
+// Account presets + creator tags + Almost Famous (2026-11-10, per Michael)
+// ===========================================================================
+// See functions/accountPresets.js for the data model. First case: Jet
+// DesertFox. The preset is only applied for a VERIFIED email, so nobody can
+// sign up with his address and get his card rank, badge or a request from
+// Michael. Friendship is a pending request he accepts (Michael's choice),
+// because friends can see each other's bookings.
+
+async function applyAccountPreset(db, uid, email) {
+  const key = presets.normEmail(email);
+  if (!key) return false;
+  const presetRef = db.collection("accountPresets").doc(key);
+  const pubRef = db.collection("publicProfiles").doc(uid);
+  const claimed = await db.runTransaction(async (t) => {
+    const [p, pub] = await Promise.all([t.get(presetRef), t.get(pubRef)]);
+    if (!p.exists || !pub.exists || p.data().appliedTo) return null;
+    const plan = presets.presetPlan(p.data());
+    const callsign = pub.data().callsign || null;
+    const now = FieldValue.serverTimestamp();
+    t.update(presetRef, { appliedTo: uid, appliedAt: now });
+    if (plan.cardBeta) t.set(db.collection("cardBeta").doc(uid), { callsign, addedAt: now, source: "accountPreset" });
+    if (plan.rank) t.set(db.collection("cardRankOverrides").doc(uid), { rank: plan.rank, callsign, setAt: now, source: "accountPreset" });
+    if (plan.creator) t.set(db.collection("creatorTags").doc(uid), { kind: plan.creator.kind, label: plan.creator.label, callsign, taggedAt: now });
+    return { plan, me: pub.data() };
+  });
+  if (!claimed) return false;
+  const { plan, me } = claimed;
+  const from = plan.friendRequestFrom;
+  if (from && from !== uid) {
+    const [a, b, fromPub] = await Promise.all([
+      db.collection("friendRequests").doc(`${from}_${uid}`).get(),
+      db.collection("friendRequests").doc(`${uid}_${from}`).get(),
+      db.collection("publicProfiles").doc(from).get(),
+    ]);
+    if (!a.exists && !b.exists && fromPub.exists) {
+      // Same shape useFriends.js writes, so it shows up as a normal request.
+      await db.collection("friendRequests").doc(`${from}_${uid}`).set({
+        fromUid: from,
+        toUid: uid,
+        fromCallsign: fromPub.data().callsign || "Player",
+        fromAvatarUrl: fromPub.data().avatarUrl || null,
+        toCallsign: me.callsign || "Player",
+        toAvatarUrl: me.avatarUrl || null,
+        status: "pending",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+  }
+  if (plan.rank) await recomputeRank(db, "adult", uid).catch((e) => console.error("applyAccountPreset: rank", uid, e));
+  console.log(`applyAccountPreset: applied ${key} to ${uid}`);
+  return true;
+}
+
+// A new public profile (end of onboarding) → apply a preset for its verified email.
+export const applyAccountPresetOnProfile = onDocumentCreated("publicProfiles/{uid}", async (event) => {
+  const uid = event.params.uid;
+  const db = getFirestore();
+  const any = await db.collection("accountPresets").where("appliedTo", "==", null).limit(1).get();
+  if (any.empty) return; // nothing pending: skip the Auth lookup
+  const u = await getAuth().getUser(uid).catch(() => null);
+  if (!u?.email || !u.emailVerified) return; // the hourly sweep catches a later verification
+  await applyAccountPreset(db, uid, u.email);
+});
+
+// Hourly: pending presets whose account has since verified its email.
+export const sweepAccountPresets = onSchedule({ schedule: "every 60 minutes", timeZone: "America/Detroit" }, async () => {
+  const db = getFirestore();
+  const pending = await db.collection("accountPresets").where("appliedTo", "==", null).get();
+  for (const d of pending.docs) {
+    const u = await getAuth().getUserByEmail(d.id).catch(() => null);
+    if (!u?.emailVerified) continue;
+    await applyAccountPreset(db, u.uid, u.email).catch((e) => console.error("sweepAccountPresets", d.id, e));
+  }
+});
+
+// Almost Famous: a check-in (owners app roster/scanner or checkInByCode)
+// flips events/{eventId}/bookings/{uid}.checkedIn to true.
+export const grantAlmostFamousOnCheckIn = onDocumentWritten("events/{eventId}/bookings/{bookingUid}", async (event) => {
+  const before = event.data?.before?.data() || {};
+  const after = event.data?.after?.data() || null;
+  if (!after || before.checkedIn === true || after.checkedIn !== true) return;
+  const db = getFirestore();
+  const { eventId, bookingUid } = event.params;
+  const tags = await db.collection("creatorTags").get();
+  if (tags.empty) return;
+  const creators = new Map(tags.docs.map((d) => [d.id, presets.toMs(d.data().taggedAt)]));
+  const col = db.collection("events").doc(eventId).collection("bookings");
+  const recipients = await presets.almostFamousRecipients({
+    bookingUid,
+    booking: after,
+    creators,
+    loadOne: async (uid) => { const s = await col.doc(uid).get(); return s.exists ? s.data() : null; },
+    loadCheckedIn: async () => (await col.where("checkedIn", "==", true).get()).docs.map((d) => ({ uid: d.id, data: d.data() })),
+  });
+  if (!recipients.length) return;
+  const cat = await db.collection("achievementPatches").doc(presets.ALMOST_FAMOUS_ID).get();
+  if (!cat.exists) { console.warn("grantAlmostFamousOnCheckIn: catalog entry missing"); return; }
+  const c = cat.data();
+  for (const uid of recipients) {
+    // Same shape usePatches.grantPatch writes; create() so an owned patch is never reset to unseen.
+    await db.collection("users").doc(uid).collection("patches").doc(presets.ALMOST_FAMOUS_ID).create({
+      name: c.name || "Almost Famous",
+      imageUrl: c.imageUrl || null,
+      details: c.details || null,
+      addedAt: FieldValue.serverTimestamp(),
+      granted: true,
+      seen: false,
+      grantedBy: "almostFamous",
+      eventId,
+    }).catch((e) => { if (e.code !== 6) console.error("grantAlmostFamousOnCheckIn", uid, e); });
+  }
+});

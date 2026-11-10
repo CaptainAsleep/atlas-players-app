@@ -17,6 +17,7 @@ import { usePatches } from "./hooks/usePatches";
 import { useSWUpdate } from "./hooks/useSWUpdate";
 import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRequests, useMyJoinRequest, useMyJoinRequests, useMyTeamMemberships, useJoinRequests, useTeamEvents, useTeamEventRsvps, useMyTeamEventRsvp, useTeamRoles, useTeamRanks, useTeamPatchLibrary, addTeamPatch, deleteTeamPatch, fetchPatchHolders, grantTeamPatch, useMyTeamInvites, useTeamInvites, sendTeamInvite, deleteTeamInvite, acceptTeamInvite } from "./hooks/useTeams";
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
+import { useCreatorTag } from "./hooks/useCreatorTag";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
 import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
@@ -4414,6 +4415,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
   sendRequest, cancelOrUnfriend, events, onOpenEvent, onOpenPlayerDeck }) {
   const { T, display, body, mono } = useTheme();
   const { profile, profileLoading } = usePublicProfile(uid);
+  const creatorTag = useCreatorTag(uid);
   // Trading cards (beta): their card + deck. Decks are public.
   const cardBeta = useCardBeta(currentUser?.uid);
   const { card: theirCard } = useCardOwner("adult", cardBeta ? uid : null);
@@ -4484,6 +4486,11 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
           <span className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{profile.callsign}</span>
           {profile.verified && <BadgeCheck size={16} color={T.accent} />}
         </div>
+        {creatorTag?.label && (
+          <div className="mb-2 px-2.5 py-1 text-[10px] font-semibold uppercase" style={{ ...mono, letterSpacing: "0.16em", color: "#2a1302", background: "linear-gradient(90deg,#ffb347,#e8731c,#ffe1a8)", borderRadius: 999 }}>
+            {creatorTag.label}
+          </div>
+        )}
         {profile.teamName && <div className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>{profile.teamName}</div>}
 
         {cardBeta && theirCard && (

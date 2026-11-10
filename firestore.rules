@@ -1021,6 +1021,18 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
     }
+    // Account presets (2026-11-10): set up before someone joins, keyed by
+    // email (scripts/set-account-preset.mjs), applied once by the server.
+    // Never readable from an app: the ids are email addresses.
+    match /accountPresets/{email} {
+      allow read, write: if false;
+    }
+    // Creator tags (2026-11-10): the public "Creator" badge on a profile,
+    // which also drives the Almost Famous patch. Server-written only.
+    match /creatorTags/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
     // Likeness consent (2026-11-09): your current answer, readable only by
     // you so the app knows whether to ask. Written only by setCardConsent.
     // The history underneath is the audit trail — nobody reads it from an app.
