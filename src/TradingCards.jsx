@@ -8,7 +8,7 @@
 // What's here: the card itself (3D spin / flip / idle sway), My Card, the
 // share QR (refreshes every 30s), the "Collected" arrival, the deck (swipe,
 // tap to view, shuffle with sound) and the photo prompt.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useHideBottomNav } from "./lib/hideNav";
 import QRCode from "qrcode";
@@ -363,7 +363,7 @@ const CSS = `
 .ac-stamp{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) rotate(-12deg) scale(3);opacity:0;pointer-events:none;z-index:30;font:700 28px/1 Oswald,sans-serif;letter-spacing:.18em;color:#22d3ee;border:3px solid #22d3ee;border-radius:8px;padding:6px 12px 6px 18px;background:rgba(6,20,40,.6);text-shadow:0 0 12px rgba(34,211,238,.6);box-shadow:0 0 24px rgba(34,211,238,.35);white-space:nowrap}
 .ac-stamp.go{animation:ac-stamp .45s cubic-bezier(.2,1.6,.4,1) forwards}
 @keyframes ac-stamp{to{opacity:1;transform:translate(-50%,-50%) rotate(-12deg) scale(1)}}
-.ac-dc{position:absolute;left:50%;top:0;width:${W}px;height:${H}px;margin-left:-${W / 2}px;transform-origin:50% 50%;transition:transform .35s cubic-bezier(.2,.8,.2,1);border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.ac-dc{position:absolute;left:50%;top:0;width:${W}px;height:${H}px;margin-left:-${W / 2}px;transform-origin:50% 50%;transition:transform .35s cubic-bezier(.2,.8,.2,1);border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,.45);will-change:transform;backface-visibility:hidden}
 .ac-dc.dragging{transition:none}
 .ac-dc.glow{animation:ac-glow 1.6s ease-out 1}
 @keyframes ac-glow{0%{box-shadow:0 0 0 0 rgba(96,165,250,.9),0 6px 18px rgba(0,0,0,.45)}100%{box-shadow:0 0 0 26px rgba(96,165,250,0),0 6px 18px rgba(0,0,0,.45)}}
@@ -1155,7 +1155,7 @@ export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId, onSc
   const dS = useScaleFor(0.66, 0.48);
 
   const byKey = useMemo(() => Object.fromEntries(loaded.map((c) => [`${c.kind}:${c.id}`, c])), [loaded]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     setOrder((prev) => {
       const keys = loaded.map((c) => `${c.kind}:${c.id}`);
       const kept = prev.filter((k) => keys.includes(k));
@@ -1171,7 +1171,9 @@ export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId, onSc
   };
   const off = (H * dS - H) / 2;
 
-  useEffect(() => {
+  // Lay the stack out only when its order or size changes — never on other
+  // re-renders (busy, sound toggle), which used to snap animations back.
+  useLayoutEffect(() => {
     order.forEach((k, i) => {
       const el = els.current[k];
       if (!el) return;
@@ -1179,7 +1181,7 @@ export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId, onSc
       el.style.top = `${off}px`;
       if (!el.classList.contains("dragging")) el.style.transform = posFor(i, k);
     });
-  });
+  }, [order, dS, byKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!highlightOwnerId || !order.length) return;
@@ -1309,11 +1311,13 @@ export function DeckScreen({ collectorUid, title, onBack, highlightOwnerId, onSc
             className="relative w-full mt-4"
             style={{ height: H * dS + 44, touchAction: "none" }}
           >
-            {order.map((k) => byKey[k] && (
+            {/* DOM order stays fixed (stacking = z-index + transform), so
+                CSS transitions are never restarted by React moving nodes. */}
+            {loaded.map((c) => { const k = `${c.kind}:${c.id}`; return (
               <div key={k} ref={(el) => { if (el) els.current[k] = el; else delete els.current[k]; }} className="ac-dc">
-                <TradingCardFaces card={byKey[k]} total={total} flat />
+                <TradingCardFaces card={c} total={total} flat />
               </div>
-            ))}
+            ); })}
           </div>
           <div className="text-center text-[11px] uppercase mt-1" style={{ ...body, color: T.ashFaint, letterSpacing: "0.14em" }}>Swipe to flip through · tap to view</div>
           <div className="flex justify-center mt-3"><Pill primary disabled={busy || order.length < 2} onClick={shuffle}>Shuffle</Pill></div>
