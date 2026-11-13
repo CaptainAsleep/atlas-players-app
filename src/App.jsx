@@ -1011,8 +1011,8 @@ function FieldFacts({ field, rentalPick, rentalsOnly = false }) {
 
   const demoAmenities = ["Pro Shop", "HPA Fill Station", "Rentals Available", "Food & Drinks", "Restrooms"];
   const demoRules = [
-    "Full-seal eye protection required at all times on the field.",
-    "Barrel bags/plugs required in all staging areas.",
+    "Full face protection required at all times on the field.",
+    "Barrel bags required in all staging areas — barrel plugs are not allowed.",
     "Blind fire and physical contact are not permitted.",
     "Minimum engagement distances enforced per game mode.",
   ];
