@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#F2F2ED" />
+    <script>
+      // Paint the status bar in the player's equipped look before iOS reads
+      // it (see useTheme.jsx). Must stay inline and right after theme-color.
+      try {
+        var c = localStorage.getItem("atlas-theme-bg");
+        if (c && /^#[0-9a-fA-F]{3,8}$/.test(c)) {
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", c);
+          document.documentElement.style.backgroundColor = c;
+        }
+      } catch (e) {}
+    </script>
     <!-- iOS "Add to Home Screen" behavior needs these explicitly — it
          doesn't fully read the web manifest the way Android/Chrome does. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />

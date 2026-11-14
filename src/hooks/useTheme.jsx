@@ -55,6 +55,18 @@ export function ThemeProvider({ children }) {
     document.documentElement.style.colorScheme = look.T.isDark ? "dark" : "light";
   }, [look]);
 
+  // iOS home-screen apps read the status-bar color from index.html at
+  // launch and don't repaint it when the meta tag changes later. Cache the
+  // equipped look's background (not a preview) so index.html's inline
+  // script can set theme-color before iOS reads it on the next launch.
+  useEffect(() => {
+    try {
+      localStorage.setItem("atlas-theme-bg", resolveLook(saved).T.void);
+    } catch {
+      // Storage blocked — status bar falls back to the light default.
+    }
+  }, [saved]);
+
   // A skin's display font is fetched the first time that skin is shown
   // (previewed or equipped) — the free looks' fonts are already in FONTS.
   useEffect(() => {
