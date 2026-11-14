@@ -741,7 +741,7 @@ export function CardConsentModal({ uid, kind = "likeness", onClose }) {
     <div className="fixed inset-0 flex flex-col" role="dialog" aria-modal="true" aria-labelledby="card-consent-title"
       style={{ zIndex: 2080, background: "radial-gradient(120% 80% at 50% 18%,#1b2440 0%,#0a0d18 60%,#05060b 100%)" }}>
       {onClose && (
-        <button onClick={() => onClose()} className="absolute top-4 right-4 w-10 h-10 text-[18px]" style={{ zIndex: 1, color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 999 }} aria-label="Close">✕</button>
+        <button onClick={() => onClose()} className="absolute right-4 w-10 h-10 text-[18px]" style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)", zIndex: 1, color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 999 }} aria-label="Close">✕</button>
       )}
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4 text-center">
         <div className="text-[11px] font-semibold uppercase" style={{ ...mono, color: "#7aa2ff", letterSpacing: "0.2em" }}>{k.eyebrow}</div>

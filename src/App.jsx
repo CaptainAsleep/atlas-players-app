@@ -11102,7 +11102,7 @@ function AppShell() {
   return (
     <ClaimedFieldsContext.Provider value={claimedFieldIds}>
     <SocialBadgeContext.Provider value={myTeamInvites.length + incomingRequests.length}>
-    <div className="w-full flex flex-col app-shell-height" style={{ background: T.void }}>
+    <div className="w-full flex flex-col app-shell-height" style={{ background: T.void, paddingTop: "env(safe-area-inset-top, 0px)" }}>
       <style>{FONTS}</style>
       <div key={`${screen}:${activeEventId}:${activeFieldId}:${activeTeamId}:${activePlayerId}`} className="flex-1 min-h-0 relative screen-transition">
         {content}
