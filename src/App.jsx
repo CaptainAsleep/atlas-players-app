@@ -3962,16 +3962,18 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
   const booked = bookedAll
     .filter((ev) => (ev.endDate || ev.date) >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const bookedPast = bookedAll.filter((ev) => (ev.endDate || ev.date) < today);
-  // Past = anything that's over and was either favorited or actually
-  // reserved, deduped by event id so a game that was both doesn't show up
-  // twice — the booked copy wins when both exist, since it carries the
-  // real checkedIn status a plain favorite never has.
+  // Past = only games the player actually checked in to, per Michael.
+  // Favorited-but-not-booked events and booked-but-missed (no-show) events
+  // are deliberately left out — a list of missed paid games isn't something
+  // to put in front of a player. Same rule as ProfileScreen's Past Events
+  // count. Deduped by event id in case of more than one booking per event.
   const pastMap = new Map();
-  events
-    .filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today)
-    .forEach((ev) => pastMap.set(ev.id, ev));
-  bookedPast.forEach((ev) => pastMap.set(ev.id, ev));
+  myBookings
+    .filter((b) => b.checkedIn && isPlayedBooking(b))
+    .forEach((b) => {
+      const ev = events.find((e) => e.id === b.eventId);
+      if (ev && (ev.endDate || ev.date) < today) pastMap.set(ev.id, { ...ev, checkedIn: true });
+    });
   const past = [...pastMap.values()].sort((a, b) => b.date.localeCompare(a.date));
 
   const TABS = [
@@ -4062,7 +4064,7 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
         {tab === "past" && (
           past.length === 0 ? (
             <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>
-              Events you've favorited or reserved will move here once they're over.
+              Games you check in to will show up here once they're over.
             </p>
           ) : renderList(past, true)
         )}
@@ -8553,7 +8555,7 @@ function FeedbackPanel() {
 // player's identity + collection; account, preferences and support moved to
 // SettingsScreen (gear in the header), and the referral QR moved into
 // InviteSheet so it no longer takes the second-biggest block on the page.
-function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildProfiles, dependents = [], onOpenPatches, onOpenActiveAchievements, achievementRows = [], onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onOpenMyCard, uploadAvatar, favorites, events, patches, vouchers }) {
+function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildProfiles, dependents = [], onOpenPatches, onOpenActiveAchievements, achievementRows = [], onOpenYearInReview, onOpenSecretPatchQR, onOpenScanRedeem, onOpenMyCard, uploadAvatar, favorites, events, patches, vouchers, myBookings = [] }) {
   const { T, display, body, mono } = useTheme();
   const initial = (profile?.callsign || user?.email || "?").charAt(0).toUpperCase();
   const fileInputRef = useRef(null);
@@ -8577,12 +8579,12 @@ function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildP
   // the Home banner. Michael's own account always sees it, to troubleshoot.
   const showYearInReview = isReviewWindow() || isOwner;
 
-  // "Past Events," not "attended" — this counts favorited events that have
-  // already happened, which isn't the same as confirmed attendance. That
-  // distinction gets to change once real check-in/RSVP data exists.
-  const today = localDateStr();
-  const savedEventIds = (favorites || []).filter((f) => f.type === "event").map((f) => f.refId);
-  const pastEventsCount = (events || []).filter((e) => savedEventIds.includes(e.id) && (e.endDate || e.date) < today).length;
+  // "Past Events" = distinct events the player actually checked in to, per
+  // Michael — not favorites, and not booked-but-missed games. Same rule as
+  // the Schedule screen's Past tab.
+  const pastEventsCount = new Set(
+    (myBookings || []).filter((b) => b.checkedIn && isPlayedBooking(b)).map((b) => b.eventId)
+  ).size;
 
   // Achievements tile: how many are in progress, and how close the nearest
   // one is (the bar), from the same rows the Active Achievements screen uses.
@@ -10979,6 +10981,7 @@ function AppShell() {
         events={events}
         patches={patches}
         vouchers={myVouchers}
+        myBookings={myBookings}
       />
     );
   } else if (screen === "settings") {
