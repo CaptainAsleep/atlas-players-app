@@ -1101,7 +1101,11 @@ const fields = [
     admission: "$30 standard play; $40 monthly competition series; $50 special events; $40 rental package",
     about:
       "Billed as \"Minnesota's largest airsoft field,\" a 100-acre outdoor venue with capacity for 150+ players, running regular weekend open play plus themed monthly games. Open weekends, March-December, 10am-4:30pm.",
-    status: "facebook_only",
+    // Delisted 2026-11-16 per Michael: Atlas won't promote this field. Record
+    // kept as-is; the player app shows only the name + Atlas's notice.
+    status: "delisted",
+    previousStatus: "facebook_only",
+    delistedAt: "2026-11-16",
     dataSource:
       "Facebook + Yelp + Airsoft Society forum showcase + independent business directories (own website, a Zoho-hosted site, is currently broken — see notes)",
     lastScraped: "2026-09-10",

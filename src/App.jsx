@@ -1636,7 +1636,10 @@ function HomeScreen({
       // "no-airsoft" (an operating business that just doesn't run airsoft,
       // e.g. a paintball-only field) get the same treatment — nothing
       // bookable to send a player toward either way.
-      if (["relocated", "closed", "no-airsoft"].includes(f.status)) return false;
+      // "delisted" (2026-11-16): a field Atlas has chosen not to promote.
+      // Its record stays in Firestore; only its page is reachable, and that
+      // page shows the delisted notice instead of the field's details.
+      if (["relocated", "closed", "no-airsoft", "delisted"].includes(f.status)) return false;
       const cat = cats.find((c) => c.key === activeCat);
       if (cat?.fieldProp && !(f.indoorOutdoor || "").toLowerCase().includes(cat.fieldProp)) return false;
       if (cat?.type && !cat.fieldProp && !events.some((ev) => ev.fieldId === f.id && ev.type === cat.type)) return false;
@@ -3654,6 +3657,41 @@ function FieldDetailScreen({ field, fieldEvents, pastFieldEvents, relocatedField
       </div>
     );
   }
+  if (field.status === "delisted") {
+    // Delisted (2026-11-16): show only the field's name and Atlas's notice.
+    // Everything else about the field stays on record but isn't rendered.
+    return (
+      <div className="h-full flex flex-col" style={{ backgroundColor: T.void }}>
+        <div className="flex-1 overflow-y-auto pb-24">
+          <div className="px-5 pt-3">
+            <button onClick={onBack} className="w-9 h-9 flex items-center justify-center" style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
+              <ChevronLeft color={T.ash} size={19} />
+            </button>
+            <div className="text-[24px] font-semibold mt-4" style={{ ...display, color: T.ash }}>{field.name}</div>
+            {field.city && <div className="text-[12px] mt-1" style={{ ...mono, color: T.ashFaint }}>{field.city}</div>}
+          </div>
+          <div className="px-5 mt-5">
+            <div className="p-5" style={{ background: "rgba(240,85,74,0.1)", border: `1px solid ${T.alert}`, borderRadius: 6 }}>
+              <div className="text-[17px] font-semibold mb-3" style={{ ...display, color: T.ash }}>Atlas isn’t promoting this field</div>
+              <p className="text-[13px] leading-relaxed mb-3" style={{ ...body, color: T.ashDim }}>
+                Atlas is built to grow the airsoft community: the players, the teams and the fields that host them. We’ve decided not to list or promote {field.name}. In our view, the field’s recent public conduct toward fellow fields and players hasn’t shown the respect and sportsmanship we expect from the fields we work with. Atlas won’t promote fields whose behavior works against the community we’re here to support.
+              </p>
+              <p className="text-[13px] leading-relaxed mb-3" style={{ ...body, color: T.ashDim }}>Looking for a game in Minnesota?</p>
+              <button
+                onClick={() => onNavigate("home")}
+                className="flex items-center justify-between w-full px-3 py-2"
+                style={{ background: T.panelAlt, borderRadius: T.rPill }}
+              >
+                <span className="text-[12px] font-semibold" style={{ ...display, color: T.ash }}>Browse fields near you</span>
+                <ArrowRight size={14} color={T.ashDim} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <BottomNav active="home" onNavigate={onNavigate} />
+      </div>
+    );
+  }
   const statusLabel = STATUS_LABEL[field.status];
   const links = [
     { label: "Website", url: field.website },
@@ -5059,7 +5097,7 @@ function TeamEventForm({ team, fields, atlasEvents, initial, onCancel, onSave, s
             className="w-full mb-2 px-3 py-2 text-[13px] outline-none" style={{ ...body, background: T.panel, border: `1px solid ${T.line}`, borderRadius: 4, color: T.ash }} />
           <div style={{ maxHeight: 180, overflowY: "auto" }}>
             {(fields || [])
-              .filter((f) => !["relocated", "closed", "no-airsoft"].includes(f.status))
+              .filter((f) => !["relocated", "closed", "no-airsoft", "delisted"].includes(f.status))
               .filter((f) => f.name.toLowerCase().includes(fieldSearch.toLowerCase()))
               .map((f) => (
                 <button key={f.id}
@@ -6462,7 +6500,7 @@ function TeamScreen({ team, members, teamLoading, myOfficerRequest, officerReque
             />
             <div style={{ maxHeight: 200, overflowY: "auto" }}>
               {fields
-                .filter((f) => !["relocated", "closed", "no-airsoft"].includes(f.status))
+                .filter((f) => !["relocated", "closed", "no-airsoft", "delisted"].includes(f.status))
                 .filter((f) => f.name.toLowerCase().includes(fieldSearch.toLowerCase()))
                 .map((f) => (
                 <button
@@ -10125,7 +10163,13 @@ function AppShell() {
 
   const { fields, loading: fieldsLoading } = useFields();
   const claimedFieldIds = useMemo(() => new Set(fields.filter((f) => f.ownerId).map((f) => f.id)), [fields]);
-  const { events, loading: eventsLoading } = useEvents();
+  const { events: allEvents, loading: eventsLoading } = useEvents();
+  // Delisted fields (status "delisted", 2026-11-16): their events stay in
+  // Firestore but are dropped here so they never surface anywhere in the app.
+  const events = useMemo(() => {
+    const delisted = new Set(fields.filter((f) => f.status === "delisted").map((f) => f.id));
+    return delisted.size ? allEvents.filter((e) => !delisted.has(e.fieldId)) : allEvents;
+  }, [allEvents, fields]);
   const { user, profile, authLoading, signUp, signIn, signInWithGoogle, sendPasswordReset, signOut, updateProfileFields, changePassword, uploadAvatar, setCardCrop, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { dependents, graduatedDependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
