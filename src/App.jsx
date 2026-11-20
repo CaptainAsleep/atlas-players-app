@@ -9494,7 +9494,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
   };
 
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor: T.void }}>
+    <div className="h-full flex flex-col" style={{ backgroundColor: T.void }}>
       <style>{FONTS}</style>
       <div className="px-6 pt-8 pb-4">
         <div className="flex gap-1 mb-5">
@@ -9622,7 +9622,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
 
       <div className="flex-1" />
 
-      <div className="px-6 pb-8">
+      <div className="px-6" style={{ paddingBottom: "calc(32px + env(safe-area-inset-bottom, 0px))" }}>
         {error && <p className="text-[12px] mb-2 text-center" style={{ ...body, color: T.alert }}>{error}</p>}
         <button
           onClick={handleNext}
@@ -9670,7 +9670,7 @@ function LegalAgreementScreen({ onAccept }) {
   };
 
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor: T.void }}>
+    <div className="h-full flex flex-col" style={{ backgroundColor: T.void }}>
       <style>{FONTS}</style>
       <div className="px-6 pt-8 pb-3">
         <h1 className="text-[18px] font-semibold mb-1" style={{ ...display, color: T.ash }}>Before you continue</h1>
@@ -9691,7 +9691,7 @@ function LegalAgreementScreen({ onAccept }) {
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
         <p className="text-[12px] whitespace-pre-wrap" style={{ ...body, color: T.ashDim, lineHeight: 1.6 }}>{activeText}</p>
       </div>
-      <div className="px-6 pt-3 pb-6" style={{ borderTop: `1px solid ${T.line}`, background: T.void }}>
+      <div className="px-6 pt-3" style={{ borderTop: `1px solid ${T.line}`, background: T.void, paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
         <button onClick={() => setChecked(!checked)} className="w-full flex items-center gap-2 mb-3 text-left">
           <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center" style={{ border: `1.5px solid ${checked ? T.cta : T.line}`, background: checked ? T.cta : "transparent", borderRadius: 4 }}>
             {checked && <Check size={13} color={T.inverse} strokeWidth={3} />}
