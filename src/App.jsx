@@ -19,6 +19,8 @@ import { useAllTeams, useTeam, useTeamActions, useMyOfficerRequest, useOfficerRe
 import { usePublicProfile, useAllPublicProfiles } from "./hooks/usePublicProfiles";
 import { useCreatorTag } from "./hooks/useCreatorTag";
 import { useFriends, useIncomingRequests, useOutgoingRequestUids, useFriendActions } from "./hooks/useFriends";
+import { useFeed } from "./hooks/useFeed";
+import { ReactionIcon, REACTION_KINDS, REACTION_LABELS } from "./ReactionIcons";
 import { CURRENT_TERMS_VERSION, TERMS_OF_USE, PRIVACY_POLICY, EULA } from "./legalText";
 import { useAchievementCatalog, redeemPatchCode } from "./hooks/useAchievementCatalog";
 import { evaluateAchievements, achievementProgress, fieldPatchToEnginePatch, childEligiblePatch } from "./achievementEngine";
@@ -447,7 +449,7 @@ function Eyebrow({ children }) {
   );
 }
 
-// Count shown on the Social tab icon: pending team invites + incoming friend
+// Count shown on the Social tab icon (+ unseen Feed items, 2026-11-22): pending team invites + incoming friend
 // requests (Officer Team Invites, 2026-10-27). Provided in AppShell, so the
 // many BottomNav call sites don't each need a new prop.
 const SocialBadgeContext = React.createContext(0);
@@ -4115,9 +4117,9 @@ function ScheduleScreen({ onNavigate, favorites, events, onOpenEvent, myBookings
 
 function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, teams, teamsLoading, createTeam,
   allProfiles, childProfiles = [], friends, friendsLoading, incomingRequests, outgoingRequestUids, sendRequest, acceptRequest, declineRequest, cancelOrUnfriend,
-  tab, setTab, teamInvites = [] }) {
+  tab, setTab, teamInvites = [], feed, events = [], onOpenEvent, onOpenField }) {
   const { T, display, body, mono } = useTheme();
-  // tab (friends | teams) now lives in AppShell as socialTab, passed down
+  // tab (feed | friends | teams) now lives in AppShell as socialTab, passed down
   // as a prop — same fix as scheduleTab/homeSearch etc. above: this
   // component only renders while screen === "inbox", so a local useState
   // here would reset every time a player opened a friend/team and came back.
@@ -4127,7 +4129,7 @@ function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, tea
       <ScreenHeader title="Social" />
       <TeamInvitesBlock invites={teamInvites} teams={teams} allProfiles={allProfiles} user={user} profile={profile} onOpenTeam={onOpenTeam} />
       <div className="px-6 pt-3 pb-1 flex gap-1" style={{ borderBottom: `1px solid ${T.line}` }}>
-        {[["friends", "Friends"], ["teams", "Teams"]].map(([key, label]) => (
+        {[["feed", "Feed"], ["friends", "Friends"], ["teams", "Teams"]].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -4139,7 +4141,26 @@ function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, tea
         ))}
       </div>
 
-      {tab === "friends" ? (
+      {tab === "feed" ? (
+        <FeedTabContent
+          user={user}
+          items={feed?.feedItems || []}
+          loading={!!feed?.feedLoading}
+          unseenCount={feed?.unseenCount || 0}
+          markSeen={feed?.markSeen || (() => {})}
+          react={feed?.react || (() => {})}
+          friendsCount={(friends || []).length}
+          incomingCount={(incomingRequests || []).length}
+          onShowFriends={() => setTab("friends")}
+          allProfiles={allProfiles}
+          childProfiles={childProfiles}
+          events={events}
+          onOpenPlayer={onOpenPlayer}
+          onOpenEvent={onOpenEvent}
+          onOpenField={onOpenField}
+          onOpenTeam={onOpenTeam}
+        />
+      ) : tab === "friends" ? (
         <FriendsTabContent
           onOpenPlayer={onOpenPlayer}
           user={user}
@@ -4160,6 +4181,346 @@ function SocialScreen({ onNavigate, onOpenTeam, onOpenPlayer, profile, user, tea
       )}
 
       <BottomNav active="inbox" onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+/* ---------- Social Feed (2026-11-22) ---------- */
+// Friends' activity, newest first. Data: useFeed (src/hooks/useFeed.js),
+// written server-side by the feed triggers (functions/feedStore.js).
+// Scope + decisions: claude/atlas-social-feed-scope.md in the Atlas project.
+
+const FEED_VERBS = {
+  interested: () => "is interested in a game",
+  booked: () => "booked a game",
+  checkedIn: (a) => `checked in${a.fieldName ? ` at ${a.fieldName}` : ""}`,
+  savedField: () => "saved a field",
+  patch: (a) => ((a.patches || []).length > 1 ? `earned ${a.patches.length} patches` : "earned a patch"),
+  joinedTeam: () => "joined a team",
+  cardCollected: (a) => `collected ${a.ownerCallsign || "a player"}'s card`,
+};
+
+function feedAgo(ms) {
+  if (!ms) return "";
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+function FeedAvatar({ url, name, size = 36 }) {
+  const { T, display } = useTheme();
+  if (url) {
+    return <div className="flex-shrink-0" style={{ width: size, height: size, backgroundImage: `url("${url}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 999 }} />;
+  }
+  return (
+    <div className="flex-shrink-0 flex items-center justify-center" style={{ width: size, height: size, borderRadius: 999, background: T.panelAlt, color: T.ashDim, ...display, fontSize: Math.round(size * 0.4) }}>
+      {(name || "?").slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
+
+// Reactions (decision 11): only reactions that have been used show, as
+// chips with counts; yours is highlighted. A small add button opens a tray
+// of all four. Tap a chip to switch to it; tap your own to remove it.
+// One reaction per player per card.
+function FeedReactionRow({ item, myUid, nameFor, onReact }) {
+  const { T, body } = useTheme();
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [whoOpen, setWhoOpen] = useState(false);
+  const [popKind, setPopKind] = useState(null);
+  const popTimer = useRef(null);
+  useEffect(() => () => clearTimeout(popTimer.current), []);
+
+  const reactions = item.reactions || {};
+  const mine = reactions[myUid] || null;
+  const counts = {};
+  for (const k of Object.values(reactions)) if (REACTION_KINDS.includes(k)) counts[k] = (counts[k] || 0) + 1;
+  const used = REACTION_KINDS.filter((k) => counts[k]);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  const choose = (k) => {
+    const next = mine === k ? null : k;
+    setTrayOpen(false);
+    onReact(item.id, next);
+    if (next) {
+      setPopKind(next);
+      clearTimeout(popTimer.current);
+      popTimer.current = setTimeout(() => setPopKind(null), 750);
+    }
+  };
+
+  return (
+    <div className="relative mt-2.5">
+      {popKind && (
+        <img
+          src={`${import.meta.env.BASE_URL}reactions/patch-${popKind}.svg`}
+          alt=""
+          aria-hidden="true"
+          className="absolute pointer-events-none atlas-feed-pop"
+          style={{ width: 64, height: 64, left: 0, bottom: 34, zIndex: 5 }}
+        />
+      )}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {used.map((k) => {
+          const on = mine === k;
+          return (
+            <button
+              key={k}
+              onClick={() => choose(k)}
+              aria-pressed={on}
+              aria-label={`${REACTION_LABELS[k]}, ${counts[k]}`}
+              className="flex items-center gap-1 px-2.5"
+              style={{ ...body, minHeight: 30, fontSize: 12, fontWeight: on ? 700 : 500, borderRadius: T.rPill, background: on ? T.tint : T.panelAlt, color: on ? T.accent : T.ashDim, border: `1px solid ${on ? T.accent : T.line}` }}
+            >
+              <ReactionIcon kind={k} active color={on ? T.accent : T.ashDim} knockout={on ? T.tint : T.panelAlt} size={16} />
+              <span>{counts[k]}</span>
+            </button>
+          );
+        })}
+        {trayOpen ? (
+          <div className="flex items-center gap-0.5 p-0.5" style={{ borderRadius: T.rPill, background: T.panel, border: `1px solid ${T.line}`, boxShadow: T.shadowSm }}>
+            {REACTION_KINDS.map((k) => (
+              <button
+                key={k}
+                onClick={() => choose(k)}
+                aria-label={REACTION_LABELS[k]}
+                aria-pressed={mine === k}
+                className="flex items-center justify-center"
+                style={{ width: 38, height: 38, borderRadius: T.rPill, background: mine === k ? T.tint : "transparent" }}
+              >
+                <ReactionIcon kind={k} active={mine === k} color={mine === k ? T.accent : T.ashDim} knockout={mine === k ? T.tint : T.panel} size={22} />
+              </button>
+            ))}
+            <button onClick={() => setTrayOpen(false)} aria-label="Close reactions" className="flex items-center justify-center" style={{ width: 30, height: 38, color: T.ashFaint }}>
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setTrayOpen(true)}
+            aria-label="Add reaction"
+            className="flex items-center justify-center"
+            style={{ width: 30, height: 30, borderRadius: T.rPill, border: `1px solid ${T.line}`, color: T.ashFaint }}
+          >
+            <Plus size={14} />
+          </button>
+        )}
+        <span className="flex-1" />
+        {total > 0 && !trayOpen && (
+          <button onClick={() => setWhoOpen((v) => !v)} className="text-[12px] px-1 py-1.5" style={{ ...body, color: T.ashFaint }}>
+            {whoOpen ? "Hide" : "See who"}
+          </button>
+        )}
+      </div>
+      {whoOpen && total > 0 && (
+        <div className="mt-2 px-3 py-1" style={{ background: T.panelAlt, borderRadius: T.rTight }}>
+          {Object.entries(reactions)
+            .filter(([, k]) => REACTION_KINDS.includes(k))
+            .map(([uid, k]) => (
+              <div key={uid} className="flex items-center gap-2.5 py-1.5 text-[13px]" style={{ ...body, color: T.ash }}>
+                <img src={`${import.meta.env.BASE_URL}reactions/patch-${k}.svg`} alt="" aria-hidden="true" style={{ width: 24, height: 24 }} />
+                <span className="truncate">{uid === myUid ? "You" : nameFor(uid)}</span>
+                <span className="ml-auto text-[11px]" style={{ color: T.ashFaint }}>{REACTION_LABELS[k]}</span>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeedCard({ item, myUid, actor, liveEvent, nameFor, onReact, onOpenPlayer, onOpenEvent, onOpenField, onOpenTeam }) {
+  const { T, display, body } = useTheme();
+  const verb = (FEED_VERBS[item.type] || (() => ""))(item);
+  const isEventType = item.type === "interested" || item.type === "booked" || item.type === "checkedIn";
+  const canceled = isEventType && !!liveEvent?.canceled;
+  const tag = canceled ? { text: "Canceled", color: T.alert } : item.type === "booked" ? { text: "Booked", color: T.good } : item.type === "checkedIn" ? { text: "Checked in", color: T.good } : null;
+  const media = (url, seed, size = 52) => (
+    <div className="flex-shrink-0" style={{ width: size, height: size, borderRadius: T.rTight, ...heroStyle(url, seed) }} />
+  );
+  const tile = (children, onClick, label) => (
+    <button onClick={onClick} aria-label={label} className="mt-2.5 w-full flex items-center gap-3 p-2 text-left" style={{ background: T.panelAlt, borderRadius: T.rTight }}>
+      {children}
+    </button>
+  );
+
+  let content = null;
+  if (isEventType) {
+    const title = liveEvent?.title || item.eventTitle || "Event";
+    const fieldName = liveEvent?.fieldName || item.fieldName;
+    const date = liveEvent?.date || item.date;
+    content = tile(
+      <>
+        {media(liveEvent?.imageUrl || item.imageUrl, item.eventId)}
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] truncate" style={{ ...display, color: T.ash }}>{title}</div>
+          <div className="text-[12px] truncate" style={{ ...body, color: T.ashDim }}>
+            {[fieldName, date ? formatDate(date, liveEvent?.endDate || item.endDate) : null].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        {tag && (
+          <span className="text-[11px] px-2 py-0.5 flex-shrink-0" style={{ ...body, fontWeight: 600, color: tag.color, border: `1px solid ${tag.color}`, borderRadius: T.rPill }}>{tag.text}</span>
+        )}
+      </>,
+      () => (liveEvent ? onOpenEvent(liveEvent) : item.fieldId ? onOpenField(item.fieldId) : null),
+      `Open ${title}`
+    );
+  } else if (item.type === "savedField") {
+    content = tile(
+      <>
+        {media(item.imageUrl, item.fieldId)}
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] truncate" style={{ ...display, color: T.ash }}>{item.fieldName || "Field"}</div>
+          {item.city && <div className="text-[12px] truncate" style={{ ...body, color: T.ashDim }}>{item.city}</div>}
+        </div>
+        <ChevronRight size={16} color={T.ashFaint} />
+      </>,
+      () => onOpenField(item.fieldId),
+      `Open ${item.fieldName || "field"}`
+    );
+  } else if (item.type === "patch") {
+    const list = (item.patches || []).slice(0, 4);
+    content = (
+      <button onClick={() => onOpenPlayer(item.actorUid)} className="mt-2.5 w-full flex flex-col items-center gap-2 py-3 px-2" style={{ background: T.panelAlt, borderRadius: T.rTight }} aria-label="Open their patches">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          {list.map((p) =>
+            p.imageUrl ? (
+              <img key={p.id} src={p.imageUrl} alt={p.name} style={{ width: list.length > 1 ? 52 : 72, height: list.length > 1 ? 52 : 72, objectFit: "contain" }} />
+            ) : (
+              <div key={p.id} className="flex items-center justify-center" style={{ width: 52, height: 52, borderRadius: 999, background: T.panel, color: T.ashDim }}><Medal size={22} /></div>
+            )
+          )}
+        </div>
+        <div className="text-[13px] text-center" style={{ ...display, color: T.ash }}>
+          {(item.patches || []).map((p) => p.name).join(", ")}
+        </div>
+      </button>
+    );
+  } else if (item.type === "joinedTeam") {
+    content = tile(
+      <>
+        <div className="flex-shrink-0 flex items-center justify-center" style={{ width: 44, height: 44, background: T.panel, borderRadius: 4 }}>
+          {item.patchUrl ? <img src={item.patchUrl} alt="" className="w-full h-full" style={{ objectFit: "contain" }} /> : <Shield size={18} color={T.ashDim} />}
+        </div>
+        <div className="flex-1 min-w-0 text-[13px] truncate" style={{ ...display, color: T.ash }}>{item.teamName || "Team"}</div>
+        <ChevronRight size={16} color={T.ashFaint} />
+      </>,
+      () => onOpenTeam(item.teamId),
+      `Open ${item.teamName || "team"}`
+    );
+  } else if (item.type === "cardCollected") {
+    content = tile(
+      <>
+        <div className="flex-shrink-0 flex items-end justify-center overflow-hidden" style={{ width: 40, height: 56, borderRadius: 4, border: `2px solid ${T.accent}`, background: T.panel }}>
+          {item.ownerAvatarUrl ? (
+            <div className="w-full h-full" style={{ backgroundImage: `url("${item.ownerAvatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
+          ) : (
+            <User size={20} color={T.ashDim} style={{ marginBottom: 14 }} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] truncate" style={{ ...display, color: T.ash }}>{item.ownerCallsign || "Player"}</div>
+          {item.ownerTier && <div className="text-[11px] uppercase truncate" style={{ ...body, color: T.ashDim, letterSpacing: "0.06em" }}>{item.ownerTier}</div>}
+        </div>
+        <ChevronRight size={16} color={T.ashFaint} />
+      </>,
+      () => onOpenPlayer(item.ownerId),
+      `Open ${item.ownerCallsign || "player"}`
+    );
+  }
+
+  return (
+    <div className="p-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowSm }}>
+      <div className="flex items-center gap-2.5">
+        <button onClick={() => onOpenPlayer(item.actorUid)} aria-label={`Open ${actor?.callsign || "player"}`}>
+          <FeedAvatar url={actor?.avatarUrl} name={actor?.callsign} />
+        </button>
+        <div className="flex-1 min-w-0 text-[13px] leading-snug" style={{ ...body, color: T.ashDim }}>
+          <button onClick={() => onOpenPlayer(item.actorUid)} style={{ ...display, color: T.ash }}>{actor?.callsign || "A friend"}</button>{" "}
+          {verb}
+        </div>
+        <span className="text-[11px] flex-shrink-0" style={{ ...body, color: T.ashFaint }}>{feedAgo(item.createdAtMs)}</span>
+      </div>
+      {content}
+      <FeedReactionRow item={item} myUid={myUid} nameFor={nameFor} onReact={onReact} />
+    </div>
+  );
+}
+
+function FeedTabContent({ user, items, loading, unseenCount, markSeen, react, friendsCount, incomingCount, onShowFriends,
+  allProfiles, childProfiles = [], events, onOpenPlayer, onOpenEvent, onOpenField, onOpenTeam }) {
+  const { T, display, body } = useTheme();
+
+  // Opening Feed (or new items arriving while it's open) clears the badge.
+  useEffect(() => {
+    if (unseenCount > 0) markSeen();
+  }, [unseenCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const profileById = useMemo(() => {
+    const m = new Map();
+    for (const p of allProfiles || []) m.set(p.uid, p);
+    for (const c of childProfiles || []) if (c?.uid) m.set(c.uid, c);
+    return m;
+  }, [allProfiles, childProfiles]);
+  const eventById = useMemo(() => new Map((events || []).map((e) => [e.id, e])), [events]);
+  const nameFor = (uid) => profileById.get(uid)?.callsign || "A friend";
+
+  // Interested/booked cards drop off once the game is over; check-ins stay.
+  const today = localDateStr();
+  const visible = (items || []).filter((it) => {
+    if (it.type !== "interested" && it.type !== "booked") return true;
+    const ev = eventById.get(it.eventId);
+    const last = ev?.endDate || ev?.date || it.endDate || it.date;
+    return !last || last >= today;
+  });
+
+  return (
+    <div className="px-6 pt-4 pb-6">
+      <style>{`@keyframes atlasFeedPop{0%{transform:scale(.4);opacity:0}35%{transform:scale(1.1);opacity:1}75%{transform:scale(1);opacity:1}100%{transform:translateY(-8px) scale(.9);opacity:0}} .atlas-feed-pop{animation:atlasFeedPop .75s ease-out forwards}`}</style>
+      {incomingCount > 0 && (
+        <button onClick={onShowFriends} className="w-full mb-3 px-3 py-2.5 flex items-center gap-2 text-[13px] text-left" style={{ ...body, background: T.panel, color: T.ash, borderRadius: T.rTight, outline: `1.5px solid ${T.accent}`, outlineOffset: -1 }}>
+          <UserPlus size={15} color={T.accent} />
+          <span className="flex-1">{incomingCount} friend request{incomingCount > 1 ? "s" : ""}</span>
+          <ChevronRight size={15} color={T.ashFaint} />
+        </button>
+      )}
+
+      {loading ? (
+        <p className="text-[13px] py-6 text-center" style={{ ...body, color: T.ashFaint }}>Loading…</p>
+      ) : friendsCount === 0 && visible.length === 0 ? (
+        <div className="py-10 flex flex-col items-center text-center gap-3">
+          <Users size={28} color={T.ashFaint} />
+          <p className="text-[14px]" style={{ ...display, color: T.ash }}>Your feed fills up as you add friends</p>
+          <p className="text-[13px] max-w-[260px]" style={{ ...body, color: T.ashDim }}>See the games they book, the patches they earn, and the teams they join.</p>
+          <button onClick={onShowFriends} className="mt-1 px-4 py-2 text-[13px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill, boxShadow: T.shadowSm }}>
+            Find friends
+          </button>
+        </div>
+      ) : visible.length === 0 ? (
+        <p className="text-[13px] py-10 text-center max-w-[280px] mx-auto" style={{ ...body, color: T.ashFaint }}>
+          Quiet out there. When your friends book games or earn patches, it shows up here.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {visible.map((it) => (
+            <FeedCard
+              key={it.id}
+              item={it}
+              myUid={user?.uid}
+              actor={profileById.get(it.actorUid)}
+              liveEvent={it.eventId ? eventById.get(it.eventId) : null}
+              nameFor={nameFor}
+              onReact={react}
+              onOpenPlayer={onOpenPlayer}
+              onOpenEvent={onOpenEvent}
+              onOpenField={onOpenField}
+              onOpenTeam={onOpenTeam}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -10208,6 +10569,9 @@ function AppShell() {
   const { requests: incomingRequests } = useIncomingRequests(user?.uid);
   const outgoingRequestUids = useOutgoingRequestUids(user?.uid);
   const { sendRequest, acceptRequest, declineRequest, cancelOrUnfriend } = useFriendActions();
+  // Social Feed (2026-11-22): here, not in the Feed tab, so the Social badge
+  // can count unseen friend activity on every screen.
+  const feed = useFeed(user?.uid, profile?.feedSeenAt);
 
   // Referral capture — a real deployed app, not a sandboxed artifact, so
   // localStorage is appropriate here: it lets the ?ref= code survive a
@@ -10315,7 +10679,7 @@ function AppShell() {
   const [homeRadiusMiles, setHomeRadiusMiles] = useState(NEARBY_RADIUS_MILES);
   const [homeSortBy, setHomeSortBy] = useState("date");
   const [scheduleTab, setScheduleTab] = useState("interested"); // booked | interested | past — see ScheduleScreen
-  const [socialTab, setSocialTab] = useState("friends"); // friends | teams — see SocialScreen
+  const [socialTab, setSocialTab] = useState("feed"); // feed | friends | teams — see SocialScreen (Feed is the landing tab, 2026-11-22)
 
   const openPlayer = (uid) => {
     setActivePlayerId(uid);
@@ -10947,6 +11311,10 @@ function AppShell() {
         tab={socialTab}
         setTab={setSocialTab}
         teamInvites={myTeamInvites}
+        feed={feed}
+        events={events}
+        onOpenEvent={openEvent}
+        onOpenField={openField}
       />
     );
   } else if (screen === "player" && activePlayerId) {
@@ -11148,7 +11516,7 @@ function AppShell() {
 
   return (
     <ClaimedFieldsContext.Provider value={claimedFieldIds}>
-    <SocialBadgeContext.Provider value={myTeamInvites.length + incomingRequests.length}>
+    <SocialBadgeContext.Provider value={myTeamInvites.length + incomingRequests.length + feed.unseenCount}>
     <div className="w-full flex flex-col app-shell-height" style={{ background: T.void, paddingTop: "env(safe-area-inset-top, 0px)" }}>
       <style>{FONTS}</style>
       <div key={`${screen}:${activeEventId}:${activeFieldId}:${activeTeamId}:${activePlayerId}`} className="flex-1 min-h-0 relative screen-transition">

@@ -901,6 +901,15 @@ service cloud.firestore {
         allow update: if request.auth != null && request.auth.uid == userId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["acknowledged"]);
       }
+
+      // Social Feed (2026-11-22): pointers to friends' activity, written
+      // only by Cloud Functions (functions/feedStore.js). A player reads
+      // their own feed and nobody else's — booking/check-in cards here are
+      // friends-only, same reasoning as users/{userId}/bookings above.
+      match /feed/{activityId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
 
     // Collection-group read for the admin portal's "patches received"
@@ -952,6 +961,35 @@ service cloud.firestore {
     // emails it to Michael. Clients never write; only the admin reads.
     // Paid skins (2026-11-09): one record per paid Stripe session that
     // granted skins (webhook-only). Admin portal revenue reporting reads it.
+    // Social Feed (2026-11-22). activity/{id} is server-written only. You
+    // can read one if it's your own, or if it's in your feed (the pointer
+    // exists only for the actor's friends, so booking/check-in activity
+    // stays friends-only). Reactions: you write only your own, only on a
+    // card in your feed, only one of the four kinds; a trigger folds them
+    // into activity.reactions.
+    function inMyFeed(activityId) {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)/feed/$(activityId));
+    }
+    match /activity/{activityId} {
+      allow read: if request.auth != null
+        && (resource.data.actorUid == request.auth.uid || inMyFeed(activityId));
+      allow write: if false;
+
+      match /reactions/{reactorUid} {
+        allow read: if request.auth != null && (inMyFeed(activityId)
+          || get(/databases/$(database)/documents/activity/$(activityId)).data.actorUid == request.auth.uid);
+        allow create, update: if request.auth != null && request.auth.uid == reactorUid
+          && inMyFeed(activityId)
+          && request.resource.data.keys().hasOnly(["kind", "at"])
+          && request.resource.data.kind in ["thumbsUp", "fire", "heart", "niceShot"];
+        allow delete: if request.auth != null && request.auth.uid == reactorUid;
+      }
+    }
+    // First-save markers (decision 10) — Cloud Functions only.
+    match /activityKeys/{markerId} {
+      allow read, write: if false;
+    }
+
     match /skinPurchases/{sessionId} {
       allow read: if isAdmin();
       allow write: if false;

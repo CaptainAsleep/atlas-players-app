@@ -9,6 +9,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as feedback from "./feedback.js";
 import * as cards from "./cards.js";
 import * as presets from "./accountPresets.js";
+import * as feed from "./feed.js";
+import * as feedStore from "./feedStore.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -6283,4 +6285,157 @@ export const syncFieldBookingsLiveOnClaim = onDocumentUpdated("fields/{fieldId}"
   }
   if (!!after.bookingsLive === isLive) return;
   await event.data.after.ref.update(bookingsLiveUpdate(isLive));
+});
+
+// ===========================================================================
+// Social Feed (2026-11-22)
+// ===========================================================================
+// Friend activity feed on the Social screen. Each trigger below turns one
+// kind of player action into an activity/{id} doc and fans a pointer out to
+// the player's friends (users/{friendUid}/feed/{id}). Rules + data model:
+// feed.js (pure, tested) and feedStore.js (Firestore). Scope doc:
+// claude/atlas-social-feed-scope.md in the Atlas project.
+//
+// Failures are logged, never thrown: a feed hiccup must not retry-storm or
+// look like a booking/patch/team failure.
+
+const feedLog = (where) => (err) => console.error(`feed ${where} failed:`, err);
+
+// Interested in an event / saved a field. First save only (decision 10):
+// the activityKeys marker outlives an un-save, so a re-save posts nothing.
+export const feedOnFavoriteWritten = onDocumentWritten("users/{uid}/favorites/{favId}", async (event) => {
+  const { uid } = event.params;
+  const before = event.data?.before?.exists ? event.data.before.data() : null;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  const db = getFirestore();
+  try {
+    if (!before && after) {
+      const m = feed.favoriteActivity(after);
+      if (!m) return;
+      if (m.type === "interested" && (
+        await feedStore.activityExists(db, uid, "booked", m.refId) || await feedStore.activityExists(db, uid, "checkedIn", m.refId)
+      )) return;
+      if (!(await feedStore.claimMarker(db, uid, m.type, m.refId))) return;
+      const data = m.type === "interested" ? await feedStore.eventData(db, m.refId) : await feedStore.fieldData(db, m.refId);
+      if (!data) return;
+      await feedStore.postActivity(db, { actorUid: uid, type: m.type, refId: m.refId, data });
+    } else if (before && !after) {
+      const m = feed.favoriteActivity(before);
+      if (m) await feedStore.removeActivity(db, feed.activityId(uid, m.type, m.refId));
+    }
+  } catch (err) { feedLog("favorite")(err); }
+});
+
+// Booked / checked in / canceled. Every booking and check-in path writes
+// this mirror (same reason refreshCardStats watches it). Kid-only bookings
+// and games inherited from a child profile never post.
+export const feedOnBookingWritten = onDocumentWritten("users/{uid}/bookings/{eventId}", async (event) => {
+  const { uid, eventId } = event.params;
+  const before = event.data?.before?.exists ? event.data.before.data() : null;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  const { post, remove } = feed.bookingTransition(before, after);
+  if (!post && !remove.length) return;
+  const db = getFirestore();
+  try {
+    await feedStore.removeTypes(db, uid, remove, eventId);
+    if (post) {
+      const data = (await feedStore.eventData(db, eventId)) || feed.eventDisplayFromBooking(eventId, after || {});
+      await feedStore.postActivity(db, { actorUid: uid, type: post, refId: eventId, data });
+    }
+  } catch (err) { feedLog("booking")(err); }
+});
+
+// Patches. Several within 10 minutes become one "earned N patches" card.
+// Patches copied in from a child profile at graduation (inherited) skip.
+export const feedOnPatchWritten = onDocumentWritten("users/{uid}/patches/{patchId}", async (event) => {
+  const { uid, patchId } = event.params;
+  const had = !!event.data?.before?.exists, has = !!event.data?.after?.exists;
+  if (had === has) return;
+  const db = getFirestore();
+  try {
+    if (has) {
+      const p = event.data.after.data();
+      if (p.inherited === true) return;
+      await feedStore.addPatch(db, FieldValue, uid, patchId, p);
+    } else {
+      await feedStore.dropPatch(db, uid, patchId);
+    }
+  } catch (err) { feedLog("patch")(err); }
+});
+
+// Joined / left a team. Adults only: child members use c… public ids.
+export const feedOnMemberWritten = onDocumentWritten("teams/{teamId}/members/{memberId}", async (event) => {
+  const { teamId, memberId } = event.params;
+  if (feed.isChildPublicId(memberId)) return;
+  const had = !!event.data?.before?.exists, has = !!event.data?.after?.exists;
+  if (had === has) return;
+  if (has && event.data.after.data()?.kind === "child") return;
+  const db = getFirestore();
+  try {
+    if (has) {
+      const data = await feedStore.teamData(db, teamId);
+      if (data) await feedStore.postActivity(db, { actorUid: memberId, type: "joinedTeam", refId: teamId, data });
+    } else {
+      await feedStore.removeActivity(db, feed.activityId(memberId, "joinedTeam", teamId));
+    }
+  } catch (err) { feedLog("member")(err); }
+});
+
+// Collected a trading card. Shown only to friends with card access
+// (decision 8); child public cards can appear.
+export const feedOnCardCollected = onDocumentCreated("cardCollections/{id}", async (event) => {
+  const c = event.data?.data();
+  if (!c?.collectorUid || !c?.ownerId) return;
+  const db = getFirestore();
+  try {
+    const data = await feedStore.cardOwnerData(db, c.ownerId, c.ownerKind);
+    if (data) await feedStore.postActivity(db, { actorUid: c.collectorUid, type: "cardCollected", refId: c.ownerId, data });
+  } catch (err) { feedLog("card")(err); }
+});
+
+// New friendship: each side gets the other's last 30 days. Unfriend: each
+// side's cards leave the other's feed.
+export const feedOnFriendshipWritten = onDocumentWritten("friendRequests/{requestId}", async (event) => {
+  const before = event.data?.before?.exists ? event.data.before.data() : null;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  const change = feed.friendshipTransition(before, after);
+  if (!change) return;
+  const { fromUid, toUid } = after || before;
+  if (!fromUid || !toUid || fromUid === toUid) return;
+  const db = getFirestore();
+  try {
+    if (change === "added") {
+      await feedStore.copyRecentInto(db, fromUid, toUid);
+      await feedStore.copyRecentInto(db, toUid, fromUid);
+    } else {
+      await feedStore.removeActorFrom(db, toUid, fromUid);
+      await feedStore.removeActorFrom(db, fromUid, toUid);
+    }
+  } catch (err) { feedLog("friendship")(err); }
+});
+
+// A player's reaction (rules already checked they can see the card) is
+// folded into activity.reactions so one doc read gives counts + who.
+export const feedOnReactionWritten = onDocumentWritten("activity/{activityId}/reactions/{uid}", async (event) => {
+  const { activityId, uid } = event.params;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  const kind = after && feed.isReactionKind(after.kind) ? after.kind : null;
+  try {
+    await getFirestore().collection("activity").doc(activityId).update({
+      [`reactions.${uid}`]: kind || FieldValue.delete(),
+    });
+  } catch (err) {
+    if (err?.code !== 5) feedLog("reaction")(err); // 5 = activity already removed
+  }
+});
+
+// Daily: activity older than the 30-day window leaves every feed.
+export const pruneFeedActivity = onSchedule({ schedule: "every day 04:17", timeZone: "America/Detroit" }, async () => {
+  const db = getFirestore();
+  const cutoff = new Date(Date.now() - feed.FEED_WINDOW_MS);
+  for (let round = 0; round < 10; round++) {
+    const snap = await db.collection("activity").where("createdAt", "<", cutoff).limit(100).get();
+    if (snap.empty) return;
+    for (const d of snap.docs) await feedStore.removeActivity(db, d.id).catch(feedLog("prune"));
+  }
 });
