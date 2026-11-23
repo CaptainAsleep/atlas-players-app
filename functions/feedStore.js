@@ -164,10 +164,17 @@ export async function removeActorFrom(db, ownerUid, actorUid) {
 }
 
 // Event/field/team/card display lookups.
+// Test organizer events (testEvent, 2026-11-23) never appear in the feed.
+export async function isTestEvent(db, eventId) {
+  const ev = await db.collection("events").doc(eventId).get();
+  return ev.exists && ev.data().testEvent === true;
+}
+
 export async function eventData(db, eventId) {
   const ev = await db.collection("events").doc(eventId).get();
   if (!ev.exists) return null;
   const e = ev.data();
+  if (e.testEvent === true) return null;
   const f = e.fieldId ? await db.collection("fields").doc(e.fieldId).get() : null;
   return feed.eventDisplay(eventId, e, f?.exists ? f.data() : {});
 }

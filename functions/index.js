@@ -6355,7 +6355,7 @@ export const feedOnBookingWritten = onDocumentWritten("users/{uid}/bookings/{eve
   const db = getFirestore();
   try {
     await feedStore.removeTypes(db, uid, remove, eventId);
-    if (post) {
+    if (post && !(await feedStore.isTestEvent(db, eventId))) {
       const data = (await feedStore.eventData(db, eventId)) || feed.eventDisplayFromBooking(eventId, after || {});
       await feedStore.postActivity(db, { actorUid: uid, type: post, refId: eventId, data });
     }

@@ -409,6 +409,9 @@ service cloud.firestore {
           && request.resource.data.get('fieldId', null) == null
           // Fee model is chosen per event (2026-11-23); unset = absorb.
           && request.resource.data.get('feeModel', 'absorb') in ['absorb', 'pass_to_player']
+          // Test organizers (2026-11-23): every event a test account creates
+          // is marked testEvent (hidden from players), and only those are.
+          && request.resource.data.get('testEvent', false) == get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.get('testAccount', false)
           // Needs an owners/{uid} account (field owner or organizer), so a
           // player-only account can't publish public events straight to
           // Firestore. Payments would already fail without one.
@@ -476,7 +479,8 @@ service cloud.firestore {
           // they paid under.
           && request.resource.data.get('feeModel', 'absorb') in ['absorb', 'pass_to_player']
           && (request.resource.data.get('feeModel', null) == resource.data.get('feeModel', null)
-              || resource.data.get('bookedCount', 0) == 0))
+              || resource.data.get('bookedCount', 0) == 0)
+          && request.resource.data.get('testEvent', false) == resource.data.get('testEvent', false))
       );
 
       // Real bookings — public read, same openness as team rosters, so a
@@ -600,7 +604,10 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == ownerId
         && !request.resource.data.keys().hasAny([
           "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
-          "connectOnboardingComplete", "feeModel", "claimedFieldCount"
+          "connectOnboardingComplete", "feeModel", "claimedFieldCount",
+          // Test organizer flag (2026-11-23): set only by an admin script
+          // (Admin SDK). It hides the account's events from players.
+          "testAccount"
         ]);
       // Still client-deletable: the owner app's deleteAccount() removes this
       // doc itself. Known leftover: delete + recreate lets an owner pick
@@ -617,7 +624,7 @@ service cloud.firestore {
         (request.auth.uid == ownerId
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             "stripeConnectAccountId", "payoutsEnabled", "chargesEnabled",
-            "connectOnboardingComplete"
+            "connectOnboardingComplete", "testAccount"
           ])
           // claimedFieldCount is a denormalized counter (no cap enforced on
           // it anymore, but still kept honest for admin-portal visibility)

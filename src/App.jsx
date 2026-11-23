@@ -46,6 +46,7 @@ import { AppearanceScreen, SkinPreviewChrome, SkinPurchaseSheet, SkinAddonPanel,
 import SkinTexture, { SkinHeaderBand } from "./SkinTexture";
 import { useOwnedSkins, saveAppearance, setSkinDropAlerts, markAnnouncementSeen } from "./hooks/useSkins";
 import { lookName, isPaidSkin } from "./skins";
+import { isTestViewer } from "./testViewers";
 
 /* ---------- design tokens ---------- */
 // Theme-aware now — see src/theme.js (LIGHT_T/DARK_T) and
@@ -10527,11 +10528,18 @@ function AppShell() {
   const { events: allEvents, loading: eventsLoading } = useEvents();
   // Delisted fields (status "delisted", 2026-11-16): their events stay in
   // Firestore but are dropped here so they never surface anywhere in the app.
-  const events = useMemo(() => {
+  const listedEvents = useMemo(() => {
     const delisted = new Set(fields.filter((f) => f.status === "delisted").map((f) => f.id));
     return delisted.size ? allEvents.filter((e) => !delisted.has(e.fieldId)) : allEvents;
   }, [allEvents, fields]);
   const { user, profile, authLoading, signUp, signIn, signInWithGoogle, sendPasswordReset, signOut, updateProfileFields, changePassword, uploadAvatar, setCardCrop, updateLanguage, deleteAccount, acceptTerms, completeOnboarding, sendVerificationEmail, syncEmailVerification } = useAuth();
+  // Test organizer events (2026-11-23) only exist for TEST_VIEWER_UIDS. Every
+  // list, search, map and detail view reads this one list, so they vanish
+  // everywhere for everyone else.
+  const events = useMemo(
+    () => (isTestViewer(user?.uid) ? listedEvents : listedEvents.filter((e) => e.testEvent !== true)),
+    [listedEvents, user?.uid]
+  );
   const { favorites, favoritesLoading, isFavorited, toggleFavorite } = useFavorites(user?.uid, profile);
   const { dependents, graduatedDependents, dependentsLoading, addDependent, updateDependent, deleteDependent } = useDependents(user?.uid);
   const childGraduations = useChildGraduations(user?.uid);
