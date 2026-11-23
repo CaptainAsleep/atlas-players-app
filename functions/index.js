@@ -373,6 +373,14 @@ function computeStandardFee(entryPriceCents, uncapped = false) {
 // minimumAge). Both flags are required, and isMajor is only ever read from
 // the stored event doc — never from a request — and is locked after create
 // by firestore.rules.
+// Organizer (Major) events choose their fee model per event (2026-11-23):
+// "pass_to_player" adds the fee at checkout; anything else, including no
+// choice saved, absorbs it from the organizer's payout. Always read from
+// the stored event doc, never from a request.
+function majorPassesFee(eventData) {
+  return eventData?.feeModel === "pass_to_player";
+}
+
 function isMajorEvent(eventData) {
   return eventData?.isMajor === true && !!eventData?.hostOwnerId;
 }
@@ -806,10 +814,10 @@ export const createBookingCheckout = onCall(
         throw err;
       }
     }
-    // Major events: the fee is never passed to the player, whatever (or
-    // whether) the host's owners doc says — a host with no field never
-    // picks a fee model, and the unset default would be pass-to-player.
-    const passFeeToPlayer = isMajor ? false : ownerData.feeModel !== "absorb";
+    // Major events: the organizer picks per event (event.feeModel, locked by
+    // firestore.rules once the event has a booking). An event with no
+    // choice saved absorbs, as every Major did before 2026-11-23.
+    const passFeeToPlayer = isMajor ? majorPassesFee(eventData) : ownerData.feeModel !== "absorb";
     // Only the entry line item's own price carries the fee (exactly as
     // before) — a rental's cost is a real, hard cost, never something an
     // owner "absorbs" the way Atlas's own fee can be. Each rental gets its
@@ -1306,7 +1314,7 @@ export const cancelEventWithVouchers = onCall(
     // an owner picks it, so the current value is safe to use even for a
     // booking made earlier under the same owner.
     const ownerSnap = ownerId ? await db.collection("owners").doc(ownerId).get() : null;
-    const passFeeToPlayer = isMajor ? false : (ownerSnap?.data()?.feeModel) !== "absorb";
+    const passFeeToPlayer = isMajor ? majorPassesFee(eventData) : (ownerSnap?.data()?.feeModel) !== "absorb";
 
     if (eventData.canceled) {
       // Already canceled — nothing new to do, but don't error the owner
@@ -1593,7 +1601,7 @@ export const grantVoucherToPlayer = onCall(
     }
 
     const ownerSnap = ownerId ? await db.collection("owners").doc(ownerId).get() : null;
-    const passFeeToPlayer = isMajor ? false : (ownerSnap?.data()?.feeModel) !== "absorb";
+    const passFeeToPlayer = isMajor ? majorPassesFee(eventData) : (ownerSnap?.data()?.feeModel) !== "absorb";
     const savedExpirationDays = ownerSnap?.data()?.voucherExpirationDays;
     const expirationDays = Number.isInteger(savedExpirationDays) && savedExpirationDays >= 1 && savedExpirationDays <= 3650
       ? savedExpirationDays
