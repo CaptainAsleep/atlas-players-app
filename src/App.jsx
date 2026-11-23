@@ -1571,6 +1571,7 @@ function HomeScreen({
     { key: "MilSim", icon: ChevronsUp, type: "MILSIM" },
     { key: "Indoor", icon: Home, type: "INDOOR", fieldProp: "indoor" },
     { key: "Tournament", icon: Trophy, type: "TOURNAMENT" },
+    { key: "Major", icon: Flag, type: "MAJOR" },
   ];
 
   let filteredEvents = events.filter((ev) => {
@@ -2379,8 +2380,39 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   const selectionGroups = (Array.isArray(ev.selectionGroups) ? ev.selectionGroups : [])
     .filter((g) => g && g.id && Array.isArray(g.choices) && g.choices.length > 0);
   const [groupPicks, setGroupPicks] = useState({}); // { groupId: choiceId }
-  const groupPicksCents = selectionGroups.reduce((sum, g) => sum + (g.choices.find((c) => c.id === groupPicks[g.id])?.priceCents || 0), 0);
-  const missingGroup = selectionGroups.find((g) => g.required && !g.choices.some((c) => c.id === groupPicks[g.id])) || null;
+  // Teams & Roles (2026-11-23): a group with showIf (a team's roles) only
+  // applies once that team is picked. Inactive groups are hidden, never
+  // required, and their picks are never sent (the server refuses them).
+  const groupIsActive = (g, picks = groupPicks) => !g.showIf || !g.showIf.groupId || !g.showIf.choiceId || picks[g.showIf.groupId] === g.showIf.choiceId;
+  const activeGroups = selectionGroups.filter((g) => groupIsActive(g));
+  const pruneInactivePicks = (picks) => {
+    const next = { ...picks };
+    selectionGroups.forEach((g) => { if (!groupIsActive(g, next)) delete next[g.id]; });
+    return next;
+  };
+  const sentGroupPicks = pruneInactivePicks(groupPicks);
+  const groupPicksCents = activeGroups.reduce((sum, g) => sum + (g.choices.find((c) => c.id === groupPicks[g.id])?.priceCents || 0), 0);
+  const missingGroup = activeGroups.find((g) => g.required && !g.choices.some((c) => c.id === groupPicks[g.id])) || null;
+  const groupTitle = (g) => {
+    if (g.kind === "team") return "Choose your team";
+    if (g.kind === "role") {
+      const tg = selectionGroups.find((x) => x.id === g.showIf?.groupId);
+      const team = tg?.choices.find((c) => c.id === g.showIf?.choiceId);
+      return team ? `Choose your role · ${team.label}` : "Choose your role";
+    }
+    return g.label;
+  };
+  // A required team group with a single team is picked for the player.
+  useEffect(() => {
+    const solo = selectionGroups.filter((g) => g.kind === "team" && g.required && g.choices.length === 1 && !groupPicks[g.id]);
+    if (solo.length === 0) return;
+    setGroupPicks((prev) => {
+      const next = { ...prev };
+      solo.forEach((g) => { next[g.id] = g.choices[0].id; });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ev.id, selectionGroups.length]);
   const entryPriceCents = basePriceCents + (selectedChoice?.priceCents || 0) + groupPicksCents;
   const choiceMissing = (!!priceOptions?.required && !selectedChoice) || !!missingGroup;
   // Booking-bar price label. basePriceCents/entryPriceCents already treat
@@ -2650,7 +2682,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalPicks, attendeeDependentIds, groupPicks, guardianPlaying, skinAddonOn ? skinPickRequest(skinPick) : null);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalPicks, attendeeDependentIds, sentGroupPicks, guardianPlaying, skinAddonOn ? skinPickRequest(skinPick) : null);
         // Two-tap checkout (2026-10-14). This used to pre-open a blank tab
         // at tap time and point it at Stripe once the URL came back. On
         // some phones, opening that tab backgrounded Atlas and paused it
@@ -2664,7 +2696,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
-        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds, groupPicks, guardianPlaying);
+        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds, sentGroupPicks, guardianPlaying);
         setBookingBusy(false);
       }
     } catch (err) {
@@ -2710,7 +2742,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     setBookingError("");
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
-      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds, groupPicks, guardianPlaying);
+      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds, sentGroupPicks, guardianPlaying);
       setBookingBusy(false);
     } catch (err) {
       console.error("voucher redemption failed:", err.code || err.message || err);
@@ -3003,9 +3035,9 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </button>
           )}
 
-          {selectionGroups.length > 0 && !myBooking && !bookingClosed && !ev.canceled && selectionGroups.map((g) => (
+          {activeGroups.length > 0 && !myBooking && !bookingClosed && !ev.canceled && activeGroups.map((g) => (
             <div key={g.id} className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, outline: missingGroup?.id === g.id ? `1.5px solid ${T.accent}` : "none", outlineOffset: -1 }}>
-              <Eyebrow>{g.label}{g.required ? "" : " (optional)"}</Eyebrow>
+              <Eyebrow>{groupTitle(g)}{g.required ? "" : " (optional)"}</Eyebrow>
               <div className="flex flex-wrap gap-2">
                 {g.choices.map((c) => {
                   const picked = groupPicks[g.id] === c.id;
@@ -3019,7 +3051,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
                       onClick={() => setGroupPicks((prev) => {
                         const next = { ...prev };
                         if (picked) { if (!g.required) delete next[g.id]; } else { next[g.id] = c.id; }
-                        return next;
+                        return pruneInactivePicks(next);
                       })}
                       className="px-3 py-2 text-[12px] font-semibold"
                       style={{ ...body, color: picked ? T.inverse : T.ashDim, background: picked ? T.cta : T.panelAlt, borderRadius: 999, opacity: unavailable ? 0.45 : 1 }}

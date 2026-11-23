@@ -8,7 +8,9 @@
 //  - GROUPED (organizer / Major events): `selectionGroups`, any number of
 //    groups { id, label, required, choices: [{ id, label, priceCents,
 //    capacity|null }] } — team, role, attendee type, class, etc. One
-//    choice per group, for the whole party.
+//    choice per group, for the whole party. Optional per group:
+//    `kind` ("team" | "role" | "question", editor-only) and
+//    `showIf: { groupId, choiceId }` (see groupIsActive).
 //
 // Errors are SelectionError (with a Firebase-style `code`); index.js maps
 // them onto HttpsError so this file never needs firebase-functions.
@@ -52,6 +54,16 @@ function resolveLegacy(eventData, selectedChoiceId) {
   return { entryPriceCents: basePriceCents + (selectedChoice?.priceCents || 0), selectedChoice, selections: [], grouped: false };
 }
 
+// Optional dependency (2026-11-23, Teams & Roles): a group with
+// `showIf: { groupId, choiceId }` is active only when that choice is
+// picked. Groups without showIf are always active (every older event).
+export function groupIsActive(group, picks) {
+  const cond = group?.showIf;
+  if (!cond || typeof cond !== "object" || !cond.groupId || !cond.choiceId) return true;
+  const chosen = picks && typeof picks === "object" && !Array.isArray(picks) ? picks : {};
+  return chosen[cond.groupId] === cond.choiceId;
+}
+
 // `picks` is the client's { groupId: choiceId } map. Only ids are trusted;
 // labels and prices come from the stored event.
 function resolveGrouped(eventData, groups, picks) {
@@ -61,10 +73,26 @@ function resolveGrouped(eventData, groups, picks) {
       throw new SelectionError("invalid-argument", "That option isn't available for this event anymore.");
     }
   }
+  // A pick for a group whose showIf isn't met (another team's role) is
+  // refused up front, before any "choose a ..." message.
+  for (const g of groups) {
+    const v = chosen[g.id];
+    if (!(v === undefined || v === null || v === "") && !groupIsActive(g, chosen)) {
+      throw new SelectionError("invalid-argument", "That option isn't available for this event anymore.");
+    }
+  }
   const selections = [];
   for (const g of groups) {
     const cid = chosen[g.id];
-    if (cid === undefined || cid === null || cid === "") {
+    const empty = cid === undefined || cid === null || cid === "";
+    // A group with showIf (a team's roles) only applies once its condition
+    // is picked: then it follows `required`; otherwise it's skipped and a
+    // pick sent for it is refused.
+    if (!groupIsActive(g, chosen)) {
+      if (!empty) throw new SelectionError("invalid-argument", "That option isn't available for this event anymore.");
+      continue;
+    }
+    if (empty) {
       if (g.required) throw new SelectionError("invalid-argument", `Choose a valid ${g.label || "option"} before booking.`);
       continue;
     }

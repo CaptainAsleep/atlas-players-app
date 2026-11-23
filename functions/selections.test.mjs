@@ -148,3 +148,69 @@ test("metadata round-trip: ids -> snapshot, unknown ids dropped", () => {
   assert.deepEqual(snapshotSelections(wombats, [{ g: "team", c: "gone" }, { g: "nope", c: "g" }, null]), []);
   assert.deepEqual(snapshotSelections(wombats, undefined), []);
 });
+
+// --- Teams & Roles (showIf), 2026-11-23 -----------------------------------
+const teamsRoles = {
+  price: "$50",
+  selectionGroups: [
+    { id: "team", kind: "team", label: "Team", required: true, choices: [
+      { id: "green", label: "Green Team", priceCents: 0, capacity: null },
+      { id: "tan", label: "Tan Team", priceCents: 0, capacity: null },
+    ] },
+    { id: "role_green", kind: "role", label: "Role", required: true, showIf: { groupId: "team", choiceId: "green" }, choices: [
+      { id: "green__rifle", label: "Rifleman", priceCents: 0, capacity: 2 },
+      { id: "green__sniper", label: "Sniper", priceCents: 1000, capacity: 1 },
+    ] },
+    { id: "role_tan", kind: "role", label: "Role", required: true, showIf: { groupId: "team", choiceId: "tan" }, choices: [
+      { id: "tan__rifle", label: "Rifleman", priceCents: 0, capacity: 2 },
+      { id: "tan__sniper", label: "Sniper", priceCents: 1000, capacity: 1 },
+    ] },
+    { id: "q_type", kind: "question", label: "Attendee type", required: false, choices: [
+      { id: "player", label: "Player", priceCents: 0, capacity: null },
+      { id: "media", label: "Media", priceCents: 0, capacity: 3 },
+    ] },
+  ],
+};
+
+test("showIf: team + that team's role books; other team's roles not required", () => {
+  const r = resolveSelections(teamsRoles, { selections: { team: "green", role_green: "green__sniper" } });
+  assert.equal(r.entryPriceCents, 6000);
+  assert.deepEqual(r.selections.map((s) => s.choiceLabel), ["Green Team", "Sniper"]);
+});
+
+test("showIf: role from the other team is rejected", () => {
+  assert.throws(() => resolveSelections(teamsRoles, { selections: { team: "green", role_tan: "tan__rifle" } }), /isn't available/);
+  assert.throws(() => resolveSelections(teamsRoles, { selections: { team: "green", role_green: "green__rifle", role_tan: "tan__rifle" } }), /isn't available/);
+});
+
+test("showIf: active role group is required; team is required", () => {
+  assert.throws(() => resolveSelections(teamsRoles, { selections: { team: "tan" } }), /Choose a valid Role/);
+  assert.throws(() => resolveSelections(teamsRoles, { selections: { role_green: "green__rifle" } }), /isn't available/);
+  assert.throws(() => resolveSelections(teamsRoles, {}), /Choose a valid Team/);
+});
+
+test("showIf: optional question works alongside; team with no roles books", () => {
+  const r = resolveSelections(teamsRoles, { selections: { team: "tan", role_tan: "tan__rifle", q_type: "media" } });
+  assert.equal(r.selections.length, 3);
+  const noRoles = { price: "$10", selectionGroups: [teamsRoles.selectionGroups[0]] };
+  assert.equal(resolveSelections(noRoles, { selections: { team: "tan" } }).selections.length, 1);
+});
+
+test("showIf: spots count per team", () => {
+  const r = resolveSelections(teamsRoles, { selections: { team: "green", role_green: "green__sniper" } });
+  const bookings = [{ selections: [{ groupId: "role_green", choiceId: "green__sniper" }] }];
+  assert.throws(() => assertCapacity(teamsRoles, r, bookings, 1), /Sniper is full/);
+  const rt = resolveSelections(teamsRoles, { selections: { team: "tan", role_tan: "tan__sniper" } });
+  assert.doesNotThrow(() => assertCapacity(teamsRoles, rt, bookings, 1));
+});
+
+test("showIf: malformed condition is ignored (group always active)", () => {
+  const ev = { price: "$5", selectionGroups: [{ id: "g", label: "G", required: true, showIf: { groupId: "" }, choices: [{ id: "a", label: "A" }] }] };
+  assert.throws(() => resolveSelections(ev, {}), /Choose a valid G/);
+  assert.equal(resolveSelections(ev, { selections: { g: "a" } }).selections.length, 1);
+});
+
+test("showIf: metadata round-trip keeps team + role", () => {
+  const r = resolveSelections(teamsRoles, { selections: { team: "tan", role_tan: "tan__rifle" } });
+  assert.deepEqual(snapshotSelections(teamsRoles, selectionPairs(r.selections)), r.selections);
+});
