@@ -7,6 +7,7 @@ import Stripe from "stripe";
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as feedback from "./feedback.js";
+import * as emptyTeam from "./emptyTeam.js";
 import * as cards from "./cards.js";
 import * as presets from "./accountPresets.js";
 import * as feed from "./feed.js";
@@ -3653,6 +3654,24 @@ export const sendFeedbackDigest = onSchedule(
     await feedbackSender()({ to: feedback.FEEDBACK_ALERT_TO, ...digest });
   }
 );
+
+// Empty-team cleanup (2026-11-23). Public (no sign-in), same as feedback:
+// the token from the email is the credential. Logic lives in emptyTeam.js.
+export const getEmptyTeamOffer = onCall({ invoker: "public" }, async (request) => {
+  const ctx = await emptyTeam.getContext(getFirestore(), request.data?.token);
+  if (!ctx) throw new HttpsError("not-found", "This link isn't valid.");
+  return ctx;
+});
+
+export const resolveEmptyTeam = onCall({ invoker: "public" }, async (request) => {
+  try {
+    return await emptyTeam.resolve(getFirestore(), getStorage(), request.data?.token, request.data?.action);
+  } catch (err) {
+    if (err instanceof emptyTeam.EmptyTeamError) throw new HttpsError(err.code, err.message);
+    console.error("resolveEmptyTeam:", err);
+    throw new HttpsError("internal", "Something went wrong. Reply to the email and we'll sort it out.");
+  }
+});
 
 // Public (no sign-in): the feedback page trades its link token for the
 // event context. The token itself is the credential.
