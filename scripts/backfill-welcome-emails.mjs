@@ -37,7 +37,7 @@ initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const FROM = "Michael @ Atlas <welcome@airsoftatlas.app>";
+const FROM = "Airsoft Atlas <welcome@airsoftatlas.app>";
 
 function parseAlsoArg() {
   const arg = process.argv.find((a) => a.startsWith("--also="));

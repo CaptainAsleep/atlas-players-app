@@ -30,19 +30,19 @@ const resendApiKey = defineSecret("RESEND_API_KEY");
 // Every Atlas email (player-facing and field-owner-facing) is signed as
 // Michael personally, not "The Atlas team" — same sender identity used
 // everywhere across this pipeline.
-const ATLAS_EMAIL_FROM = "Michael @ Atlas <welcome@airsoftatlas.app>";
+const ATLAS_EMAIL_FROM = "Airsoft Atlas <welcome@airsoftatlas.app>";
 
 // Booking confirmations use their own address (per Michael, Sep 2026) —
-// same "Michael @ Atlas" signature, same verified airsoftatlas.app
+// same "Airsoft Atlas" signature, same verified airsoftatlas.app
 // domain (Resend verifies per-domain, so no separate DNS/Resend setup
 // is needed for a new local part on an already-verified domain), just a
 // distinct From so booking receipts are visually distinguishable from
 // the welcome emails in a player's inbox.
-const BOOKING_EMAIL_FROM = "Michael @ Atlas <bookingconfirmation@airsoftatlas.app>";
+const BOOKING_EMAIL_FROM = "Airsoft Atlas <bookingconfirmation@airsoftatlas.app>";
 
 // Team-officer emails send from their own address (teams@, already covered
 // by the verified airsoftatlas.app domain — no new Resend/DNS setup).
-const TEAM_EMAIL_FROM = "Atlas Teams <teams@airsoftatlas.app>";
+const TEAM_EMAIL_FROM = "Airsoft Atlas <teams@airsoftatlas.app>";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatesDir = path.join(__dirname, "templates");
@@ -2550,7 +2550,7 @@ export const verifyWebsiteClaim = onCall(
 // pending code live in the field's PRIVATE subcollection (the field doc
 // itself is world-readable); the field doc only carries the public flag
 // emailClaimEnabled so the owner app knows to offer this route.
-const CLAIM_EMAIL_FROM = "Atlas <hello@airsoftatlas.app>";
+const CLAIM_EMAIL_FROM = "Airsoft Atlas <hello@airsoftatlas.app>";
 const EMAIL_CLAIM_TTL_MS = 15 * 60 * 1000;
 const EMAIL_CLAIM_RESEND_COOLDOWN_MS = 60 * 1000;
 const EMAIL_CLAIM_MAX_ATTEMPTS = 5;
@@ -4027,7 +4027,7 @@ export const acceptStaffInvites = onCall(
 // per minute per account (server-only emailSends doc, same pattern as the
 // verification resend above).
 const PLAYER_FEEDBACK_TO = "Michael@airsoftatlas.app";
-const PLAYER_FEEDBACK_FROM = "Atlas Feedback <feedback@airsoftatlas.app>";
+const PLAYER_FEEDBACK_FROM = "Airsoft Atlas <feedback@airsoftatlas.app>";
 const PLAYER_FEEDBACK_COOLDOWN_MS = 60 * 1000;
 const PLAYER_FEEDBACK_MAX_TITLE = 120;
 const PLAYER_FEEDBACK_MAX_MESSAGE = 5000;

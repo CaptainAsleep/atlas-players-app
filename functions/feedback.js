@@ -26,7 +26,7 @@ const ownerTemplate = readFileSync(path.join(__dirname, "templates", "feedback-r
 
 export const FEEDBACK_ADMIN_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1"; // same as ADMIN_UID in index.js
 export const FEEDBACK_ALERT_TO = "Michael@airsoftatlas.app";
-export const FEEDBACK_EMAIL_FROM = "Michael @ Atlas <feedback@airsoftatlas.app>";
+export const FEEDBACK_EMAIL_FROM = "Airsoft Atlas <feedback@airsoftatlas.app>";
 export const FEEDBACK_PAGE_URL = "https://airsoftatlas.app/feedback.html";
 // Nothing before the first event this shipped for is ever emailed, so the
 // first deploy can't blast feedback requests for old events.
