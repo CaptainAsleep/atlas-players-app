@@ -143,6 +143,10 @@ const stripeConnectWebhookSecret = defineSecret("STRIPE_CONNECT_WEBHOOK_SECRET")
 // behalf), then returns a Stripe-hosted onboarding link where they enter
 // their own bank details directly with Stripe — this app's code never
 // sees that information, same principle as the subscription checkout.
+// Stripe Connect onboarding return/refresh origins, one per app.
+const OWNER_APP_ORIGIN = "https://ownerapp.airsoftatlas.app";
+const MAJOR_APP_ORIGIN = "https://majorapp.airsoftatlas.app";
+
 export const createConnectOnboardingLink = onCall(
   { secrets: [stripeSecretKey], invoker: "public" },
   async (request) => {
@@ -171,7 +175,9 @@ export const createConnectOnboardingLink = onCall(
 
     // Account Links expire quickly and are single-use by design — always
     // generate a fresh one rather than trying to cache or reuse one.
-    const appOrigin = "https://ownerapp.airsoftatlas.app";
+    // Which app sent the owner here decides where Stripe sends them back.
+    // Only these two origins are ever used; a URL is never taken from the client.
+    const appOrigin = request.data?.app === "major" ? MAJOR_APP_ORIGIN : OWNER_APP_ORIGIN;
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${appOrigin}/?connect=refresh`,
@@ -2728,13 +2734,14 @@ const PW_RESET_PAGE = "https://airsoftatlas.app/reset-password.html";
 const PW_RESET_CONTINUE = {
   player: "https://playerapp.airsoftatlas.app/",
   owner: "https://ownerapp.airsoftatlas.app/",
+  major: "https://majorapp.airsoftatlas.app/",
 };
 
 export const sendPasswordReset = onCall(
   { invoker: "public", secrets: [resendApiKey] },
   async (request) => {
     const email = String(request.data?.email || "").trim().toLowerCase();
-    const app = request.data?.app === "owner" ? "owner" : "player";
+    const app = request.data?.app === "owner" ? "owner" : request.data?.app === "major" ? "major" : "player";
     if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new HttpsError("invalid-argument", "That doesn't look like a valid email address.");
     }
@@ -2832,6 +2839,8 @@ export const sendPasswordReset = onCall(
 // minute per account (server-only emailSends doc — no client rule matches).
 const OWNER_CLAIM_VERIFY_COOLDOWN_MS = 60 * 1000;
 const OWNER_APP_URL = "https://ownerapp.airsoftatlas.app/";
+// Atlas Major (organizer app, forked from the owners app 2026-11-23).
+const MAJOR_APP_URL = "https://majorapp.airsoftatlas.app/";
 
 export const sendOwnerClaimVerification = onCall(
   { invoker: "public", secrets: [resendApiKey] },
@@ -3427,7 +3436,7 @@ export const sendOrganizerWelcomeEmail = onDocumentWritten(
 
     const html = fillTemplate(organizerWelcomeTemplate, {
       "[NAME]": escapeHtml(after.name || "there"),
-      "[APP LINK]": OWNER_APP_URL,
+      "[APP LINK]": MAJOR_APP_URL,
     });
 
     try {
