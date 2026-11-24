@@ -408,7 +408,7 @@ service cloud.firestore {
           && request.resource.data.get('hostOwnerId', null) == request.auth.uid
           && request.resource.data.get('fieldId', null) == null
           // Fee model is chosen per event (2026-11-23); unset = absorb.
-          && request.resource.data.get('feeModel', 'absorb') in ['absorb', 'pass_to_player']
+          && request.resource.data.get('feeModel', 'absorb') in ['absorb', 'pass_to_player', 'split_processing']
           // Test organizers (2026-11-23): every event a test account creates
           // is marked testEvent (hidden from players), and only those are.
           && request.resource.data.get('testEvent', false) == get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.get('testAccount', false)
@@ -477,7 +477,7 @@ service cloud.firestore {
           // locked once the event has a booking (bookedCount is
           // server-maintained), so players who already paid keep the terms
           // they paid under.
-          && request.resource.data.get('feeModel', 'absorb') in ['absorb', 'pass_to_player']
+          && request.resource.data.get('feeModel', 'absorb') in ['absorb', 'pass_to_player', 'split_processing']
           && (request.resource.data.get('feeModel', null) == resource.data.get('feeModel', null)
               || resource.data.get('bookedCount', 0) == 0)
           && request.resource.data.get('testEvent', false) == resource.data.get('testEvent', false))

@@ -19,6 +19,7 @@ import { Resend } from "resend";
 import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { getStorage } from "firebase-admin/storage";
 import { SelectionError, resolveSelections, normalizeSelectionGroups, assertCapacity, snapshotSelections, selectionPairs } from "./selections.js";
+import { passedFeeCents as computePassedFeeCents } from "./fees.js";
 import { SkinError, normalizeSkinRequest, resolveSkinPurchase, skinKeyPart, skinMetadata, parseSkinMetadata, readSkinGrantState, writeSkinGrant } from "./skins.js";
 
 initializeApp();
@@ -380,6 +381,14 @@ function computeStandardFee(entryPriceCents, uncapped = false) {
 // the stored event doc, never from a request.
 function majorPassesFee(eventData) {
   return eventData?.feeModel === "pass_to_player";
+}
+
+// 2026-11-24: Majors may also choose "split_processing" (organizer absorbs
+// Atlas's platform part, player pays the card processing estimate; see
+// fees.js). Anything unknown or unset absorbs, as before.
+function majorFeeModel(eventData) {
+  const m = eventData?.feeModel;
+  return m === "pass_to_player" || m === "split_processing" ? m : "absorb";
 }
 
 function isMajorEvent(eventData) {
@@ -819,6 +828,13 @@ export const createBookingCheckout = onCall(
     // firestore.rules once the event has a booking). An event with no
     // choice saved absorbs, as every Major did before 2026-11-23.
     const passFeeToPlayer = isMajor ? majorPassesFee(eventData) : ownerData.feeModel !== "absorb";
+    // Split (Majors only): ticket lines stay at the plain price and the
+    // player's share (card processing) is its own line item. Pass and
+    // absorb build exactly the same line items as before.
+    const splitFee = isMajor && majorFeeModel(eventData) === "split_processing";
+    const splitPassedCents = splitFee
+      ? computePassedFeeCents({ model: "split_processing", entryPriceCents, chargeableCents, attendeeCount, uncapped: true, bookingFeeCents })
+      : 0;
     // Only the entry line item's own price carries the fee (exactly as
     // before) — a rental's cost is a real, hard cost, never something an
     // owner "absorbs" the way Atlas's own fee can be. Each rental gets its
@@ -885,6 +901,10 @@ export const createBookingCheckout = onCall(
           price_data: { currency: "usd", product_data: { name: li.name }, unit_amount: li.unitCents },
           quantity: 1,
         })) : []),
+        ...(splitPassedCents > 0 ? [{
+          price_data: { currency: "usd", product_data: { name: "Card payment processing", description: "Covers card payment processing for your tickets." }, unit_amount: splitPassedCents },
+          quantity: 1,
+        }] : []),
       ],
       payment_intent_data: {
         application_fee_amount: bookingFeeCents + (skinPriced ? skinPriced.totalCents : 0),
@@ -901,7 +921,9 @@ export const createBookingCheckout = onCall(
         // on a mismatch. attendeeCount / attendeeDependentIds appear only
         // for a party (ids only — Stripe caps metadata values at 500
         // chars; the webhook re-reads each profile itself).
-        passFeeToPlayer: passFeeToPlayer ? "true" : "false",
+        // "split" = the player paid passedFeeCents (card processing only).
+        passFeeToPlayer: splitFee ? "split" : passFeeToPlayer ? "true" : "false",
+        ...(splitFee ? { passedFeeCents: String(splitPassedCents) } : {}),
         // Sent whenever children are on the booking (a 1-child child-only
         // booking has attendeeCount 1 but still needs the id).
         ...(attendees.dependents.length > 0 ? { attendeeCount: String(attendeeCount), attendeeDependentIds: JSON.stringify(attendees.dependents.map((d) => d.id)) } : {}),
@@ -2186,7 +2208,7 @@ export const stripeWebhook = onRequest(
           }
           // Only booking-fee checkouts carry this metadata shape.
           if (session.mode === "payment" && session.metadata?.eventId) {
-            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, priceTier, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta, guardianPlaying: guardianPlayingMeta } = session.metadata;
+            const { firebaseUid: uid, eventId, fieldId, bookingFeeCents, entryPriceCents, priceTier, selectedChoiceLabel, selectedChoicePriceCents, walkOnNearField, selectedRentals, selections: selectionsMeta, attendeeDependentIds: attendeeIdsMeta, passFeeToPlayer: passFeeMeta, passedFeeCents: passedFeeMeta, guardianPlaying: guardianPlayingMeta } = session.metadata;
             // Written by createBookingCheckout as a JSON string (Stripe
             // metadata values are strings only) — parsed back out here the
             // same defensive way selectedChoiceLabel/Cents are trusted:
@@ -2230,7 +2252,7 @@ export const stripeWebhook = onRequest(
               const expectedTotal =
                 bookedAttendeeCount * Number(entryPriceCents || 0) +
                 parsedRentals.reduce((sum, r) => sum + (typeof r.priceCents === "number" ? r.priceCents * qtyOf(r) : 0), 0) +
-                (passFeeMeta === "true" ? Number(bookingFeeCents || 0) : 0) +
+                (passFeeMeta === "true" ? Number(bookingFeeCents || 0) : passFeeMeta === "split" ? Number(passedFeeMeta || 0) : 0) +
                 skinMeta.skinCents;
               if (expectedTotal !== session.amount_total) {
                 console.error(`stripeWebhook: amount mismatch for session ${session.id} (uid ${uid}, event ${eventId}) — expected ${expectedTotal}, Stripe charged ${session.amount_total}. NO booking created; needs manual review.`);
@@ -2304,6 +2326,9 @@ export const stripeWebhook = onRequest(
                 // metadata since it was already computed once, at checkout
                 // creation.
                 bookingFeeCents: bookingFeeCents != null ? Number(bookingFeeCents) : null,
+                // Split-fee Majors (2026-11-24): the part of Atlas's fee the
+                // player paid (card processing). Absent on other bookings.
+                ...(passFeeMeta === "split" ? { feeModel: "split_processing", passedFeeCents: Number(passedFeeMeta || 0) } : {}),
                 // The real ticket price this booking paid — base price +
                 // whichever Price Option was picked, excluding rentals
                 // and the platform fee. Read straight off checkout

@@ -2585,6 +2585,18 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seatsTaken, attendeeCount]);
   const fmtCents = (cents) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
+  // Major events that pass all or part of Atlas's fee to the player
+  // (2026-11-24): the booking bar shows the all-in price and the added
+  // part. Same math as functions/index.js computeBookingFeeCents and
+  // functions/fees.js (uncapped on Majors): N-1 tickets at the per-ticket
+  // fee, plus one fee on entry + rentals. Field events are unchanged.
+  const majorFeeShown = ev.isMajor && (ev.feeModel === "pass_to_player" || ev.feeModel === "split_processing");
+  const majorAddedFeeCents = (() => {
+    if (!majorFeeShown || entryPriceCents + rentalsCents <= 0) return 0;
+    const fee = (c) => (c > 0 ? Math.round(c * 0.035) + 130 : 0);
+    const part = (c) => (ev.feeModel === "split_processing" ? (c > 0 ? Math.min(Math.round(c * 0.029) + 30, fee(c)) : 0) : fee(c));
+    return Math.max(0, attendeeCount - 1) * (entryPriceCents > 0 ? part(entryPriceCents) : 0) + part(entryPriceCents + rentalsCents);
+  })();
   const toggleDependent = (id) =>
     setSelectedDependentIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : (guardianPlaying ? 1 : 0) + prev.length < MAX_ATTENDEES_PER_BOOKING ? [...prev, id] : prev
@@ -3328,6 +3340,11 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               </div>
               {attendeeCount > 1 && !myBooking && (
                 <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>{attendeeCount} tickets</div>
+              )}
+              {majorAddedFeeCents > 0 && !usingVoucher && !myBooking && !choiceMissing && (
+                <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>
+                  {fmtCents(entryPriceCents * attendeeCount + rentalsCents + majorAddedFeeCents)} total · includes {fmtCents(majorAddedFeeCents)} {ev.feeModel === "split_processing" ? "card payment processing" : "Atlas fee"}
+                </div>
               )}
               {dayOfPending && !usingVoucher && !myBooking && (
                 <div className="text-[10px]" style={{ ...mono, color: T.ashFaint }}>Prepay price · {displayPrice(ev.dayOfPrice)} on game day</div>
