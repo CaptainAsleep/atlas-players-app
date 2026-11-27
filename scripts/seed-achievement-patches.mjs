@@ -225,12 +225,28 @@ const achievementPatches = [
   { id: "100th-player", name: "100th Player", imageFile: "100thplayer.png",
     details: "A 1-of-1 patch, awarded to the 100th player to join Atlas",
     trigger: null },
+
+  // Trading cards (2026-11-26, Michael): first card collected. users/{uid}.cardsCollected
+  // is bumped by the collectCard function; account-only (kids can't collect).
+  { id: "collector", name: "Collector", imageFile: "collector.png",
+    details: "Collected your first card in the Atlas app",
+    trigger: { type: "cards_collected_count", count: 1 } },
 ];
+
+// --only <id>[,<id>...] seeds just those patches (2026-11-26), so adding one
+// new patch doesn't re-upload all of them.
+const onlyArg = process.argv.indexOf("--only");
+const ONLY = onlyArg > -1 ? new Set(String(process.argv[onlyArg + 1] || "").split(",").filter(Boolean)) : null;
+if (ONLY) {
+  const unknown = [...ONLY].filter((id) => !achievementPatches.some((p) => p.id === id));
+  if (unknown.length) { console.error(`Unknown patch id(s): ${unknown.join(", ")}`); process.exit(1); }
+}
 
 async function uploadAndSeed() {
   let uploaded = 0, skipped = 0, failed = 0;
 
   for (const patch of achievementPatches) {
+    if (ONLY && !ONLY.has(patch.id)) continue;
     const localPath = path.join(PATCHES_DIR, patch.imageFile);
     if (!existsSync(localPath)) {
       console.warn(`Skipping "${patch.name}" — couldn't find ${patch.imageFile} in ${PATCHES_DIR}`);
