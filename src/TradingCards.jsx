@@ -975,7 +975,7 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
             </div>
             {/* Card photo changes (2026-11-26): first free, then $3.99. Re-framing (Adjust) is always free. */}
             {card.photoUrl && (
-              <div className="w-full flex flex-col items-center gap-1">
+              <div className="w-full flex flex-col items-stretch gap-1.5">
                 <SecondaryAction icon={ImagePlus} onClick={() => offerCardPhoto({})}>Change card photo</SecondaryAction>
                 <div className="text-[11px] text-center" style={{ ...body, color: T.ashFaint }}>{cardPhotoCostLine(card.photoChanges)} Adjusting the framing is free.</div>
               </div>
@@ -1038,7 +1038,7 @@ function CardControls({ onFlip, onSpin, sway, onSway }) {
 function SecondaryAction({ icon: Icon, onClick, children }) {
   const { T, display } = useTheme();
   return (
-    <button onClick={onClick} className="flex items-center justify-center gap-2 py-3 text-[13px] font-semibold"
+    <button onClick={onClick} className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-semibold"
       style={{ ...display, background: T.panel, color: T.ash, border: `1px solid ${T.line}`, borderRadius: T.rPill }}>
       <Icon size={16} strokeWidth={2} /> {children}
     </button>
