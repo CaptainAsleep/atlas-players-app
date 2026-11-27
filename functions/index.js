@@ -6842,3 +6842,90 @@ export const onPublicProfileDeletedCardPhoto = onDocumentDeleted("publicProfiles
   const p = event.data?.data()?.cardPhotoPath;
   if (p && p.startsWith("cardPhotos/")) await getStorage().bucket().file(p).delete().catch(() => {});
 });
+
+// Admin portal #cards (2026-11-26): every trading card in one list — photo,
+// sharp/low-res, free/paid changes, consent, rank, deck, reports. Reads
+// private collections (consents, credits), so it's an admin-only callable,
+// like getAdminFeedback.
+export const getAdminCardOverview = onCall({ memory: "512MiB", timeoutSeconds: 120 }, async (request) => {
+  if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Admin only.");
+  const db = getFirestore();
+  const [pubs, kids, links, consents, packs, credits, cases, overrides, creators, collections, deps] = await Promise.all([
+    db.collection("publicProfiles").get(),
+    db.collection("childPublicProfiles").get(),
+    db.collection("childPublicLinks").get(),
+    db.collection("cardConsents").get(),
+    db.collection("cardPackConsents").get(),
+    db.collection("cardPhotoCredits").get(),
+    db.collection("photoReportCases").get(),
+    db.collection("cardRankOverrides").get(),
+    db.collection("creatorTags").get(),
+    db.collection("cardCollections").get(),
+    db.collectionGroup("dependents").get(),
+  ]);
+  const ms = (t) => (t?.toMillis ? t.toMillis() : null);
+  const byId = (snap) => Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+  const consentBy = byId(consents), packBy = byId(packs), overrideBy = byId(overrides), creatorBy = byId(creators);
+  const linkBy = byId(links);
+  const depBy = Object.fromEntries(deps.docs.map((d) => [`${d.ref.parent.parent.id}/${d.id}`, d.data()]));
+  const callsignBy = Object.fromEntries(pubs.docs.map((d) => [d.id, d.data().callsign || null]));
+  const deckBy = {};
+  for (const c of collections.docs) { const u = c.data().collectorUid; if (u) deckBy[u] = (deckBy[u] || 0) + 1; }
+  const creditBy = {};
+  for (const c of credits.docs) {
+    const d = c.data();
+    const e = creditBy[d.uid] || (creditBy[d.uid] = { paid: 0, unused: 0, cents: 0, last: null });
+    e.paid++; e.cents += d.amountCents || 0; if (d.used === false) e.unused++;
+    e.last = Math.max(e.last || 0, ms(d.createdAt) || 0) || null;
+  }
+  const reportBy = {};
+  for (const c of cases.docs) {
+    const d = c.data();
+    (reportBy[`${d.ownerKind}_${d.ownerId}`] ||= []).push({ caseId: c.id, target: d.target, status: d.status, count: d.reportCount || 0, lastAt: ms(d.lastReportAt) });
+  }
+  const consentOut = (d) => (d ? { choice: d.choice || null, current: d.choice === "in" ? cards.consentIsCurrentIn(d) : null, version: d.version || null, at: ms(d.at) } : null);
+  const photoInfo = (d) => ({
+    cardPhotoUrl: d.cardPhotoUrl || null,
+    cardPhotoAspect: d.cardPhotoAspect || null,
+    cardPhotoHiRes: d.cardPhotoUrl ? d.cardPhotoHiRes !== false : null,
+    cardPhotoChanges: Number.isInteger(d.cardPhotoChanges) ? d.cardPhotoChanges : 0,
+    migrated: !d.cardPhotoUrl || (typeof d.cardPhotoPath === "string" && d.cardPhotoPath.startsWith("cardPhotos/")),
+    cardCrop: d.cardCrop || null,
+  });
+  const rows = [];
+  for (const p of pubs.docs) {
+    const d = p.data();
+    rows.push({
+      kind: "adult", id: p.id, callsign: d.callsign || null, avatarUrl: d.avatarUrl || null,
+      serial: Number.isInteger(d.signupNumber) ? d.signupNumber : null,
+      tier: p.id === cards.FOUNDER_UID ? "founder" : d.cardTier || "unranked",
+      rankOverride: overrideBy[p.id]?.rank || cards.TIER_OVERRIDES[p.id] || null,
+      creator: creatorBy[p.id]?.label || null,
+      circulation: d.circulation || 0, deck: deckBy[p.id] || 0, stats: d.cardStats || null, rankFloor: d.rankFloor || null,
+      optOut: !!d.cardOptOut, consent: consentOut(consentBy[p.id]), packConsent: consentOut(packBy[p.id]),
+      credits: creditBy[p.id] || { paid: 0, unused: 0, cents: 0, last: null },
+      reports: reportBy[`adult_${p.id}`] || [],
+      createdAt: ms(d.createdAt),
+      ...photoInfo(d),
+    });
+  }
+  for (const k of kids.docs) {
+    const d = k.data();
+    const link = linkBy[k.id] || {};
+    const dep = depBy[`${link.guardianUid}/${link.dependentId}`] || {};
+    rows.push({
+      kind: "child", id: k.id, callsign: d.callsign || null, avatarUrl: d.avatarUrl || null,
+      guardianUid: link.guardianUid || null, guardianCallsign: callsignBy[link.guardianUid] || null,
+      serial: Number.isInteger(d.signupNumber) ? d.signupNumber : null,
+      tier: d.cardTier || "unranked", rankOverride: null, creator: null,
+      circulation: d.circulation || 0, deck: null, stats: d.cardStats || null, rankFloor: null,
+      optOut: false, consent: null, packConsent: null,
+      credits: null, reports: reportBy[`child_${k.id}`] || [],
+      createdAt: ms(d.createdAt),
+      ...photoInfo(dep), // the dependent doc is the source of a kid's card photo
+      cardPhotoUrl: d.cardPhotoUrl || dep.cardPhotoUrl || null,
+    });
+  }
+  const totalCreditCents = credits.docs.reduce((s, c) => s + (c.data().amountCents || 0), 0);
+  return { rows, totals: { creditsSold: credits.size, creditCents: totalCreditCents }, generatedAt: Date.now() };
+});
