@@ -2596,6 +2596,7 @@ const fields = [
     indoorOutdoor: "indoor",
     about:
       "Metro Atlanta's most prominent indoor airsoft field and pro shop, located inside the Sugarloaf Mills mall.",
+    imageUrl: "https://www.geairsoft.com/uploads/b/3bcba3e0-2182-11ed-8d18-b31c93fbc6d4/IMG_6826.jpeg",
     status: "active",
     dataSource: "own site + Yelp (updated July 2026, 19 reviews) + Facebook + Instagram + BBB",
     lastScraped: "2026-09-11",
@@ -2611,6 +2612,7 @@ const fields = [
     indoorOutdoor: "outdoor",
     about:
       "Outdoor CQB-style airsoft field near Conyers, the original of two locations run by the same Atlanta-area operator.",
+    imageUrl: "https://www.poweropsairsoft.com/uploads/4/2/8/7/42870353/img-1622_orig.jpeg",
     status: "active",
     dataSource: "own site + Yelp (updated April 2026, 37 reviews) + Facebook + Instagram",
     lastScraped: "2026-09-11",
@@ -2627,6 +2629,7 @@ const fields = [
     admission: "Sat 11am-6pm, Sun 1pm-6pm (weather permitting)",
     about:
       "Larger MILSIM-style outdoor field (2-story structures, vehicles) opened around 2022, the second of two locations run by Power Ops Airsoft.",
+    imageUrl: "https://www.poweropsairsoft.com/uploads/4/2/8/7/42870353/img-1622_orig.jpeg",
     status: "active",
     dataSource: "own site + Facebook + Instagram",
     lastScraped: "2026-11-27",
@@ -2644,6 +2647,7 @@ const fields = [
     admission: "Sat 10am-7pm, Sun 12pm-7pm",
     about:
       "Veteran-owned MILSIM-focused outdoor field near Cornelia in northeast Georgia — 9 acres with roughly 30 mock-city buildings and night-play capability.",
+    imageUrl: "https://static.wixstatic.com/media/571520_e4d57601fcea4b4eb764328b04fa0c14~mv2.jpg",
     status: "active",
     dataSource: "own site + Facebook + Instagram + Snapchat",
     lastScraped: "2026-09-11",
@@ -2659,6 +2663,7 @@ const fields = [
       "Field fee only $15; AEG rental package $60 (rifle, goggles, vest, cap, magazine, 1000 BBs); group/military/LE discounts",
     about:
       "Georgia's longest-running airsoft operation (since 1999) — an outdoor field and retail store about 10 minutes from downtown Athens/UGA, open Saturdays.",
+    imageUrl: "https://georgiaairsoft.com/images/774_IMG_3741.jpg",
     status: "active",
     dataSource: "own site + AirsoftC3",
     lastScraped: "2026-11-27",
@@ -2709,6 +2714,7 @@ const fields = [
     indoorOutdoor: "indoor",
     about:
       "Indoor airsoft arena in a 20,000+ sq ft insulated warehouse, serving the Canton/Cherokee County area.",
+    imageUrl: "https://static.wixstatic.com/media/2fc884_edf9ab027405460692f1867b1e35394d~mv2.jpg/v1/fill/w_1600,h_900,al_c,q_80/2fc884_edf9ab027405460692f1867b1e35394d~mv2.jpg",
     status: "active",
     dataSource: "Yelp (updated July 2026, 15 reviews) + Facebook + Instagram + X",
     lastScraped: "2026-11-27",
@@ -2739,6 +2745,7 @@ const fields = [
     admission: "Airsoft by private party only (no airsoft open play); weekday private parties by request",
     about:
       "Outdoor paintball park that also runs private airsoft games under the 'Georgia Airsoft at Arkenstone' branding.",
+    imageUrl: "https://georgiapaintball.com/wp-content/uploads/2021/02/georgia-paintball-fields.jpg",
     status: "active",
     dataSource: "Yelp (updated May 2026) + own site + Instagram",
     lastScraped: "2026-11-27",
@@ -2755,6 +2762,7 @@ const fields = [
     indoorOutdoor: "outdoor",
     admission: "Sat-Sun 9am-5pm; weekdays by reservation",
     about: "Long-running Savannah-area paintball facility with themed fields that also explicitly offers airsoft.",
+    imageUrl: "https://static.wixstatic.com/media/caefbd_523ffe0924da402582c22351d5995c24~mv2_d_3264_2448_s_4_2.jpg/v1/fill/w_1600,h_900,al_c,q_80/caefbd_523ffe0924da402582c22351d5995c24~mv2_d_3264_2448_s_4_2.jpg",
     status: "active",
     dataSource: "Yelp + Roadtrippers + Facebook + YouTube",
     lastScraped: "2026-09-11",
@@ -2771,6 +2779,7 @@ const fields = [
     admission: "$20 day pass, cash only",
     about:
       "One of Georgia's oldest airsoft fields, open since April 2001 — 30+ acres with weekly games and regional events.",
+    imageUrl: "https://static.wixstatic.com/media/acdae2_fe93f30d0bc647e381c860af834aa7e8~mv2_d_3872_2592_s_4_2.jpg/v1/fill/w_1600,h_900,al_c,q_80/acdae2_fe93f30d0bc647e381c860af834aa7e8~mv2_d_3872_2592_s_4_2.jpg",
     status: "active",
     dataSource: "own site + Facebook + Instagram",
     lastScraped: "2026-09-11",
@@ -2829,6 +2838,7 @@ const fields = [
     indoorOutdoor: "outdoor",
     about:
       "Long-running (since 2000) 24-acre paintball/airsoft/gel-ball facility just across the state line from Chattanooga, TN, in far northwest Georgia.",
+    imageUrl: "https://irp.cdn-website.com/5692f577/dms3rep/multi/opt/Airsoft-wd-action-insane-paintball-opt-706-2880w.webp",
     status: "active",
     dataSource: "own site + Facebook + Instagram + YouTube",
     lastScraped: "2026-11-27",
@@ -10847,14 +10857,15 @@ FIELD RULES SUMMARY
     id: "georgia-airsoft-2026-12-05-saturday-walk-on-games",
     fieldId: "georgia-airsoft",
     fieldName: "Georgia Airsoft Inc.",
-    title: "Saturday Walk-On Games",
+    title: "Ambush Alley Grand Reopening",
     date: "2026-12-05",
     startTime: "12:00 PM",
     endTime: "5:00 PM",
     price: "$15",
     type: "OUTDOOR",
-    description: "Saturday walk-on games at Georgia Airsoft. $15 field fee with your own gear; $60 AEG rental package (field fee, Novritsch AEG, goggles, magazine, 1,000+ BBs). Groups of 4+ by reservation; military, law enforcement and first responder discounts. Closed on holidays and for special events.",
+    description: "Grand reopening of the newly restored Ambush Alley field at Georgia Airsoft, starting at noon, alongside regular Saturday walk-on games. $15 field fee with your own gear; $60 AEG rental package (field fee, Novritsch AEG, goggles, magazine, 1,000+ BBs). Groups of 4+ by reservation; military, law enforcement and first responder discounts.",
     sourceUrl: "https://georgiaairsoft.com",
+    imageUrl: "https://georgiaairsoft.com/images/575_Ambush_Alley_2026_Grand_Opening.jpg",
   },
   {
     id: "georgia-airsoft-2026-12-12-saturday-walk-on-games",
