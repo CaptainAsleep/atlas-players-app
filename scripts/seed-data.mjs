@@ -6445,6 +6445,292 @@ This is placeholder demo text for showcase purposes and is not a legally binding
     },
   },
   {
+    id: "cedar-airsoft-field-2026-11-29-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-11-29",
+    startTime: "1:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Rec day on Cedar's new hours, starting at 1 PM. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-12-06-tdm-day",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Cedar Airsoft TDM Day",
+    date: "2026-12-06",
+    startTime: "1:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Team Death Match day on Cedar's new hours, starting at 1 PM.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-12-12-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-12-12",
+    startTime: "1:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Rec day starting at 1 PM. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2026-12-20-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2026-12-20",
+    startTime: "1:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Rec day starting at 1 PM. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2027-01-03-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2027-01-03",
+    startTime: "1:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Rec day starting at 1 PM. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2027-01-09-rec-game",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rec Game",
+    date: "2027-01-09",
+    startTime: "1:00 PM",
+    price: "$20",
+    type: "OUTDOOR",
+    description:
+      "Rec day starting at 1 PM. Game modes per the field's usual rotation: Team Death Match, Chaos, Attack & Defend, Kill Confirmed, Infected, Duos/Squads, Search & Destroy, Juggernaut, Hostage, Trouble in Terrorist Town (TTT), Hunter & Hunted, Pilots Down, etc.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2027-03-20-field-clean-up-hangout",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Field Clean Up / Hangout",
+    date: "2027-03-20",
+    startTime: "1:00 PM",
+    type: "OUTDOOR",
+    description:
+      "Help get the field ready for the season and hang out with the Cedar community.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2027-03-21-operation-unknown",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Operation Unknown",
+    date: "2027-03-21",
+    startTime: "11:00 AM",
+    type: "OUTDOOR",
+    description:
+      "Cedar's Operation Unknown event, starting at 11 AM. Further details haven't been announced yet.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2027-05-22-ww2-ww1",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "WW2, WW1 at Cedar",
+    date: "2027-05-22",
+    endDate: "2027-05-23",
+    type: "MILSIM",
+    description:
+      "Two-day World War I and World War II themed event at Cedar.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
+    id: "cedar-airsoft-field-2027-09-11-rampage-2027",
+    fieldId: "cedar-airsoft-field",
+    fieldName: "Cedar Airsoft Field",
+    title: "Rampage 2027",
+    date: "2027-09-11",
+    endDate: "2027-09-12",
+    type: "MILSIM",
+    description:
+      "Cedar's two-day flagship event returns. Further details haven't been announced yet.",
+    sourceUrl: "https://www.facebook.com/CedarAirsoftField/events/",
+    waiver: {
+      version: "2026-08-01",
+      text: `LIABILITY WAIVER AND RELEASE OF CLAIMS
+
+By signing below, I acknowledge that airsoft is a physical activity carrying inherent risks of injury, including but not limited to impact injuries, eye injury, and physical exertion.
+
+I certify that:
+- I am voluntarily participating and am physically able to do so.
+- I will wear full-seal eye protection at all times while on the field.
+- I will follow all posted field rules and staff instructions.
+- I understand that replicas will be chronographed and must meet posted FPS limits.
+- I release the field, its owners, staff, and event organizers from liability for injuries sustained during normal gameplay, except in cases of gross negligence.
+- I am at least 18 years of age, or have a parent/guardian's consent on file.
+
+This is placeholder demo text for showcase purposes and is not a legally binding document.`,
+    },
+  },
+  {
     id: "darkfire-airsoft-2026-08-22-summers-end-11",
     fieldId: "darkfire-airsoft",
     imageUrl: "https://airsoftatlas.app/assets/darkfire-event-banner.png",
