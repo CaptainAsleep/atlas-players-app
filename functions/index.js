@@ -6795,20 +6795,39 @@ export const getReportedPhoto = onCall(async (request) => {
   return { url: c.status === "hidden" ? c.externalUrl || null : c.photoUrl || null };
 });
 
-// { caseId, action: "restore" | "remove" } — Michael only.
+// Michael only. On a hidden photo: "restore" | "remove". On a reported photo
+// that isn't hidden yet (under 3 reports): "hide" (hide it now), "remove"
+// (hide, then delete) or "dismiss" (clear the reports; those reporters can't
+// report this photo again).
 export const resolvePhotoReport = onCall(async (request) => {
   if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Admin only.");
   const { caseId, action } = request.data || {};
-  if (!cardPhotos.parseCaseId(caseId) || !["restore", "remove"].includes(action)) throw new HttpsError("invalid-argument", "Bad request.");
+  if (!cardPhotos.parseCaseId(caseId) || !["restore", "remove", "hide", "dismiss"].includes(action)) throw new HttpsError("invalid-argument", "Bad request.");
   const db = getFirestore();
   const caseRef = db.collection("photoReportCases").doc(caseId);
-  const c = (await caseRef.get()).data();
-  if (!c || c.status !== "hidden") throw new HttpsError("failed-precondition", "That photo isn't hidden.");
+  let c = (await caseRef.get()).data();
+  if (!c) throw new HttpsError("not-found", "No such report.");
+  if (c.status === "open") {
+    if (action === "restore") throw new HttpsError("failed-precondition", "That photo isn't hidden.");
+    if (action === "dismiss") {
+      const seen = [...new Set([...(c.ignoredReporters || []), ...(c.reporters || [])])];
+      await caseRef.update({ status: "cleared", resolvedAt: FieldValue.serverTimestamp(), reporters: [], ignoredReporters: seen, reportCount: 0, dismissed: true });
+      return { ok: true, status: "cleared" };
+    }
+    await caseRef.update({ status: "hiding", hiddenBy: "admin" });
+    await hideReportedPhoto(db, caseId);
+    c = (await caseRef.get()).data();
+    if (c.status !== "hidden") throw new HttpsError("failed-precondition", c.note || "Couldn't hide that photo. Refresh and try again.");
+    if (action === "hide") return { ok: true, status: "hidden" };
+  }
+  if (c.status !== "hidden") throw new HttpsError("failed-precondition", "That report is already resolved.");
+  if (action === "hide") return { ok: true, status: "hidden" };
+  if (action === "dismiss") throw new HttpsError("failed-precondition", "That photo is hidden. Restore or remove it.");
   const bucket = getStorage().bucket();
   const reviewed = [...new Set([...(c.ignoredReporters || []), ...(c.reporters || [])])];
   if (action === "remove") {
     if (c.quarantinePath) await bucket.file(c.quarantinePath).delete().catch(() => {});
-    await caseRef.update({ status: "removed", resolvedAt: FieldValue.serverTimestamp(), quarantinePath: null });
+    await caseRef.update({ status: "removed", resolvedAt: FieldValue.serverTimestamp(), quarantinePath: null, dismissed: false });
     return { ok: true, status: "removed" };
   }
   const slot = await reportedPhotoSlot(db, c.ownerKind, c.ownerId, c.target);
@@ -6830,7 +6849,7 @@ export const resolvePhotoReport = onCall(async (request) => {
   }
   if (c.quarantinePath) await bucket.file(c.quarantinePath).delete().catch(() => {});
   await caseRef.update({
-    status: "cleared", resolvedAt: FieldValue.serverTimestamp(), quarantinePath: null,
+    status: "cleared", resolvedAt: FieldValue.serverTimestamp(), quarantinePath: null, dismissed: false,
     photoUrl: restoredUrl || (slot ? slot.url : null), reporters: [], ignoredReporters: reviewed, reportCount: 0,
   });
   return { ok: true, status: "cleared", restored: !!restoredUrl };
