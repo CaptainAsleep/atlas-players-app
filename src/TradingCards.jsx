@@ -412,9 +412,10 @@ export const TradingCardFaces = React.forwardRef(function TradingCardFaces({ car
               {isFounder && <div className="ac-edition">FOUNDER EDITION</div>}
               <div className="ac-name">{card?.callsign || "Player"}</div>
               <div className="ac-stats">
-                <div className="ac-stat"><b>{card?.circ ?? 0}</b><span>CIRCULATION</span></div>
+                {/* Events / Fields / Patches (Michael, 2026-11-26; was Circulation / Events / Fields). Circulation still shows as "in N decks" under the card. */}
                 <div className="ac-stat"><b>{card?.ops ?? 0}</b><span>EVENTS</span></div>
                 <div className="ac-stat"><b>{card?.fields ?? 0}</b><span>FIELDS</span></div>
+                <div className="ac-stat"><b>{card?.patches ?? 0}</b><span>PATCHES</span></div>
               </div>
             </div>
           </div>
