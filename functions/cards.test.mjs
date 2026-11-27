@@ -192,3 +192,15 @@ test("pack consent: Legendary-and-up only, exact terms, box must be ticked to sa
   assert.equal(cards.packConsentIsCurrentIn({ choice: "in", version: cards.CARD_PACK_CONSENT.version }), false);
   assert.equal(cards.packConsentIsCurrentIn({ choice: "out", acknowledged: true, version: cards.CARD_PACK_CONSENT.version }), false);
 });
+
+test("admin-given ranks: earnable ones are a minimum, legendary/onyx are fixed", () => {
+  assert.equal(cards.finalRank({ earned: "common", override: "rare" }), "rare");
+  assert.equal(cards.finalRank({ earned: "epic", override: "rare" }), "epic"); // keeps climbing
+  assert.equal(cards.finalRank({ earned: "unranked", override: "uncommon", floor: "rare" }), "rare");
+  assert.equal(cards.finalRank({ earned: "epic", override: "legendary" }), "legendary");
+  assert.equal(cards.finalRank({ earned: "epic", override: "onyx" }), "onyx");
+  assert.equal(cards.finalRank({ earned: "common", override: "diamond" }), "diamond");
+  assert.equal(cards.finalRank({ earned: "common", override: "rare", founder: true }), "founder");
+  assert.ok(!cards.ADMIN_GIVABLE_RANKS.includes("diamond"));
+  assert.ok(cards.isStoredGivenRank("rare") && cards.isStoredGivenRank("diamond") && !cards.isStoredGivenRank("unranked") && !cards.isStoredGivenRank("founder"));
+});

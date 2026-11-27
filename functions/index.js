@@ -5899,7 +5899,8 @@ async function computeChildStats(db, guardianUid, dependentId) {
 async function rankOverrideFor(db, id) {
   const o = await db.collection("cardRankOverrides").doc(id).get().catch(() => null);
   const r = o?.exists ? o.data().rank : null;
-  return cards.HAND_GIVEN_RANKS.includes(r) ? r : cards.TIER_OVERRIDES[id];
+  // Since 2026-11-26 this can also be an earnable rank (a minimum; see finalRank).
+  return cards.isStoredGivenRank(r) ? r : cards.TIER_OVERRIDES[id];
 }
 
 async function recomputeRank(db, kind, id) {
@@ -6144,7 +6145,7 @@ export const setCardPackConsent = onCall(async (request) => {
 export const refreshCardTiers = onSchedule({ schedule: "every 60 minutes", timeZone: "America/Detroit" }, async () => {
   const db = getFirestore();
   const [adults, kids, overrides] = await Promise.all([db.collection("publicProfiles").get(), db.collection("childPublicProfiles").get(), db.collection("cardRankOverrides").get()]);
-  const given = Object.fromEntries(overrides.docs.map((o) => [o.id, o.data().rank]).filter(([, r]) => cards.HAND_GIVEN_RANKS.includes(r)));
+  const given = Object.fromEntries(overrides.docs.map((o) => [o.id, o.data().rank]).filter(([, r]) => cards.isStoredGivenRank(r)));
   const ops = [];
   const plan = (kind, d) => {
     const data = d.data();
@@ -6924,6 +6925,7 @@ export const getAdminCardOverview = onCall({ memory: "512MiB", timeoutSeconds: 1
       serial: Number.isInteger(d.signupNumber) ? d.signupNumber : null,
       tier: p.id === cards.FOUNDER_UID ? "founder" : d.cardTier || "unranked",
       rankOverride: overrideBy[p.id]?.rank || cards.TIER_OVERRIDES[p.id] || null,
+      rankGiven: overrideBy[p.id]?.rank || null, rankCodeSet: !!cards.TIER_OVERRIDES[p.id],
       creator: creatorBy[p.id]?.label || null,
       circulation: d.circulation || 0, deck: deckBy[p.id] || 0, stats: d.cardStats || null, rankFloor: d.rankFloor || null,
       optOut: !!d.cardOptOut, consent: consentOut(consentBy[p.id]), packConsent: consentOut(packBy[p.id]),
@@ -6941,7 +6943,7 @@ export const getAdminCardOverview = onCall({ memory: "512MiB", timeoutSeconds: 1
       kind: "child", id: k.id, callsign: d.callsign || null, avatarUrl: d.avatarUrl || null,
       guardianUid: link.guardianUid || null, guardianCallsign: callsignBy[link.guardianUid] || null,
       serial: Number.isInteger(d.signupNumber) ? d.signupNumber : null,
-      tier: d.cardTier || "unranked", rankOverride: null, creator: null,
+      tier: d.cardTier || "unranked", rankOverride: overrideBy[k.id]?.rank || null, rankGiven: overrideBy[k.id]?.rank || null, rankCodeSet: false, creator: null,
       circulation: d.circulation || 0, deck: null, stats: d.cardStats || null, rankFloor: null,
       optOut: false, consent: null, packConsent: null,
       credits: null, reports: reportBy[`child_${k.id}`] || [],
@@ -6952,4 +6954,37 @@ export const getAdminCardOverview = onCall({ memory: "512MiB", timeoutSeconds: 1
   }
   const totalCreditCents = credits.docs.reduce((s, c) => s + (c.data().amountCents || 0), 0);
   return { rows, totals: { creditsSold: credits.size, creditCents: totalCreditCents }, generatedAt: Date.now() };
+});
+
+// Admin portal (2026-11-26): hand out a card rank, or take one back.
+// { ownerKind: "adult"|"child", ownerId, rank: <rank> | null }. Any rank but
+// Diamond (and Founder); kids only Common–Epic. Common–Epic is a minimum
+// (the player keeps climbing); Legendary / Onyx are fixed. Cards whose rank
+// is Diamond or Founder can't be changed here.
+export const setCardRank = onCall(async (request) => {
+  if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Admin only.");
+  const { ownerKind, ownerId } = request.data || {};
+  const rank = request.data?.rank ?? null;
+  if (!["adult", "child"].includes(ownerKind) || typeof ownerId !== "string" || !/^[A-Za-z0-9]{20,40}$/.test(ownerId)) {
+    throw new HttpsError("invalid-argument", "Bad card.");
+  }
+  const allowed = ownerKind === "child" ? cards.CHILD_GIVABLE_RANKS : cards.ADMIN_GIVABLE_RANKS;
+  if (rank !== null && !allowed.includes(rank)) {
+    throw new HttpsError("invalid-argument", ownerKind === "child" ? "Kids' cards can be given Common to Epic." : "Pick Common, Uncommon, Rare, Epic, Legendary or Onyx.");
+  }
+  const db = getFirestore();
+  const pubRef = db.collection(ownerKind === "child" ? "childPublicProfiles" : "publicProfiles").doc(ownerId);
+  const ref = db.collection("cardRankOverrides").doc(ownerId);
+  const [pub, cur] = await Promise.all([pubRef.get(), ref.get()]);
+  if (!pub.exists) throw new HttpsError("not-found", "Card not found.");
+  if (ownerKind === "adult" && (ownerId === cards.FOUNDER_UID || cards.TIER_OVERRIDES[ownerId])) {
+    throw new HttpsError("failed-precondition", "This card's rank is set in code (Founder or Diamond) and can't be changed here.");
+  }
+  if (cur.exists && cur.data().rank === "diamond") {
+    throw new HttpsError("failed-precondition", "This card is Diamond. Diamond is only changed with scripts/set-card-rank.mjs.");
+  }
+  if (rank === null) await ref.delete();
+  else await ref.set({ rank, callsign: pub.data().callsign || null, setAt: FieldValue.serverTimestamp(), source: "admin" });
+  const shown = await recomputeRank(db, ownerKind, ownerId);
+  return { ok: true, rank: shown, given: rank };
 });

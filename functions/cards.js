@@ -237,13 +237,27 @@ export function earnedRank(stats, kind = "adult") {
   return best;
 }
 
-// What a card shows: a hand-set rank wins; otherwise the earned rank, never
-// below a kept floor (a child who moved to an adult account keeps their rank,
-// Michael 2026-11-09).
+// Admin-given ranks (2026-11-26, Michael): the admin portal can hand out any
+// rank but Diamond (and Founder). An earnable rank (Common–Epic) given by hand
+// is a MINIMUM: the card shows it until the player earns past it, so a
+// hand-given rank never holds anyone back. Legendary / Onyx / Diamond are
+// fixed, as before. Kids can only be given earnable ranks.
+export const EARNABLE_RANKS = ["common", "uncommon", "rare", "epic"];
+export const ADMIN_GIVABLE_RANKS = [...EARNABLE_RANKS, "legendary", "onyx"];
+export const CHILD_GIVABLE_RANKS = EARNABLE_RANKS;
+const FIXED_RANKS = ["legendary", "onyx", "diamond", "founder"];
+// Any rank that may be stored in cardRankOverrides/{id}.
+export const isStoredGivenRank = (r) => EARNABLE_RANKS.includes(r) || HAND_GIVEN_RANKS.includes(r);
+
+// What a card shows: a fixed hand-set rank wins; otherwise the earned rank,
+// never below a kept floor (a child who moved to an adult account keeps their
+// rank, Michael 2026-11-09) or a hand-given earnable rank.
 export function finalRank({ earned, override, floor, founder }) {
   if (founder) return "founder";
-  if (override && RANK_ORDER.includes(override)) return override;
-  const f = floor && RANK_ORDER.includes(floor) && rankIndex(floor) <= rankIndex("epic") ? floor : "unranked";
+  if (override && FIXED_RANKS.includes(override)) return override;
+  const floors = [floor, EARNABLE_RANKS.includes(override) ? override : null]
+    .filter((r) => r && RANK_ORDER.includes(r) && rankIndex(r) <= rankIndex("epic"));
+  const f = floors.reduce((a, b) => (rankIndex(b) > rankIndex(a) ? b : a), "unranked");
   return rankIndex(f) > rankIndex(earned) ? f : earned;
 }
 
