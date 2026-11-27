@@ -6727,25 +6727,30 @@ export const reportPhoto = onCall(async (request) => {
   }
   const pubRef = db.collection(ownerKind === "adult" ? "publicProfiles" : "childPublicProfiles").doc(ownerId);
   const caseRef = db.collection("photoReportCases").doc(caseId);
-  const hide = await db.runTransaction(async (t) => {
-    const [pub, c] = await Promise.all([t.get(pubRef), t.get(caseRef)]);
+  // One report per player per photo slot, ever (Michael, 2026-11-26): the
+  // photoReports doc {caseId}_{uid} is never deleted or overwritten, so a new
+  // photo, a dismiss or a restore doesn't give anyone a second report.
+  const reportRef = db.collection("photoReports").doc(`${caseId}_${uid}`);
+  const outcome = await db.runTransaction(async (t) => {
+    const [pub, c, mine] = await Promise.all([t.get(pubRef), t.get(caseRef), t.get(reportRef)]);
+    if (mine.exists) return "already";
     const p = pub.exists ? pub.data() : {};
     const photoUrl = (target === "card" ? p.cardPhotoUrl : p.avatarUrl) || null;
     if (!photoUrl) throw new HttpsError("failed-precondition", "There's no photo to report.");
     const r = cardPhotos.applyReport(c.exists ? c.data() : null, photoUrl, uid);
-    if (r.status !== "counted") return false;
+    if (r.status !== "counted") return "already";
     const now = FieldValue.serverTimestamp();
-    t.set(db.collection("photoReports").doc(`${caseId}_${uid}`), { caseId, reporterUid: uid, photoUrl, createdAt: now });
+    t.create(reportRef, { caseId, reporterUid: uid, photoUrl, createdAt: now });
     t.set(caseRef, {
       ownerKind, ownerId, target, photoUrl, callsign: p.callsign || null,
       reporters: r.reporters, ignoredReporters: r.ignoredReporters, reportCount: r.reporters.length,
       status: r.hide ? "hiding" : "open", lastReportAt: now,
       ...(c.exists ? {} : { createdAt: now }),
     }, { merge: true });
-    return r.hide;
+    return r.hide ? "hide" : "counted";
   });
-  if (hide) await hideReportedPhoto(db, caseId).catch((err) => console.error(`hideReportedPhoto ${caseId}:`, err));
-  return { ok: true };
+  if (outcome === "hide") await hideReportedPhoto(db, caseId).catch((err) => console.error(`hideReportedPhoto ${caseId}:`, err));
+  return { ok: true, already: outcome === "already" };
 });
 
 // Moves the photo to private storage (no download token) and clears it from

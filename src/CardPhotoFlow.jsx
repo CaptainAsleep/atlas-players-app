@@ -294,7 +294,7 @@ function ChooserFlow({ uid, offer, onClose }) {
 export function ReportPhotoButton({ ownerKind, ownerId, target, label, light = false }) {
   const { T, display, body } = useTheme();
   const [open, setOpen] = useState(false);
-  const [state, setState] = useState("idle"); // idle | sending | sent
+  const [state, setState] = useState("idle"); // idle | sending | sent | already
   const [error, setError] = useState("");
   const me = auth.currentUser?.uid;
   if (!ownerId || !me || (ownerKind === "adult" && ownerId === me)) return null;
@@ -302,8 +302,8 @@ export function ReportPhotoButton({ ownerKind, ownerId, target, label, light = f
     setState("sending");
     setError("");
     try {
-      await httpsCallable(firebaseFunctions, "reportPhoto")({ ownerKind, ownerId, target });
-      setState("sent");
+      const res = await httpsCallable(firebaseFunctions, "reportPhoto")({ ownerKind, ownerId, target });
+      setState(res.data?.already ? "already" : "sent");
     } catch (err) {
       console.error("reportPhoto failed:", err);
       setError(friendlyError(err, "Couldn't send that. Try again."));
@@ -319,17 +319,19 @@ export function ReportPhotoButton({ ownerKind, ownerId, target, label, light = f
       {open && createPortal(
         <div className="fixed inset-0 flex items-center justify-center px-6" style={{ zIndex: 2300, background: "rgba(0,0,0,0.6)" }} role="dialog" aria-label="Report photo">
           <div className="w-full p-5 flex flex-col gap-3" style={{ maxWidth: 360, background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
-            {state === "sent" ? (
+            {state === "sent" || state === "already" ? (
               <>
-                <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Thanks, we got it</div>
-                <div className="text-[13px]" style={{ ...body, color: T.ashDim }}>If more players report this photo, it's hidden until Atlas looks at it.</div>
+                <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>{state === "already" ? "Already reported" : "Thanks, we got it"}</div>
+                <div className="text-[13px]" style={{ ...body, color: T.ashDim }}>
+                  {state === "already" ? "You've already reported this photo. Each player can report a photo once." : "If more players report this photo, it's hidden until Atlas looks at it."}
+                </div>
                 <button onClick={() => setOpen(false)} className="h-11 text-[14px] font-semibold" style={{ ...display, background: T.cta, color: T.inverse, borderRadius: T.rPill }}>OK</button>
               </>
             ) : (
               <>
                 <div className="text-[16px] font-semibold" style={{ ...display, color: T.ash }}>Report this photo?</div>
                 <div className="text-[13px]" style={{ ...body, color: T.ashDim }}>
-                  Report a photo that's inappropriate or isn't a photo of the player. A photo is hidden after reports from 3 different players until Atlas looks at it. The player isn't told who reported it.
+                  Report a photo that's inappropriate or isn't a photo of the player. You can report each photo once. A photo is hidden after reports from 3 different players until Atlas looks at it. The player isn't told who reported it.
                 </div>
                 {error && <div className="text-[12px]" style={{ ...body, color: T.alert }}>{error}</div>}
                 <div className="flex gap-2">
