@@ -4,11 +4,12 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import Stripe from "stripe";
-import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as feedback from "./feedback.js";
 import * as emptyTeam from "./emptyTeam.js";
 import * as cards from "./cards.js";
+import * as cardPhotos from "./cardPhotos.js";
 import * as presets from "./accountPresets.js";
 import * as feed from "./feed.js";
 import * as feedStore from "./feedStore.js";
@@ -2198,6 +2199,11 @@ export const stripeWebhook = onRequest(
           // Paid skins (2026-11-09): Appearance-screen purchases.
           if (session.mode === "payment" && session.metadata?.kind === "skin") {
             await handleSkinPurchasePaid(db, session);
+            break;
+          }
+          // Paid card photo changes (2026-11-26): one credit per session.
+          if (session.mode === "payment" && session.metadata?.kind === "cardPhoto") {
+            await handleCardPhotoPaid(db, session);
             break;
           }
           // Team Bookings (2026-11-05): tickets bought for others. Checked
@@ -4496,6 +4502,13 @@ function childPublicFields(dep) {
   return { callsign: dep.callsign || "Player", avatarUrl: dep.avatarUrl || null };
 }
 
+// A child's card photo (2026-11-26): set by setCardPhoto on the dependent doc,
+// mirrored onto childPublicProfiles only (never onto roster/request copies).
+function childCardFields(dep) {
+  return { cardPhotoUrl: dep.cardPhotoUrl || null, cardPhotoAspect: dep.cardPhotoAspect || null, cardPhotoHiRes: dep.cardPhotoHiRes === true };
+}
+const sameChildCard = (a, b) => ["cardPhotoUrl", "cardPhotoAspect", "cardPhotoHiRes"].every((k) => (a?.[k] ?? null) === (b?.[k] ?? null));
+
 function publicPatchFields(p) {
   return { name: p.name || "", imageUrl: p.imageUrl || null, details: p.details || null, addedAt: p.addedAt || null };
 }
@@ -4559,7 +4572,7 @@ export const setChildProfilePublic = onCall(async (request) => {
     const ptr = await t.get(ptrRef);
     if (ptr.exists) return ptr.data().publicId; // already public — idempotent
     const id = newPublicChildId();
-    t.set(db.collection("childPublicProfiles").doc(id), { ...childPublicFields(dep), teamId: null, teamName: null, createdAt: FieldValue.serverTimestamp() });
+    t.set(db.collection("childPublicProfiles").doc(id), { ...childPublicFields(dep), ...childCardFields(dep), teamId: null, teamName: null, createdAt: FieldValue.serverTimestamp() });
     t.set(db.collection("childPublicLinks").doc(id), { guardianUid: uid, dependentId, createdAt: FieldValue.serverTimestamp() });
     t.set(ptrRef, { publicId: id, enabledAt: FieldValue.serverTimestamp() });
     return id;
@@ -4643,10 +4656,13 @@ export const onChildDependentWritten = onDocumentWritten("users/{uid}/dependents
   if (!after) {
     await makeChildPrivate(db, uid, depId);
     if (before?.avatarPath) await getStorage().bucket().file(before.avatarPath).delete().catch(() => {});
+    if (before?.cardPhotoPath) await getStorage().bucket().file(before.cardPhotoPath).delete().catch(() => {});
     return;
   }
   if (after.graduatedAt) return; // claimChildProfile cleans up itself
-  if (before && before.callsign === after.callsign && (before.avatarUrl || null) === (after.avatarUrl || null)) return;
+  const profileSame = before && before.callsign === after.callsign && (before.avatarUrl || null) === (after.avatarUrl || null);
+  const cardSame = before && sameChildCard(childCardFields(before), childCardFields(after));
+  if (profileSame && cardSame) return;
   const ptr = await db.collection("users").doc(uid).collection("childPublic").doc(depId).get();
   if (!ptr.exists) return;
   const publicId = ptr.data().publicId;
@@ -4657,9 +4673,9 @@ export const onChildDependentWritten = onDocumentWritten("users/{uid}/dependents
     db.collection("joinRequests").where("uid", "==", publicId).get(),
   ]);
   await commitInChunks(db, [
-    (b) => b.set(db.collection("childPublicProfiles").doc(publicId), fields, { merge: true }),
-    ...members.docs.map((d) => (b) => b.update(d.ref, fields)),
-    ...requests.docs.map((d) => (b) => b.update(d.ref, fields)),
+    (b) => b.set(db.collection("childPublicProfiles").doc(publicId), { ...fields, ...childCardFields(after) }, { merge: true }),
+    ...(profileSame ? [] : members.docs.map((d) => (b) => b.update(d.ref, fields))),
+    ...(profileSame ? [] : requests.docs.map((d) => (b) => b.update(d.ref, fields))),
   ]);
 });
 
@@ -5799,18 +5815,16 @@ export const sweepTeamTickets = onSchedule(
 
 // ===========================================================================
 // Player Trading Cards (2026-11-08) — helpers in cards.js, scope in project
-// doc claude/atlas-trading-cards-scope.md. v1 is gated to CARD_BETA_UIDS for
-// sharing and collecting; serial numbers and stats run for everyone so the
-// data is ready when cards open up.
+// doc claude/atlas-trading-cards-scope.md. Open to every signed-in
+// player since 2026-11-26 (was a beta gated by CARD_BETA_UIDS / cardBeta docs).
 // ===========================================================================
 
 const PLAYERS_COUNTER = "players";
 
-// Card testers: the code list, or a cardBeta/{uid} doc (scripts/set-card-beta.mjs).
-async function cardBetaAllowed(db, uid) {
-  if (cards.isCardBeta(uid)) return true;
-  const d = await db.collection("cardBeta").doc(uid).get().catch(() => null);
-  return !!d?.exists;
+// Was the beta check (code list or a cardBeta/{uid} doc). Since 2026-11-26
+// every signed-in player is allowed; kept so the call sites don't change.
+async function cardBetaAllowed(_db, uid) {
+  return cards.isCardBeta(uid);
 }
 
 // Next number from the all-time counter, inside a transaction. Returns null
@@ -5986,8 +6000,9 @@ export const issueCardToken = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "Give Atlas permission to use your likeness on your card first (Profile → My Card).");
     }
   }
-  const photo = owner.data.cardPhotoUrl || owner.data.avatarUrl;
-  if (!photo) throw new HttpsError("failed-precondition", "Add a photo to share your card.");
+  // Cards never fall back to the profile photo (2026-11-26).
+  const photo = owner.data.cardPhotoUrl;
+  if (!photo) throw new HttpsError("failed-precondition", "Add a card photo to share your card.");
   const token = cards.newShareToken(randomBytes);
   const expiresAtMs = Date.now() + cards.SHARE_TTL_MS;
   // Only the public id goes in here — never a parent uid or dependent id.
@@ -6499,4 +6514,331 @@ export const pruneFeedActivity = onSchedule({ schedule: "every day 04:17", timeZ
     if (snap.empty) return;
     for (const d of snap.docs) await feedStore.removeActivity(db, d.id).catch(feedLog("prune"));
   }
+});
+
+// ===========================================================================
+// Card photos, paid card photo changes + photo reports (2026-11-26) — scope:
+// project doc claude/atlas-card-photo-change-scope.md, helpers in
+// cardPhotos.js. Profile photos stay app-written and free. The card photo
+// is written only here: the first one is free, every one after that needs a
+// $3.99 credit (cardPhotoCredits, created only by the webhook). No review;
+// reports from 3 different players move a photo to private storage until
+// Michael restores or removes it (admin portal #photo-reports).
+// ===========================================================================
+
+async function savePublicImage(bucket, filePath, buf, contentType) {
+  const token = randomUUID();
+  await bucket.file(filePath).save(buf, {
+    resumable: false,
+    contentType,
+    metadata: { cacheControl: "public, max-age=31536000", metadata: { firebaseStorageDownloadTokens: token } },
+  });
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
+}
+
+function decodeUploadedImage(raw, maxBytes) {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > Math.ceil(maxBytes * 4 / 3) + 8) {
+    throw new HttpsError("invalid-argument", "That image is too large. Try a smaller one.");
+  }
+  const buf = Buffer.from(raw, "base64");
+  if (buf.length === 0 || buf.length > maxBytes) throw new HttpsError("invalid-argument", "That image is too large. Try a smaller one.");
+  const kind = sniffImageType(buf);
+  if (!kind) throw new HttpsError("invalid-argument", "That file isn't a JPEG, PNG or WebP image.");
+  return { buf, kind };
+}
+
+const NEEDS_PAYMENT_MSG = "Your free card photo is used. Each change after that is $3.99.";
+const unusedCardPhotoCredits = (db, uid) => db.collection("cardPhotoCredits").where("uid", "==", uid).where("used", "==", false).limit(1);
+
+// { imageBase64, aspect, cardCrop?, dependentId? } — your own card, or one of
+// your kids' cards (the parent pays for a kid's change).
+export const setCardPhoto = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+  const uid = request.auth.uid;
+  const db = getFirestore();
+  const dependentId = request.data?.dependentId ?? null;
+  if (dependentId !== null && !isValidDependentId(dependentId)) throw new HttpsError("invalid-argument", "Missing child profile.");
+  const isChild = dependentId !== null;
+  const ref = isChild
+    ? db.collection("users").doc(uid).collection("dependents").doc(dependentId)
+    : db.collection("publicProfiles").doc(uid);
+  const credits = unusedCardPhotoCredits(db, uid);
+  const [pre, preCredits] = await Promise.all([ref.get(), credits.get()]);
+  if (!pre.exists) throw new HttpsError("not-found", isChild ? "That child profile no longer exists." : "Profile not found.");
+  if (isChild && pre.data().graduatedAt) throw new HttpsError("failed-precondition", `${pre.data().callsign || "This profile"} has moved to their own account.`);
+  // Checked before uploading so nobody waits on an upload just to be asked to pay.
+  if (!cardPhotos.cardPhotoPayment(pre.data().cardPhotoChanges, !preCredits.empty)) {
+    throw new HttpsError("failed-precondition", NEEDS_PAYMENT_MSG, { needsPayment: true });
+  }
+  const { buf, kind } = decodeUploadedImage(request.data?.imageBase64, cardPhotos.CARD_PHOTO_MAX_BYTES);
+  const bucket = getStorage().bucket();
+  const filePath = `cardPhotos/${randomBytes(16).toString("hex")}.${kind.ext}`;
+  const url = await savePublicImage(bucket, filePath, buf, kind.type);
+  let oldPath = null;
+  let paidWith = null;
+  try {
+    await db.runTransaction(async (t) => {
+      const [snap, creditSnap] = await Promise.all([t.get(ref), t.get(credits)]);
+      if (!snap.exists) throw new HttpsError("not-found", "Profile not found.");
+      const d = snap.data();
+      paidWith = cardPhotos.cardPhotoPayment(d.cardPhotoChanges, !creditSnap.empty);
+      if (!paidWith) throw new HttpsError("failed-precondition", NEEDS_PAYMENT_MSG, { needsPayment: true });
+      const fields = cardPhotos.cardPhotoFields({ url, path: filePath, aspect: request.data?.aspect, hiRes: true, changes: d.cardPhotoChanges });
+      if (!isChild) fields.cardCrop = cardPhotos.cleanCardCrop(request.data?.cardCrop);
+      t.update(ref, fields);
+      if (paidWith === "credit") {
+        t.update(creditSnap.docs[0].ref, { used: true, usedAt: FieldValue.serverTimestamp(), usedFor: isChild ? `child:${dependentId}` : "self" });
+      }
+      oldPath = d.cardPhotoPath || null;
+    });
+  } catch (err) {
+    await bucket.file(filePath).delete().catch(() => {});
+    throw err;
+  }
+  if (oldPath && oldPath !== filePath) await bucket.file(oldPath).delete().catch(() => {});
+  return { ok: true, cardPhotoUrl: url, paidWith };
+});
+
+// $3.99 for one card photo change. Same shape as createSkinCheckout: a plain
+// payment on Atlas's own account; the credit is created only by the webhook.
+export const createCardPhotoCheckout = onCall(
+  { secrets: [stripeSecretKey], invoker: "public" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+    const uid = request.auth.uid;
+    const db = getFirestore();
+    const all = await db.collection("cardPhotoCredits").where("uid", "==", uid).get();
+    if (all.docs.some((d) => d.data().used === false)) {
+      throw new HttpsError("already-exists", "You already have a card photo change paid for. Pick your photo.");
+    }
+    const stripe = new Stripe(stripeSecretKey.value());
+    const sessionParams = {
+      mode: "payment",
+      customer_email: request.auth.token?.email,
+      line_items: [{
+        price_data: { currency: "usd", product_data: { name: "Atlas trading card photo change" }, unit_amount: cardPhotos.CARD_PHOTO_PRICE_CENTS },
+        quantity: 1,
+      }],
+      metadata: { kind: "cardPhoto", firebaseUid: uid, cardPhotoCents: String(cardPhotos.CARD_PHOTO_PRICE_CENTS) },
+      success_url: "https://playerapp.airsoftatlas.app/?cardPhoto=success",
+      cancel_url: "https://playerapp.airsoftatlas.app/?cardPhoto=cancelled",
+    };
+    // A double tap gets the same session back; the key moves on once a credit
+    // exists, so the next change gets a fresh checkout.
+    const idempotencyKey = `card-photo-checkout:${uid}:${all.size}`;
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+    } catch (err) {
+      if (err.type !== "StripeIdempotencyError") throw err;
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: `${idempotencyKey}:retry:${Date.now()}` });
+    }
+    if (!session.url) throw new HttpsError("already-exists", "That payment already went through. It can take a moment to show up.");
+    return { url: session.url, totalCents: cardPhotos.CARD_PHOTO_PRICE_CENTS };
+  }
+);
+
+async function handleCardPhotoPaid(db, session) {
+  const uid = session.metadata?.firebaseUid;
+  if (!uid) {
+    console.error(`stripeWebhook: card photo session ${session.id} has no uid — nothing granted.`);
+    return;
+  }
+  if (session.payment_status === "unpaid") {
+    console.warn(`stripeWebhook: card photo session ${session.id} completed unpaid — nothing granted.`);
+    return;
+  }
+  if (session.amount_total !== cardPhotos.CARD_PHOTO_PRICE_CENTS) {
+    console.error(`stripeWebhook: card photo amount mismatch for session ${session.id} (uid ${uid}) — expected ${cardPhotos.CARD_PHOTO_PRICE_CENTS}, Stripe charged ${session.amount_total}. NOTHING granted; needs manual review.`);
+    return;
+  }
+  // One credit per session; Stripe retries just hit "already exists".
+  await db.collection("cardPhotoCredits").doc(session.id).create({
+    uid, sessionId: session.id, amountCents: session.amount_total,
+    used: false, usedAt: null, usedFor: null, createdAt: FieldValue.serverTimestamp(),
+  }).catch((err) => { if (err.code !== 6) throw err; });
+}
+
+// --- Photo reports ----------------------------------------------------------
+
+// Where a reported photo lives right now, and how to take it down / put it back.
+async function reportedPhotoSlot(db, ownerKind, ownerId, target) {
+  if (ownerKind === "adult") {
+    const pubRef = db.collection("publicProfiles").doc(ownerId);
+    const pub = await pubRef.get();
+    const d = pub.exists ? pub.data() : {};
+    if (target === "profile") {
+      return {
+        url: d.avatarUrl || null,
+        path: cardPhotos.storagePathFromUrl(d.avatarUrl),
+        clear: (b) => { b.update(pubRef, { avatarUrl: null }); b.update(db.collection("users").doc(ownerId), { avatarUrl: null }); },
+        restorePath: () => `avatars/${ownerId}/profile.jpg`,
+        put: (b, url, p) => { b.update(pubRef, { avatarUrl: url }); b.update(db.collection("users").doc(ownerId), { avatarUrl: url }); },
+      };
+    }
+    return {
+      url: d.cardPhotoUrl || null,
+      path: d.cardPhotoPath || cardPhotos.storagePathFromUrl(d.cardPhotoUrl),
+      clear: (b) => b.update(pubRef, { cardPhotoUrl: FieldValue.delete(), cardPhotoPath: FieldValue.delete() }),
+      restorePath: (ext) => `cardPhotos/${randomBytes(16).toString("hex")}.${ext}`,
+      put: (b, url, p) => b.update(pubRef, { cardPhotoUrl: url, cardPhotoPath: p }),
+    };
+  }
+  const link = await db.collection("childPublicLinks").doc(ownerId).get();
+  if (!link.exists) return null;
+  const { guardianUid, dependentId } = link.data();
+  const depRef = db.collection("users").doc(guardianUid).collection("dependents").doc(dependentId);
+  const dep = await depRef.get();
+  const d = dep.exists ? dep.data() : {};
+  // The dependent doc is the source; onChildDependentWritten mirrors it.
+  if (target === "profile") {
+    return {
+      url: d.avatarUrl || null,
+      path: d.avatarPath || null,
+      clear: (b) => b.update(depRef, { avatarUrl: FieldValue.delete(), avatarPath: FieldValue.delete() }),
+      restorePath: (ext) => `childAvatars/${randomBytes(16).toString("hex")}.${ext}`,
+      put: (b, url, p) => b.update(depRef, { avatarUrl: url, avatarPath: p }),
+      guardianUid,
+    };
+  }
+  return {
+    url: d.cardPhotoUrl || null,
+    path: d.cardPhotoPath || null,
+    clear: (b) => b.update(depRef, { cardPhotoUrl: FieldValue.delete(), cardPhotoPath: FieldValue.delete() }),
+    restorePath: (ext) => `cardPhotos/${randomBytes(16).toString("hex")}.${ext}`,
+    put: (b, url, p) => b.update(depRef, { cardPhotoUrl: url, cardPhotoPath: p }),
+    guardianUid,
+  };
+}
+
+// { ownerKind: "adult"|"child", ownerId, target: "profile"|"card" }
+export const reportPhoto = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to report a photo.");
+  const uid = request.auth.uid;
+  const caseId = cardPhotos.reportCaseId(request.data || {});
+  if (!caseId) throw new HttpsError("invalid-argument", "Couldn't tell which photo that was.");
+  const { ownerKind, ownerId, target } = request.data;
+  if (ownerKind === "adult" && ownerId === uid) throw new HttpsError("failed-precondition", "You can't report your own photo.");
+  const db = getFirestore();
+  if (ownerKind === "child") {
+    const link = await db.collection("childPublicLinks").doc(ownerId).get();
+    if (!link.exists) throw new HttpsError("not-found", "That profile isn't public anymore.");
+    if (link.data().guardianUid === uid) throw new HttpsError("failed-precondition", "You can't report your own child's photo.");
+  }
+  const pubRef = db.collection(ownerKind === "adult" ? "publicProfiles" : "childPublicProfiles").doc(ownerId);
+  const caseRef = db.collection("photoReportCases").doc(caseId);
+  const hide = await db.runTransaction(async (t) => {
+    const [pub, c] = await Promise.all([t.get(pubRef), t.get(caseRef)]);
+    const p = pub.exists ? pub.data() : {};
+    const photoUrl = (target === "card" ? p.cardPhotoUrl : p.avatarUrl) || null;
+    if (!photoUrl) throw new HttpsError("failed-precondition", "There's no photo to report.");
+    const r = cardPhotos.applyReport(c.exists ? c.data() : null, photoUrl, uid);
+    if (r.status !== "counted") return false;
+    const now = FieldValue.serverTimestamp();
+    t.set(db.collection("photoReports").doc(`${caseId}_${uid}`), { caseId, reporterUid: uid, photoUrl, createdAt: now });
+    t.set(caseRef, {
+      ownerKind, ownerId, target, photoUrl, callsign: p.callsign || null,
+      reporters: r.reporters, ignoredReporters: r.ignoredReporters, reportCount: r.reporters.length,
+      status: r.hide ? "hiding" : "open", lastReportAt: now,
+      ...(c.exists ? {} : { createdAt: now }),
+    }, { merge: true });
+    return r.hide;
+  });
+  if (hide) await hideReportedPhoto(db, caseId).catch((err) => console.error(`hideReportedPhoto ${caseId}:`, err));
+  return { ok: true };
+});
+
+// Moves the photo to private storage (no download token) and clears it from
+// the profile/card. Copies elsewhere (rosters etc.) follow through the
+// existing profile sync triggers.
+async function hideReportedPhoto(db, caseId) {
+  const caseRef = db.collection("photoReportCases").doc(caseId);
+  const c = (await caseRef.get()).data();
+  if (!c || c.status !== "hiding") return;
+  const slot = await reportedPhotoSlot(db, c.ownerKind, c.ownerId, c.target);
+  if (!slot || slot.url !== c.photoUrl) {
+    await caseRef.update({ status: "open", note: "The photo changed before it could be hidden." });
+    return;
+  }
+  const bucket = getStorage().bucket();
+  let quarantinePath = null;
+  let contentType = null;
+  if (slot.path) {
+    const src = bucket.file(slot.path);
+    const [[buf], [meta]] = await Promise.all([src.download(), src.getMetadata()]);
+    contentType = meta.contentType || "image/jpeg";
+    const ext = (sniffImageType(buf) || { ext: "jpg" }).ext;
+    quarantinePath = `photoQuarantine/${caseId}/${Date.now()}.${ext}`;
+    await bucket.file(quarantinePath).save(buf, { resumable: false, contentType });
+  }
+  const batch = db.batch();
+  slot.clear(batch);
+  batch.update(caseRef, {
+    status: "hidden", hiddenAt: FieldValue.serverTimestamp(),
+    quarantinePath, contentType, sourcePath: slot.path || null,
+    externalUrl: slot.path ? null : c.photoUrl, // e.g. a Google sign-in photo: nothing of ours to move
+  });
+  await batch.commit();
+  if (slot.path) await bucket.file(slot.path).delete().catch(() => {});
+}
+
+export const getReportedPhoto = onCall(async (request) => {
+  if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Admin only.");
+  const caseId = request.data?.caseId;
+  if (!cardPhotos.parseCaseId(caseId)) throw new HttpsError("invalid-argument", "Bad case.");
+  const c = (await getFirestore().collection("photoReportCases").doc(caseId).get()).data();
+  if (!c) throw new HttpsError("not-found", "No such case.");
+  if (c.status === "hidden" && c.quarantinePath) {
+    const [buf] = await getStorage().bucket().file(c.quarantinePath).download();
+    return { dataUrl: `data:${c.contentType || "image/jpeg"};base64,${buf.toString("base64")}` };
+  }
+  return { url: c.status === "hidden" ? c.externalUrl || null : c.photoUrl || null };
+});
+
+// { caseId, action: "restore" | "remove" } — Michael only.
+export const resolvePhotoReport = onCall(async (request) => {
+  if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Admin only.");
+  const { caseId, action } = request.data || {};
+  if (!cardPhotos.parseCaseId(caseId) || !["restore", "remove"].includes(action)) throw new HttpsError("invalid-argument", "Bad request.");
+  const db = getFirestore();
+  const caseRef = db.collection("photoReportCases").doc(caseId);
+  const c = (await caseRef.get()).data();
+  if (!c || c.status !== "hidden") throw new HttpsError("failed-precondition", "That photo isn't hidden.");
+  const bucket = getStorage().bucket();
+  const reviewed = [...new Set([...(c.ignoredReporters || []), ...(c.reporters || [])])];
+  if (action === "remove") {
+    if (c.quarantinePath) await bucket.file(c.quarantinePath).delete().catch(() => {});
+    await caseRef.update({ status: "removed", resolvedAt: FieldValue.serverTimestamp(), quarantinePath: null });
+    return { ok: true, status: "removed" };
+  }
+  const slot = await reportedPhotoSlot(db, c.ownerKind, c.ownerId, c.target);
+  let restoredUrl = null;
+  // Only put it back if the owner hasn't added a new photo since.
+  if (slot && !slot.url && c.quarantinePath) {
+    const [buf] = await bucket.file(c.quarantinePath).download();
+    const ext = (sniffImageType(buf) || { ext: "jpg" }).ext;
+    const dest = slot.restorePath(ext);
+    restoredUrl = await savePublicImage(bucket, dest, buf, c.contentType || "image/jpeg");
+    const batch = db.batch();
+    slot.put(batch, restoredUrl, dest);
+    await batch.commit();
+  } else if (slot && !slot.url && c.externalUrl) {
+    restoredUrl = c.externalUrl;
+    const batch = db.batch();
+    slot.put(batch, restoredUrl, null);
+    await batch.commit();
+  }
+  if (c.quarantinePath) await bucket.file(c.quarantinePath).delete().catch(() => {});
+  await caseRef.update({
+    status: "cleared", resolvedAt: FieldValue.serverTimestamp(), quarantinePath: null,
+    photoUrl: restoredUrl || (slot ? slot.url : null), reporters: [], ignoredReporters: reviewed, reportCount: 0,
+  });
+  return { ok: true, status: "cleared", restored: !!restoredUrl };
+});
+
+// A deleted account's card photo file goes too (the profile photo is cleaned
+// up by the app's deleteAccount).
+export const onPublicProfileDeletedCardPhoto = onDocumentDeleted("publicProfiles/{uid}", async (event) => {
+  const p = event.data?.data()?.cardPhotoPath;
+  if (p && p.startsWith("cardPhotos/")) await getStorage().bucket().file(p).delete().catch(() => {});
 });

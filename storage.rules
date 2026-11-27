@@ -16,6 +16,18 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // Trading card photos (2026-11-26). Written only by setCardPhoto, under a
+    // random name, so the free-then-$3.99 rule can't be skipped.
+    match /cardPhotos/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // Reported photos hidden after 3 reports. Server-only; the admin portal
+    // views them through getReportedPhoto.
+    match /photoQuarantine/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     // Child profile photos (2026-10-28). Uploaded only by the setChildAvatar
     // Cloud Function under a random file name, so the public URL never
     // carries the parent's uid or the child's private profile id (an

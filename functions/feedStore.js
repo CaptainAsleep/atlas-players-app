@@ -28,11 +28,9 @@ export async function friendsOf(db, uid) {
   return feed.friendUidsFrom(uid, sent.docs.map((d) => d.data()), received.docs.map((d) => d.data()));
 }
 
-// Same check as cardBetaAllowed in index.js: the code list or a cardBeta doc.
-export async function hasCards(db, uid) {
-  if (isCardBeta(uid)) return true;
-  const d = await db.collection("cardBeta").doc(uid).get().catch(() => null);
-  return !!d?.exists;
+// Same check as cardBetaAllowed in index.js. Everyone has cards since 2026-11-26.
+export async function hasCards(_db, uid) {
+  return isCardBeta(uid);
 }
 
 async function audienceFor(db, activity, friendUids) {

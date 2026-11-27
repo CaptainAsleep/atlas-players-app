@@ -10,12 +10,7 @@
 //   cardCollections/{collectorUid}_{ownerId}  { collectorUid, ownerId, ownerKind, collectedAt }  public read, server write
 //   cardShares/{token}                     { ownerId, ownerKind, issuerUid, expiresAt, status, ... } issuer read, server write
 
-// v1 is visible to these accounts only (Michael, 2026-11-08). Add a uid here
-// AND in src/TradingCards.jsx to let someone else test.
-export const CARD_BETA_UIDS = new Set([
-  "lg4HMLTJvsPfSEN1pvNhMV4fbct1", // Atlas
-  "4gaohQb6ddMvdSNdhlDp75eMZke2", // Rogue (2026-11-08)
-]);
+// Cards were a beta (CARD_BETA_UIDS) until 2026-11-26; now open to everyone.
 export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
 
 // Hand-set tiers that skip the circulation ranking (like Founder). Rogue is
@@ -34,7 +29,8 @@ export const RANKED_MIN = 5;
 export const SHARE_TTL_MS = 3 * 60 * 1000;
 
 // Server-owned fields on a public profile. Mirrored in firestore.rules.
-export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected", "rankFloor", "cardOptOut"];
+// + the card photo itself (2026-11-26, cardPhotos.js): only setCardPhoto writes it.
+export const CARD_SERVER_KEYS = ["signupNumber", "circulation", "cardTier", "cardTitle", "cardStats", "cardsCollected", "rankFloor", "cardOptOut", "cardPhotoUrl", "cardPhotoPath", "cardPhotoAspect", "cardPhotoHiRes", "cardPhotoChanges"];
 
 // Likeness consent (2026-11-09). The app hashes the exact words it showed in
 // the consent pop-up and sends the hash with the answer; only this version
@@ -68,8 +64,9 @@ export const packConsentIsCurrentIn = (d) => !!d && d.choice === "in" && d.ackno
 // "diamond" is hand-set only (TIER_OVERRIDES); circulation never produces it.
 export const TIERS = ["unranked", "common", "uncommon", "rare", "epic", "legendary", "onyx", "diamond", "founder"];
 
+// Name kept from the beta: true for any signed-in uid.
 export function isCardBeta(uid) {
-  return !!uid && CARD_BETA_UIDS.has(uid);
+  return !!uid;
 }
 
 export function newShareToken(randomBytes) {

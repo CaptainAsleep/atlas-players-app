@@ -18,6 +18,7 @@ import { collection, deleteDoc, doc, getDoc, getDocFromServer, getDocs, incremen
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 import { auth, db, functions, storage } from "../lib/firebase";
+import { offerCardPhoto } from "../lib/cardPhotoBus";
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -369,10 +370,11 @@ export function useAuth() {
   // Takes an already-resized image Blob (resizing happens in the component,
   // right where the file picker lives), uploads it to this user's own
   // Storage folder, and saves the resulting URL to their profile doc.
-  // 2026-11-08 (trading cards): from the crop tool it gets
-  // { profileBlob, originalBlob, aspect, cardCrop } instead — the round photo
-  // (profile.jpg, cropped, used everywhere as before) plus the full photo at
-  // up to 1,200px (card-photo.jpg) and where the card frames it.
+  // From the crop tool it gets { profileBlob, originalBlob, aspect }: the
+  // round photo (profile.jpg, 1,200px since 2026-11-26) plus the full photo.
+  // Profile photos are free and unlimited and never touch the trading card
+  // (2026-11-26). Afterwards the app offers the full photo for the card
+  // (CardPhotoFlow.jsx; the server decides free vs $3.99).
   async function uploadAvatar(input) {
     if (!auth.currentUser) return;
     const uid = auth.currentUser.uid;
@@ -381,17 +383,10 @@ export function useAuth() {
     const storageRef = ref(storage, `avatars/${uid}/profile.jpg`);
     await uploadBytes(storageRef, blob, { contentType: "image/jpeg" });
     const url = await getDownloadURL(storageRef);
-    const card = {};
-    if (isCropped && input.originalBlob) {
-      const cardRef = ref(storage, `avatars/${uid}/card-photo.jpg`);
-      await uploadBytes(cardRef, input.originalBlob, { contentType: "image/jpeg" });
-      card.cardPhotoUrl = await getDownloadURL(cardRef);
-      card.cardPhotoAspect = Number(input.aspect) || 1;
-      card.cardCrop = input.cardCrop || { x: 0.5, y: 0.5, zoom: 1 };
-    }
     await updateDoc(doc(db, "users", uid), { avatarUrl: url });
-    await updateDoc(doc(db, "publicProfiles", uid), { avatarUrl: url, ...card });
+    await updateDoc(doc(db, "publicProfiles", uid), { avatarUrl: url });
     await updateProfile(auth.currentUser, { photoURL: url });
+    if (isCropped && input.originalBlob) offerCardPhoto({ blob: input.originalBlob, aspect: Number(input.aspect) || 1 });
     return url;
   }
 

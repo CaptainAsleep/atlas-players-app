@@ -12,7 +12,7 @@ test("constants", () => {
   assert.ok(SHARE_TTL_MS >= 60_000 && SHARE_TTL_MS <= 5 * 60_000);
   assert.ok(CARD_SERVER_KEYS.includes("signupNumber") && CARD_SERVER_KEYS.includes("circulation"));
   assert.ok(isCardBeta(FOUNDER_UID));
-  assert.ok(!isCardBeta("someoneElse"));
+  assert.ok(isCardBeta("someoneElse")); // open to everyone 2026-11-26
   assert.ok(!isCardBeta(null));
 });
 

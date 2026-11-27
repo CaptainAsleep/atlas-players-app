@@ -813,9 +813,11 @@ service cloud.firestore {
         // as they are. graduatedAt is still not allowed, so a handed-over
         // profile stays locked.
         allow update: if request.auth != null && request.auth.uid == userId
-          && request.resource.data.keys().hasOnly(['fullName', 'callsign', 'dob', 'avatar', 'createdAt', 'avatarUrl', 'avatarPath'])
+          && request.resource.data.keys().hasOnly(['fullName', 'callsign', 'dob', 'avatar', 'createdAt', 'avatarUrl', 'avatarPath', 'cardPhotoUrl', 'cardPhotoPath', 'cardPhotoAspect', 'cardPhotoHiRes', 'cardPhotoChanges'])
           && request.resource.data.get('avatarUrl', null) == resource.data.get('avatarUrl', null)
           && request.resource.data.get('avatarPath', null) == resource.data.get('avatarPath', null)
+          // A child's card photo (2026-11-26) is written only by setCardPhoto.
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['cardPhotoUrl', 'cardPhotoPath', 'cardPhotoAspect', 'cardPhotoHiRes', 'cardPhotoChanges'])
           && request.resource.data.dob == resource.data.dob
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.fullName is string && request.resource.data.fullName.size() > 0 && request.resource.data.fullName.size() <= 80
@@ -1024,10 +1026,12 @@ service cloud.firestore {
     match /publicProfiles/{uid} {
       allow read: if true;
       // Trading cards (2026-11-08): serial number, circulation, tier, title,
-      // card stats and collected count are written only by Cloud Functions
+      // card stats and collected count are written only by Cloud Functions.
+      // So is the card photo since 2026-11-26 (setCardPhoto: first one free,
+      // then $3.99); cardCrop stays app-writable (re-cropping is free)
       // (they drive rarity). A player can't set them on create or change them.
       allow create: if request.auth != null && request.auth.uid == uid
-        && !request.resource.data.keys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor', 'cardOptOut']);
+        && !request.resource.data.keys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor', 'cardOptOut', 'cardPhotoUrl', 'cardPhotoPath', 'cardPhotoAspect', 'cardPhotoHiRes', 'cardPhotoChanges']);
       allow delete: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && (
         // Same verified-forgery carve-out as users/{userId} above — the
@@ -1035,7 +1039,7 @@ service cloud.firestore {
         // guard, not just the source doc.
         (request.auth.uid == uid
           && (request.resource.data.get('verified', false) != true || request.auth.token.email_verified == true)
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor', 'cardOptOut']))
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['signupNumber', 'circulation', 'cardTier', 'cardTitle', 'cardStats', 'cardsCollected', 'rankFloor', 'cardOptOut', 'cardPhotoUrl', 'cardPhotoPath', 'cardPhotoAspect', 'cardPhotoHiRes', 'cardPhotoChanges']))
         ||
         // Anyone signing up with this player's referral link can bump
         // their referral count by exactly 1 — narrow, single-field,
@@ -1078,6 +1082,23 @@ service cloud.firestore {
     }
     // Trading-card testers (scripts/set-card-beta.mjs). A player can only see
     // their own entry, which is how the app knows to show cards to them.
+    // Paid card photo changes (2026-11-26): one doc per $3.99 payment, created
+    // only by the Stripe webhook, spent only by setCardPhoto. The payer can
+    // see their own (the app watches for the credit after checkout).
+    match /cardPhotoCredits/{id} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+    // Photo reports (2026-11-26): written only by reportPhoto. Individual
+    // reports are never readable; the per-photo case is admin-only.
+    match /photoReports/{id} {
+      allow read, write: if false;
+    }
+    match /photoReportCases/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    // Pre-2026-11-26 card beta list. No longer read by the app or functions.
     match /cardBeta/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;

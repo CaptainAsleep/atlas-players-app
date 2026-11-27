@@ -2,8 +2,8 @@
 // claude/atlas-trading-cards-scope.md. Prototype the visuals came from:
 // https://claude.ai/artifact/5L16KqMkjpQbRyTyKGkATV
 //
-// v1 is visible only to CARD_BETA_UIDS (Michael's account). The same list is
-// enforced server-side in functions/cards.js — keep them in sync.
+// Open to every signed-in player since 2026-11-26 (Michael). Was a beta:
+// CARD_BETA_UIDS + cardBeta/{uid} docs, mirrored in functions/cards.js.
 //
 // What's here: the card itself (3D spin / flip / idle sway), My Card, the
 // share QR (refreshes every 30s), the "Collected" arrival, the deck (swipe,
@@ -17,30 +17,23 @@ import { httpsCallable } from "firebase/functions";
 import { db, functions as firebaseFunctions } from "./lib/firebase";
 import { useTheme } from "./hooks/useTheme";
 import { cropBackground, CARD_ASPECT } from "./lib/cardCrop";
+import { offerCardPhoto } from "./lib/cardPhotoBus";
+import { ReportPhotoButton, cardPhotoCostLine } from "./CardPhotoFlow";
 import { Crop, ImagePlus, Layers, Lock, QrCode, RefreshCw, Repeat2, ScanLine, Waves } from "lucide-react";
 
-export const CARD_BETA_UIDS = new Set([
-  "lg4HMLTJvsPfSEN1pvNhMV4fbct1", // Atlas
-  "4gaohQb6ddMvdSNdhlDp75eMZke2", // Rogue (2026-11-08)
-]);
 export const FOUNDER_UID = "lg4HMLTJvsPfSEN1pvNhMV4fbct1";
-export const isCardBeta = (uid) => !!uid && CARD_BETA_UIDS.has(uid);
+// Name kept from the beta so call sites don't change: true for anyone signed in.
+export const isCardBeta = (uid) => !!uid;
 // The word on a card's rank badge, when it isn't the rank's own name.
 // Display only: the rank (and its colors) stays what the server says.
 export const CARD_RANK_LABELS = {
   "4gaohQb6ddMvdSNdhlDp75eMZke2": { label: "CO-FOUNDER", name: "Co-Founder" }, // Rogue, on Diamond (Michael, 2026-11-09)
 };
 
-// Testers added without a code change live in cardBeta/{uid}
-// (scripts/set-card-beta.mjs). Only your own entry is readable.
+// Cards are on for every signed-in player (2026-11-26). The cardBeta/{uid}
+// docs are no longer read.
 export function useCardBeta(uid) {
-  const [on, setOn] = useState(isCardBeta(uid));
-  useEffect(() => {
-    if (!uid) { setOn(false); return undefined; }
-    if (isCardBeta(uid)) { setOn(true); return undefined; }
-    return onSnapshot(doc(db, "cardBeta", uid), (s) => setOn(s.exists()), () => setOn(false));
-  }, [uid]);
-  return on;
+  return isCardBeta(uid);
 }
 
 const W = 300;
@@ -124,10 +117,13 @@ export function toCard(kind, id, d) {
     ops: d.cardStats?.ops ?? 0,
     fields: d.cardStats?.fields ?? 0,
     patches: d.cardStats?.patches ?? 0,
-    photoUrl: d.cardPhotoUrl || d.avatarUrl || null,
+    // No fallback to the profile photo (2026-11-26): the card photo is its
+    // own thing, set only by setCardPhoto (first free, then $3.99).
+    photoUrl: d.cardPhotoUrl || null,
     aspect: hasCardPhoto ? d.cardPhotoAspect || 1 : 1,
     crop: hasCardPhoto ? d.cardCrop || null : null,
-    hiRes: hasCardPhoto,
+    hiRes: hasCardPhoto && d.cardPhotoHiRes !== false,
+    photoChanges: Number.isInteger(d.cardPhotoChanges) ? d.cardPhotoChanges : 0,
     optedOut: !!d.cardOptOut,
     rankLabel: kind === "adult" ? CARD_RANK_LABELS[id]?.label || null : null,
     rankName: kind === "adult" ? CARD_RANK_LABELS[id]?.name || null : null,
@@ -616,7 +612,7 @@ export function CardPhotoPrompt({ onUpload }) {
     <div className="p-3 mb-4 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, border: `1px solid ${T.line}` }}>
       <div className="flex-1">
         <div className="text-[13px] font-semibold" style={{ ...display, color: T.ash }}>Your card needs a sharper photo</div>
-        <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>Upload a new one and line it up for your trading card.</div>
+        <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>Upload a sharper profile photo, then choose it (or another) for your card. Your first card photo is free.</div>
       </div>
       <Pill primary onClick={onUpload}>Upload</Pill>
     </div>
@@ -823,6 +819,7 @@ export function CardViewer({ card, total, onClose }) {
         <button onClick={() => ctl.current?.flip()} className="px-4 py-2.5 text-[12px] font-semibold" style={{ color: "#fff", border: "1px solid rgba(255,255,255,0.3)", borderRadius: T.rPill }}>Flip</button>
         <button onClick={() => ctl.current?.spin()} className="px-4 py-2.5 text-[12px] font-semibold" style={{ color: "#fff", border: "1px solid rgba(255,255,255,0.3)", borderRadius: T.rPill }}>Spin</button>
       </div>
+      {card?.photoUrl && <div className="mt-4"><ReportPhotoButton ownerKind={card.kind} ownerId={card.id} target="card" label="Report card photo" light /></div>}
     </div>,
     document.body
   );
@@ -943,9 +940,9 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
   const canShare = !!card?.photoUrl && consent.optedIn;
   // One line under Share saying what's in the way (most important first).
   const shareHint = !card ? null
-    : !card.photoUrl ? "Add a photo to share your card."
+    : !card.photoUrl ? "Add a card photo to share your card."
     : !consent.loading && !consent.optedIn ? "Your card is private. Opt in below to share it."
-    : !card.hiRes ? "Your card photo is low-res. Add a sharper one."
+    : !card.hiRes ? "Your card photo is low-res. Change it for a sharper one."
     : null;
 
   return (
@@ -972,10 +969,17 @@ export function MyCardScreen({ user, publicChildren = [], onBack, onOpenDeck, on
             {shareHint && <div className="text-[12px] text-center -mt-0.5" style={{ ...body, color: T.ashDim }}>{shareHint}</div>}
             <div className="w-full grid grid-cols-2 gap-2.5">
               <SecondaryAction icon={Layers} onClick={onOpenDeck}>My deck{deckCount ? ` · ${deckCount}` : ""}</SecondaryAction>
-              {card.hiRes
+              {card.photoUrl
                 ? <SecondaryAction icon={Crop} onClick={onAdjustCardPhoto}>Adjust photo</SecondaryAction>
-                : <SecondaryAction icon={ImagePlus} onClick={onUploadPhoto}>{card.photoUrl ? "Sharper photo" : "Add photo"}</SecondaryAction>}
+                : <SecondaryAction icon={ImagePlus} onClick={() => offerCardPhoto({})}>Add card photo</SecondaryAction>}
             </div>
+            {/* Card photo changes (2026-11-26): first free, then $3.99. Re-framing (Adjust) is always free. */}
+            {card.photoUrl && (
+              <div className="w-full flex flex-col items-center gap-1">
+                <SecondaryAction icon={ImagePlus} onClick={() => offerCardPhoto({})}>Change card photo</SecondaryAction>
+                <div className="text-[11px] text-center" style={{ ...body, color: T.ashFaint }}>{cardPhotoCostLine(card.photoChanges)} Adjusting the framing is free.</div>
+              </div>
+            )}
           </div>
           {!consent.loading && (
             <div className="w-full mt-4 p-3 flex items-center gap-3" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd, border: `1px solid ${T.line}` }}>
@@ -1042,6 +1046,7 @@ function SecondaryAction({ icon: Icon, onClick, children }) {
 }
 
 function ChildCardRow({ child, total, onShare }) {
+  const changePhoto = () => offerCardPhoto({ dependentId: child.depId, callsign: child.callsign });
   const { T, display, body } = useTheme();
   const { card } = useCardOwner("child", child.publicId);
   useCardStyles();
@@ -1052,9 +1057,10 @@ function ChildCardRow({ child, total, onShare }) {
       <div className="flex-1 min-w-0">
         <div className="text-[14px] font-semibold" style={{ ...display, color: T.ash }}>{card.callsign}</div>
         <div className="text-[12px]" style={{ ...body, color: T.ashDim }}>
-          {card.photoUrl ? `${rankName(card.tier)} · in ${card.circ} deck${card.circ === 1 ? "" : "s"}` : "Add a photo in Child Profiles to share"}
+          {card.photoUrl ? `${rankName(card.tier)} · in ${card.circ} deck${card.circ === 1 ? "" : "s"}` : "Add a card photo to share"}
         </div>
       </div>
+      {child.depId && <Pill onClick={changePhoto}>{card.photoUrl ? "Photo" : "Add photo"}</Pill>}
       <Pill primary disabled={!card.photoUrl} onClick={() => onShare(card)}>Share</Pill>
     </div>
   );

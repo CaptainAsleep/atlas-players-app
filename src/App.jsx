@@ -35,6 +35,7 @@ import { useMyVouchers, useCancellationNotices, useVoucherRedemption } from "./h
 import { useMyTicketHoldings, useMyEventTeamTickets } from "./hooks/useTeamTickets";
 import { EventTeamTickets, TicketOffersCard, GiveVoucherSheet, canGiveVoucher } from "./TeamTickets";
 import PhotoCropper from "./PhotoCropper";
+import { CardPhotoChooser, ReportPhotoButton } from "./CardPhotoFlow";
 import { isCardBeta, useCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher, CardConsentGate, TIER_STYLE } from "./TradingCards";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
 import { FONTS } from "./theme";
@@ -4973,6 +4974,7 @@ function PlayerProfileScreen({ uid, onBack, currentUser, currentProfile, current
           </div>
         )}
         {profile.teamName && <div className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>{profile.teamName}</div>}
+        {!isSelf && profile.avatarUrl && <div className="mb-3"><ReportPhotoButton ownerKind="adult" ownerId={uid} target="profile" /></div>}
 
         {cardBeta && theirCard && (
           <div className="flex gap-2 mb-3">
@@ -8538,6 +8540,7 @@ function ChildPublicProfileScreen({ publicId, profile, onBack }) {
           <span className="text-[18px] font-semibold" style={{ ...display, color: T.ash }}>{callsign}</span>
         </div>
         {profile.teamName && <div className="text-[12px] mb-3" style={{ ...body, color: T.ashDim }}>{profile.teamName}</div>}
+        {profile.avatarUrl && <div className="mb-3"><ReportPhotoButton ownerKind="child" ownerId={publicId} target="profile" /></div>}
       </div>
       <div className="px-6 pt-4">
         <Eyebrow>Patches ({sorted.length})</Eyebrow>
@@ -8784,7 +8787,7 @@ function MyAccountScreen({ profile, user, onBack, updateProfileFields, uploadAva
 
       <div className="px-6 pt-6 flex flex-col items-center">
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-        {cropFile && <PhotoCropper file={cropFile} withCardStep={cardBeta} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
+        {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
         <button onClick={handleAvatarPick} className="relative w-20 h-20 mb-2" disabled={avatarUploading}>
           {profile?.avatarUrl ? (
             <div className="w-20 h-20" style={{ backgroundImage: `url("${profile.avatarUrl}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 40 }} />
@@ -9104,7 +9107,7 @@ function ProfileScreen({ profile, user, onNavigate, onOpenSettings, onOpenChildP
         {/* Identity */}
         <div className="p-5 mb-2" style={{ background: T.heroBg, border: T.heroBorder, borderRadius: T.rHero, boxShadow: T.shadowLg }}>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-          {cropFile && <PhotoCropper file={cropFile} withCardStep={cardBeta} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
+          {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
           <div className="flex items-center gap-4">
             <button onClick={handleAvatarPick} aria-label="Change profile photo" className="relative flex-shrink-0" style={{ width: 76, height: 76 }} disabled={avatarUploading}>
               {profile?.avatarUrl ? (
@@ -9983,7 +9986,7 @@ function OnboardingWizardScreen({ profile, user, updateProfileFields, uploadAvat
               </button>
               {avatarError && <p className="text-[11px] mt-2" style={{ ...body, color: T.alert }}>{avatarError}</p>}
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
-              {cropFile && <PhotoCropper file={cropFile} withCardStep={cardBeta} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
+              {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onSave={handleCropSave} />}
             </div>
           </>
         )}
@@ -11598,6 +11601,7 @@ function AppShell() {
       )}
       {user && profile && !installGate && cardBetaMe && <RankUpWatcher uid={user.uid} />}
       {user && profile && !installGate && cardBetaMe && <CardConsentGate uid={user.uid} />}
+      {user && profile && !installGate && <CardPhotoChooser uid={user.uid} />}
       {user && profile && !installGate && collectedCard && (
         <CardCollectedOverlay
           result={collectedCard}
@@ -11611,7 +11615,7 @@ function AppShell() {
           <button onClick={() => setCardLinkError("")} className="text-[12px] underline" style={{ color: T.accent }}>OK</button>
         </div>
       )}
-      {adjustingCardPhoto && myCardForCrop?.hiRes && (
+      {adjustingCardPhoto && myCardForCrop?.photoUrl && (
         <PhotoCropper
           mode="card"
           imageUrl={myCardForCrop.photoUrl}

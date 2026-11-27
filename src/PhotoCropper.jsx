@@ -5,13 +5,16 @@
 //   step 2 "card":    the trading-card framing (stored as numbers on the
 //          public profile; can be changed later without re-uploading)
 // mode "card" opens straight on step 2 for an already-uploaded photo.
+// 2026-11-26: profile uploads are one step again (withCardStep defaults to
+// false). The card photo is chosen afterwards in CardPhotoFlow.jsx (first one
+// free, then $3.99), so a profile change never touches the card.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useHideBottomNav } from "./lib/hideNav";
 import { useTheme } from "./hooks/useTheme";
 import { DEFAULT_CROP, MIN_ZOOM, MAX_ZOOM, CARD_ASPECT, clampCrop, cropBackground, cropRect, loadImageFile, renderCrop, renderScaled } from "./lib/cardCrop";
 
-const PROFILE_OUT = 800;   // round profile photo, px square
+const PROFILE_OUT = 1200;  // round profile photo, px square (raised from 800, Michael 2026-11-26)
 const ORIGINAL_MAX = 1200; // the stored full photo (card source), long side
 
 function CropFrame({ url, aspect, frameAspect, crop, setCrop, round, width }) {
@@ -72,8 +75,8 @@ function CropFrame({ url, aspect, frameAspect, crop, setCrop, round, width }) {
   );
 }
 
-// withCardStep=false (players outside the card beta): one step, no card wording.
-export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspect, initialCardCrop, onCancel, onSave, withCardStep = true }) {
+// withCardStep=false (the default since 2026-11-26): one step, no card wording.
+export default function PhotoCropper({ file, mode = "full", imageUrl, imageAspect, initialCardCrop, onCancel, onSave, withCardStep = false }) {
   const { T, display, body, mono } = useTheme();
   const [img, setImg] = useState(null);
   const [url, setUrl] = useState(mode === "card" ? imageUrl : null);
