@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import {
   Compass, Heart, Calendar, Inbox, User, ChevronLeft, Share2, Users, Shield,
   Search, SlidersHorizontal, MapPin, Star, Check, Plus, Crosshair,
-  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy, Target, Flag, Rocket, Medal, Flame,
+  ArrowRight, ChevronRight, LogOut, MessageCircle, Ticket, Radio, Camera, Phone, BadgeCheck, FileSignature, RefreshCw, Maximize2, X, TreePine, ChevronsUp, Home, Trophy, Zap, Target, Flag, Rocket, Medal, Flame,
   Settings, ScanLine, UserPlus, Copy, Lock, Mail, Globe, Palette, AlertTriangle, ExternalLink, CalendarDays
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
@@ -404,6 +404,15 @@ function ClaimedBadge({ claimed, fieldId, size = 14, ring = false }) {
   );
 }
 
+// Event-type tag text (2026-11-28, RealSim request): OUTDOOR is shown as
+// "Open Play" everywhere players see it; the stored key stays OUTDOOR so
+// existing events, patch rules and saved preferences keep working. MAJOR
+// returns null because Major events already get their own MAJOR tag.
+function eventTypeTag(type) {
+  if (!type || type === "MAJOR") return null;
+  return type === "OUTDOOR" ? "OPEN PLAY" : type;
+}
+
 function Tag({ children, tone = "neutral" }) {
   const { T, display, body, mono } = useTheme();
   const map = {
@@ -705,7 +714,7 @@ function EventCard({ ev, fallbackImageUrl, distanceMi, claimed, onClick, priceSt
     >
       <div className="h-40 relative mb-2.5" style={{ ...heroStyle(ev.imageUrl || fallbackImageUrl, ev.id || ev.title), borderRadius: T.rMedia, overflow: "hidden" }}>
         <div className="absolute top-3 left-3 flex gap-2">
-          {ev.type && <Tag>{ev.type}</Tag>}
+          {eventTypeTag(ev.type) && <Tag>{eventTypeTag(ev.type)}</Tag>}
           {(ev.isMajor || ev.showMajorTag) && <Tag>MAJOR</Tag>}
           {isToday && <Tag tone="live">TODAY</Tag>}
         </div>
@@ -862,7 +871,7 @@ function CommunitySpotlight({ events, fields, onOpenEvent }) {
               <div className="h-44 relative" style={{ ...heroStyle(ev.imageUrl || field?.imageUrl, ev.id || ev.title), borderRadius: T.rMedia, overflow: "hidden" }}>
                 <div className="absolute top-3 left-3 flex gap-2">
                   <Tag tone="live">#{i + 1}</Tag>
-                  {ev.type && <Tag>{ev.type}</Tag>}
+                  {eventTypeTag(ev.type) && <Tag>{eventTypeTag(ev.type)}</Tag>}
                   {(ev.isMajor || ev.showMajorTag) && <Tag>MAJOR</Tag>}
                 </div>
                 <div className="absolute left-3 right-3 bottom-3">
@@ -1568,9 +1577,10 @@ function HomeScreen({
 
   const cats = [
     { key: "Featured", icon: Star },
-    { key: "Outdoor", icon: TreePine, type: "OUTDOOR", fieldProp: "outdoor" },
+    { key: "Open Play", icon: TreePine, type: "OUTDOOR", fieldProp: "outdoor" },
     { key: "MilSim", icon: ChevronsUp, type: "MILSIM" },
     { key: "Indoor", icon: Home, type: "INDOOR", fieldProp: "indoor" },
+    { key: "Speedsoft", icon: Zap, type: "SPEEDSOFT" },
     { key: "Tournament", icon: Trophy, type: "TOURNAMENT" },
     { key: "Major", icon: Flag, type: "MAJOR" },
   ];
@@ -2910,7 +2920,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
           )}
           <div className={`absolute bottom-4 left-5 ${heroImageUrl ? "right-16" : "right-5"} pointer-events-none`}>
             <div className="flex gap-2 mb-2">
-              {ev.type && <Tag>{ev.type}</Tag>}
+              {eventTypeTag(ev.type) && <Tag>{eventTypeTag(ev.type)}</Tag>}
               {(ev.isMajor || ev.showMajorTag) && <Tag>MAJOR</Tag>}
               {statusLabel && <Tag tone="live">{statusLabel}</Tag>}
             </div>
@@ -9798,9 +9808,10 @@ function InstallGateScreen({ platform, deferredPrompt }) {
 }
 
 const ONBOARDING_EVENT_TYPES = [
-  { key: "OUTDOOR", label: "Outdoor", icon: TreePine },
+  { key: "OUTDOOR", label: "Open Play", icon: TreePine },
   { key: "MILSIM", label: "MilSim", icon: ChevronsUp },
   { key: "INDOOR", label: "Indoor", icon: Home },
+  { key: "SPEEDSOFT", label: "Speedsoft", icon: Zap },
   { key: "TOURNAMENT", label: "Tournament", icon: Trophy },
 ];
 
