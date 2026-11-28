@@ -116,12 +116,12 @@ export function useBookingActions() {
   // bookFreeEvent resolves the real price itself and only writes if it
   // actually comes out to $0 — profile lookup and all three writes now
   // happen server-side, in one transaction, so this is just the trigger.
-  async function bookEvent(uid, profile, event, selectedChoice, location, attendeeDependentIds, selections, guardianPlaying = true) {
+  async function bookEvent(uid, profile, event, selectedChoice, location, attendeeDependentIds, selections, guardianPlaying = true, youth = null) {
     const call = httpsCallable(functions, "bookFreeEvent");
     // location is a best-effort { lat, lng } reading (or null) the caller
     // already tried to grab — used server-side only to decide the
     // Walk-On Survivor patch, never required for booking to succeed.
-    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [], selections: selections && Object.keys(selections).length > 0 ? selections : null, guardianPlaying: guardianPlaying !== false });
+    await call({ eventId: event.id, selectedChoiceId: selectedChoice?.id || null, location: location || null, attendeeDependentIds: attendeeDependentIds || [], selections: selections && Object.keys(selections).length > 0 ? selections : null, guardianPlaying: guardianPlaying !== false, guardianOnSite: youth?.guardianOnSite === true, fullFaceAck: youth?.fullFaceAck === true });
   }
 
   async function cancelBooking(uid, eventId) {
@@ -148,7 +148,7 @@ export function useBookingActions() {
   // the webhook, server-side, once payment actually succeeds — this
   // function's whole job is just getting the player to a real checkout
   // page, nothing more.
-  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentals, attendeeDependentIds, selections, guardianPlaying = true, skins = null) {
+  async function createBookingCheckout(eventId, selectedChoiceId, location, selectedRentals, attendeeDependentIds, selections, guardianPlaying = true, skins = null, youth = null) {
     const call = httpsCallable(functions, "createBookingCheckout");
     // Same best-effort { lat, lng } (or null) as bookEvent — carried
     // through Checkout Session metadata since the webhook that actually
@@ -172,6 +172,9 @@ export function useBookingActions() {
       // Skin add-on (2026-11-09): { skinIds } or { bundle: true }, ids only —
       // the server prices it from its own catalog.
       skins: skins || null,
+      // Youth rules (2026-11-28): the guardian's "on site" and full-face ticks.
+      guardianOnSite: youth?.guardianOnSite === true,
+      fullFaceAck: youth?.fullFaceAck === true,
     });
     return result.data.url;
   }

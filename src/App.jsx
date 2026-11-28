@@ -38,6 +38,7 @@ import PhotoCropper from "./PhotoCropper";
 import { CardPhotoChooser, ReportPhotoButton } from "./CardPhotoFlow";
 import { isCardBeta, useCardBeta, parseCardToken, collectCardCode, useCardOwner, useDeckCount, MyCardScreen, DeckScreen, CardCollectedOverlay, CardViewer, CardPhotoPrompt, useCardsTotal, RankUpWatcher, CardConsentGate, TIER_STYLE } from "./TradingCards";
 import { eventCloseMs, stateFromCity, parseFirstTime, timeZoneForState, wallClockToUtcMs, isDayOfPricing, currentPriceText } from "./lib/eventClose";
+import { readYouthRules, childYouthStatus, youthRulesSummary } from "./lib/youthRules";
 import { FONTS } from "./theme";
 import { httpsCallable } from "firebase/functions";
 import { functions as firebaseFunctions } from "./lib/firebase";
@@ -1053,6 +1054,13 @@ function FieldFacts({ field, rentalPick, rentalsOnly = false }) {
           ))}
         </div>
       </div>
+
+      {youthRulesSummary(readYouthRules(field)) && (
+        <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+          <Eyebrow>Age &amp; Safety</Eyebrow>
+          <div className="text-[13px]" style={{ ...body, color: T.ash }}>{youthRulesSummary(readYouthRules(field))}</div>
+        </div>
+      )}
 
       <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
         <div className="flex items-center justify-between mb-2">
@@ -2504,9 +2512,10 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
   // booking), so unlike the real Stripe total, "does it cover this?" is
   // exact, client-computable math — no server round-trip needed just to
   // decide whether to show the option.
-  // A Major has no field — its minimum age (if any) lives on the event.
-  const minAgeSource = ev.isMajor ? ev.minimumAge : field?.minimumAge;
-  const minAge = typeof minAgeSource === "number" && minAgeSource > 0 ? minAgeSource : null;
+  // Youth rules (2026-11-28): minimum age, an optional "with a legal guardian
+  // on site" age band, and an optional full-face age. A Major keeps them on
+  // the event; a field event on the field. The server repeats every check.
+  const youth = readYouthRules(ev.isMajor ? ev : field);
   const hasGuardianPhone = !!normalizeUSPhone(profile?.phone);
   // Why a child can't be selected for this event (null = eligible). Age is
   // counted on the event's start date, not today.
@@ -2514,12 +2523,21 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const age = ageOnDate(d.dob, ev.date);
     if (age === null) return "Birthdate missing";
     if (age >= ADULT_AGE) return "Turns 18 by this event — needs their own account";
-    if (minAge && age < minAge) return `Minimum age here is ${minAge}`;
+    if (childYouthStatus(age, youth).blocked) return `Minimum age here is ${youth.minAgeWithGuardian || youth.minAge}`;
     return null;
   };
+  const dependentYouth = (d) => childYouthStatus(ageOnDate(d.dob, ev.date), youth);
   const selectedDependents = dependents.filter((d) => selectedDependentIds.includes(d.id) && !dependentBlockReason(d));
   // Without child profiles there's no picker, so the player is always on.
   const guardianPlaying = includeSelf || dependents.length === 0;
+  const [guardianOnSiteTick, setGuardianOnSiteTick] = useState(false);
+  const [fullFaceTick, setFullFaceTick] = useState(false);
+  const guardianBandKids = selectedDependents.filter((d) => dependentYouth(d).needsGuardian);
+  const fullFaceKids = selectedDependents.filter((d) => dependentYouth(d).needsFullFace);
+  const needsOnSiteTick = !guardianPlaying && guardianBandKids.length > 0;
+  const needsFullFaceTick = fullFaceKids.length > 0;
+  const youthAcks = { guardianOnSite: needsOnSiteTick && guardianOnSiteTick, fullFaceAck: needsFullFaceTick && fullFaceTick };
+  const youthMissing = (needsOnSiteTick && !guardianOnSiteTick) || (needsFullFaceTick && !fullFaceTick);
   const nobodySelected = !guardianPlaying && selectedDependents.length === 0;
   const attendeeCount = (guardianPlaying ? 1 : 0) + selectedDependents.length;
   const attendeeDependentIds = selectedDependents.map((d) => d.id);
@@ -2705,7 +2723,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
       if (isPaidEvent) {
-        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalPicks, attendeeDependentIds, sentGroupPicks, guardianPlaying, skinAddonOn ? skinPickRequest(skinPick) : null);
+        const url = await createBookingCheckout(ev.id, selectedChoiceId, location, selectedRentalPicks, attendeeDependentIds, sentGroupPicks, guardianPlaying, skinAddonOn ? skinPickRequest(skinPick) : null, youthAcks);
         // Two-tap checkout (2026-10-14). This used to pre-open a blank tab
         // at tap time and point it at Stripe once the URL came back. On
         // some phones, opening that tab backgrounded Atlas and paused it
@@ -2719,7 +2737,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
         setCheckoutOpenedInfo(true);
         setBookingBusy(false);
       } else {
-        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds, sentGroupPicks, guardianPlaying);
+        await bookEvent(user.uid, profile, ev, selectedChoice, location, attendeeDependentIds, sentGroupPicks, guardianPlaying, youthAcks);
         setBookingBusy(false);
       }
     } catch (err) {
@@ -2765,7 +2783,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     setBookingError("");
     const location = await (locationPromiseRef.current || getQuickLocation());
     try {
-      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds, sentGroupPicks, guardianPlaying);
+      await redeemVoucher(ev.id, bestFieldVoucher.id, selectedChoiceId, location, attendeeDependentIds, sentGroupPicks, guardianPlaying, youthAcks);
       setBookingBusy(false);
     } catch (err) {
       console.error("voucher redemption failed:", err.code || err.message || err);
@@ -2790,6 +2808,12 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
     }
     if (selectedDependents.length > 0 && !hasGuardianPhone) {
       setBookingError("Add a 10-digit phone number (with area code) in My Account to book with a child — the field needs a number to reach you.");
+      return;
+    }
+    if (youthMissing) {
+      setBookingError(needsOnSiteTick && !guardianOnSiteTick
+        ? `${guardianBandKids[0].callsign || "Your child"} needs their legal guardian on site. Tick "I'll be on site for the whole event" above.`
+        : "Tick the full face protection box above to continue.");
       return;
     }
     if (usingVoucher) {
@@ -3020,6 +3044,14 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
             </div>
           )}
 
+          {/* A field event shows this inside FieldFacts below; a Major has no field. */}
+          {ev.isMajor && youthRulesSummary(youth) && (
+            <div className="p-4" style={{ background: T.panel, borderRadius: T.rCard, boxShadow: T.shadowMd }}>
+              <Eyebrow>Age &amp; Safety</Eyebrow>
+              <div className="text-[13px]" style={{ ...body, color: T.ash }}>{youthRulesSummary(youth)}</div>
+            </div>
+          )}
+
           <LocationCard
             label="Event Location"
             name={ev.venueName || field?.name}
@@ -3182,6 +3214,36 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               {nobodySelected && (
                 <p className="text-[12px] mt-2" style={{ ...body, color: T.accent }}>Pick who's attending.</p>
               )}
+              {needsOnSiteTick && (
+                <button
+                  onClick={() => setGuardianOnSiteTick((v) => !v)}
+                  disabled={bookingBusy}
+                  className="w-full flex items-start gap-3 p-2 mt-3 text-left"
+                  style={{ background: guardianOnSiteTick ? T.tintGood : T.panelAlt, borderRadius: 6 }}
+                >
+                  <div className="w-5 h-5 mt-0.5 flex items-center justify-center flex-shrink-0" style={{ borderRadius: 5, border: `1.5px solid ${guardianOnSiteTick ? T.good : T.line}`, background: guardianOnSiteTick ? T.good : "transparent" }}>
+                    {guardianOnSiteTick && <Check size={13} color={T.inverse} strokeWidth={3} />}
+                  </div>
+                  <div className="text-[12px]" style={{ ...body, color: T.ash }}>
+                    I'll be on site for the whole event. Ages {youth.minAgeWithGuardian}–{youth.minAge - 1} need their legal guardian on site ({guardianBandKids.map((d) => d.callsign || d.fullName).join(", ")}).
+                  </div>
+                </button>
+              )}
+              {needsFullFaceTick && (
+                <button
+                  onClick={() => setFullFaceTick((v) => !v)}
+                  disabled={bookingBusy}
+                  className="w-full flex items-start gap-3 p-2 mt-2 text-left"
+                  style={{ background: fullFaceTick ? T.tintGood : T.panelAlt, borderRadius: 6 }}
+                >
+                  <div className="w-5 h-5 mt-0.5 flex items-center justify-center flex-shrink-0" style={{ borderRadius: 5, border: `1.5px solid ${fullFaceTick ? T.good : T.line}`, background: fullFaceTick ? T.good : "transparent" }}>
+                    {fullFaceTick && <Check size={13} color={T.inverse} strokeWidth={3} />}
+                  </div>
+                  <div className="text-[12px]" style={{ ...body, color: T.ash }}>
+                    I understand {fullFaceKids.map((d) => d.callsign || d.fullName).join(" and ")} must wear full face protection. Required here for players under {youth.fullFaceUnderAge}.
+                  </div>
+                </button>
+              )}
             </div>
           )}
 
@@ -3205,7 +3267,7 @@ function EventDetailScreen({ ev, field, fieldsLoading, onBack, onOpenField, favo
               <div className="flex flex-col gap-1 mt-1">
                 {myBooking.attendees.map((a, i) => (
                   <div key={i} className="text-[13px]" style={{ ...body, color: T.ash }}>
-                    {a.callsign}{a.kind === "minor" ? " · child" : ""}
+                    {a.callsign}{a.kind === "minor" ? " · child" : ""}{a.fullFace ? " · full face required" : ""}{a.guardianOnSite ? " · guardian on site" : ""}
                   </div>
                 ))}
               </div>

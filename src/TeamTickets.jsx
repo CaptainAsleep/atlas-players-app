@@ -6,6 +6,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Ticket, X, Search, Users, ChevronRight, Check } from "lucide-react";
 import { useTheme } from "./hooks/useTheme";
 import { currentPriceText, eventCloseMs, stateFromCity } from "./lib/eventClose";
+import { readYouthRules, childYouthStatus } from "./lib/youthRules";
+import { ageOnDate } from "./hooks/useDependents";
 import {
   MAX_TEAM_TICKETS, msOf, countdownLabel, callableMessage,
   createTeamTicketCheckout, assignTeamTicket, acceptTeamTicket, returnTeamTicket,
@@ -340,6 +342,30 @@ function ClaimTicketSheet({ ev, field, holding, profile, user, myBooking, depend
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const legalName = profile?.firstName && profile?.lastName ? `${profile.firstName} ${profile.lastName}` : profile?.callsign || "";
+  // Youth rules (2026-11-28): the same two ticks as booking, at claim time.
+  const youth = readYouthRules(ev.isMajor ? ev : field);
+  const depStatus = isChild && dep ? childYouthStatus(ageOnDate(dep.dob, ev.date), youth) : null;
+  const needsOnSite = !!depStatus?.needsGuardian && !guardianPlaying && myBooking?.guardianOnSite !== true;
+  const needsFullFace = !!depStatus?.needsFullFace;
+  const [onSiteTick, setOnSiteTick] = useState(false);
+  const [fullFaceTick, setFullFaceTick] = useState(false);
+  const youthMissing = (needsOnSite && !onSiteTick) || (needsFullFace && !fullFaceTick);
+  const youthTicks = (needsOnSite || needsFullFace) && (
+    <>
+      {needsOnSite && (
+        <label className="flex items-start gap-2 mb-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
+          <input type="checkbox" checked={onSiteTick} onChange={(e) => setOnSiteTick(e.target.checked)} className="mt-0.5" />
+          I'll be on site for the whole event. Ages {youth.minAgeWithGuardian}–{youth.minAge - 1} need their legal guardian on site.
+        </label>
+      )}
+      {needsFullFace && (
+        <label className="flex items-start gap-2 mb-3 text-[12px]" style={{ ...body, color: T.ashDim }}>
+          <input type="checkbox" checked={fullFaceTick} onChange={(e) => setFullFaceTick(e.target.checked)} className="mt-0.5" />
+          I understand {holding.assigneeCallsign} must wear full face protection. Required here for players under {youth.fullFaceUnderAge}.
+        </label>
+      )}
+    </>
+  );
 
   const claim = async () => {
     setBusy(true);
@@ -357,7 +383,7 @@ function ClaimTicketSheet({ ev, field, holding, profile, user, myBooking, depend
           guardianAbsent: isChild && !guardianPlaying,
         });
       }
-      await acceptTeamTicket({ ticketId: holding.ticketId });
+      await acceptTeamTicket({ ticketId: holding.ticketId, guardianOnSite: needsOnSite && onSiteTick, fullFaceAck: needsFullFace && fullFaceTick });
       onClose(true);
     } catch (err) {
       console.error("claim team ticket failed:", err);
@@ -400,8 +426,9 @@ function ClaimTicketSheet({ ev, field, holding, profile, user, myBooking, depend
               <div className="px-3 py-2.5 mb-3 text-[14px] font-medium" style={{ ...display, background: T.panelAlt, border: `1px solid ${T.line}`, borderRadius: 4, color: legalName ? T.ash : T.alert }}>
                 {legalName || "Add your name in My Account to sign"}
               </div>
+              {youthTicks}
               {error && <p className="text-[12px] mb-2" style={{ ...body, color: T.alert }}>{error}</p>}
-              <PrimaryButton onClick={claim} disabled={!agreed || !legalName.trim() || busy || (isChild && !dep)}>
+              <PrimaryButton onClick={claim} disabled={!agreed || !legalName.trim() || busy || (isChild && !dep) || youthMissing}>
                 {busy ? "Signing & claiming…" : "Sign & Claim Ticket"}
               </PrimaryButton>
             </>
@@ -412,8 +439,9 @@ function ClaimTicketSheet({ ev, field, holding, profile, user, myBooking, depend
           <p className="text-[13px] mb-4" style={{ ...body, color: T.ashDim }}>
             {ev.waiver ? "Your waiver's already signed." : "This event has no waiver to sign."} Claim the ticket to lock in {isChild ? `${holding.assigneeCallsign}'s` : "your"} spot.
           </p>
+          {youthTicks}
           {error && <p className="text-[12px] mb-2" style={{ ...body, color: T.alert }}>{error}</p>}
-          <PrimaryButton onClick={claim} disabled={busy || (isChild && !dep)}>{busy ? "Claiming…" : "Claim Ticket"}</PrimaryButton>
+          <PrimaryButton onClick={claim} disabled={busy || (isChild && !dep) || youthMissing}>{busy ? "Claiming…" : "Claim Ticket"}</PrimaryButton>
         </>
       )}
     </Sheet>

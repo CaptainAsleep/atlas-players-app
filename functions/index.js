@@ -67,6 +67,7 @@ const staffInviteTemplate = readFileSync(path.join(templatesDir, "staff-invite.h
 const childGraduationTemplate = readFileSync(path.join(templatesDir, "child-graduation.html"), "utf-8");
 const staffVerifyEmailTemplate = readFileSync(path.join(templatesDir, "staff-verify-email.html"), "utf-8");
 import { isPartyBooking, renderPartyBookingEmail } from "./bookingPartyEmail.js";
+import { FULL_FACE_ACK_VERSION, readYouthRules, childYouthStatus, blockedMessage, encodeYouthFlags, decodeYouthFlags } from "./youthRules.js";
 import { isEventClosed, stateFromCity, dayOfPriceStartMs, isDayOfPricing, eventCloseMs, timeZoneForState } from "./eventClose.js";
 import { MAX_TEAM_TICKETS, TeamTicketError, normalizeRecipient, normalizeTeamPurchase, teamTicketTotals, acceptDeadlineMs, teamDraftId, joinNames, fmtUsd } from "./teamTickets.js";
 import { RENTAL_HOLD_MS, stockOf, maxPerPersonOf, qtyOf, normalizeRentalPicks, countBookedRentals, countHeldRentals, assertRentalStock, samePicks } from "./rentalInventory.js";
@@ -413,6 +414,10 @@ async function resolveEventHost(db, eventData) {
       lat: typeof eventData.lat === "number" ? eventData.lat : undefined,
       lng: typeof eventData.lng === "number" ? eventData.lng : undefined,
       minimumAge: typeof eventData.minimumAge === "number" ? eventData.minimumAge : undefined,
+      // Youth rules (2026-11-28): a Major keeps them on the event, a field
+      // event on the field doc — both read through readYouthRules.
+      minAgeWithGuardian: typeof eventData.minAgeWithGuardian === "number" ? eventData.minAgeWithGuardian : undefined,
+      fullFaceUnderAge: typeof eventData.fullFaceUnderAge === "number" ? eventData.fullFaceUnderAge : undefined,
       // An organizer has no field to hold a rentals catalog, so their
       // add-ons live on the event itself, in the same shape as
       // field.rentals — resolveRentalsTotal and everything downstream of
@@ -478,7 +483,7 @@ function hasValidPhone(raw) {
 // caller's own, still under 18 on the event's start date, old enough for
 // the field's minimum age, has a signed waiver doc, and the guardian has a
 // phone number on file. Returns the guardian + a snapshot of each child.
-async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds, guardianPlaying = true }) {
+async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds, guardianPlaying = true, guardianOnSite = false, fullFaceAck = false }) {
   const ids = Array.isArray(dependentIds) ? dependentIds : [];
   if (!guardianPlaying && ids.length === 0) {
     throw new HttpsError("invalid-argument", "Pick at least one person to book for.");
@@ -497,7 +502,7 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
   if (!hasValidPhone(profile.phone)) {
     throw new HttpsError("failed-precondition", "Add a 10-digit phone number (with area code) in My Account before booking with a child — the field needs a way to reach you.");
   }
-  const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
+  const youth = readYouthRules(fieldData);
   const depRefs = ids.map((id) => db.collection("users").doc(uid).collection("dependents").doc(id));
   const sigRefs = ids.map((id) => db.collection("waiverSignatures").doc(`${uid}_${eventId}_${id}`));
   // Child-only: the parent also acknowledged the "you are not playing"
@@ -525,8 +530,9 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
     if (age >= ADULT_AGE) {
       throw new HttpsError("failed-precondition", `${d.callsign || "A child"} turns 18 by this event and needs their own account.`);
     }
-    if (minAge && age < minAge) {
-      throw new HttpsError("failed-precondition", `${d.callsign || "A child"} is under this field's minimum age of ${minAge}.`);
+    const status = childYouthStatus(age, youth);
+    if (status.blocked) {
+      throw new HttpsError("failed-precondition", blockedMessage(d.callsign, youth));
     }
     let sig = null;
     if (sigSnaps) {
@@ -553,9 +559,28 @@ async function resolveAttendees(db, { uid, eventId, eventData, fieldData, profil
       waiverSignatureId: sig ? sigSnaps[i].id : null,
       waiverVersion: sig?.waiverVersion || null,
       guardianNoticeVersion: sig?.guardianNoticeVersion || null,
+      needsGuardian: status.needsGuardian,
+      fullFace: status.needsFullFace,
     };
   });
+  // Youth rules (2026-11-28): a child in the guardian age band needs the
+  // parent on site — playing, or the "I'll be on site" tick. A child under
+  // the full-face age needs the parent's full-face acknowledgement.
+  const guardianBand = dependents.filter((d) => d.needsGuardian);
+  if (guardianBand.length && !guardianPlaying && !guardianOnSite) {
+    throw new HttpsError("failed-precondition", `${guardianBand[0].callsign || "This child"} needs their legal guardian on site. Tick "I'll be on site for the whole event" to book.`);
+  }
+  if (dependents.some((d) => d.fullFace) && !fullFaceAck) {
+    throw new HttpsError("failed-precondition", "Please confirm the full face protection requirement before booking.");
+  }
   return { attendeeCount: (guardianPlaying ? 1 : 0) + dependents.length, dependents, guardianPlaying };
+}
+
+// The two youth-rule ticks, read the same way on every booking path. Only an
+// explicit true counts, so an older app build that never sends them is
+// refused only where a rule actually needs one.
+function readYouthAcks(data) {
+  return { guardianOnSite: data?.guardianOnSite === true, fullFaceAck: data?.fullFaceAck === true };
 }
 
 // Shared by all three booking callables: anything but an explicit false
@@ -605,9 +630,18 @@ function attendeePublicFields(profileData, dependents, guardianPlaying = true) {
     attendeeCount: (guardianPlaying ? 1 : 0) + dependents.length,
     attendees: [
       ...(guardianPlaying ? [{ kind: "adult", callsign: profileData.callsign || "Player" }] : []),
-      ...dependents.map((d) => ({ kind: "minor", callsign: d.callsign || "Child" })),
+      ...dependents.map((d) => ({
+        kind: "minor",
+        callsign: d.callsign || "Child",
+        // Youth rules (2026-11-28) — booleans only, no PII, for roster pills.
+        ...(d.needsGuardian ? { guardianOnSite: true } : {}),
+        ...(d.fullFace ? { fullFace: true } : {}),
+      })),
     ],
     ...(guardianPlaying ? {} : { guardianPlaying: false }),
+    // Set when the parent isn't playing but ticked "I'll be on site".
+    ...(!guardianPlaying && dependents.some((d) => d.needsGuardian) ? { guardianOnSite: true } : {}),
+    ...(dependents.some((d) => d.fullFace) ? { fullFaceAckVersion: FULL_FACE_ACK_VERSION } : {}),
   };
 }
 
@@ -633,6 +667,9 @@ function writeAttendeeDetails(t, bookingRef, uid, profileData, dependents, guard
       guardianNoticeVersion: d.guardianNoticeVersion,
       guardianPlaying,
       guardianAbsentAckId: d.guardianAbsentAckId || null,
+      needsGuardianOnSite: d.needsGuardian === true,
+      fullFaceRequired: d.fullFace === true,
+      fullFaceAckVersion: d.fullFace ? FULL_FACE_ACK_VERSION : null,
       createdAt: new Date(),
     });
   }
@@ -762,7 +799,7 @@ export const createBookingCheckout = onCall(
       throw new HttpsError("failed-precondition", "This field hasn't finished payment setup yet.");
     }
 
-    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data), ...readYouthAcks(request.data) });
     const attendeeCount = attendees.attendeeCount;
     const { entryPriceCents, selectedChoice, selections, resolved, priceTier } = resolveEntryPrice(eventData, request.data?.selectedChoiceId, request.data?.selections, fieldData);
     // Hard cap on team/role-style choices, checked before any Stripe call.
@@ -929,6 +966,9 @@ export const createBookingCheckout = onCall(
         // booking has attendeeCount 1 but still needs the id).
         ...(attendees.dependents.length > 0 ? { attendeeCount: String(attendeeCount), attendeeDependentIds: JSON.stringify(attendees.dependents.map((d) => d.id)) } : {}),
         ...(attendees.guardianPlaying ? {} : { guardianPlaying: "false" }),
+        // Youth-rule flags per child ("id:gf;…"), so the webhook can write
+        // the roster pills without re-deriving the rules.
+        ...(encodeYouthFlags(attendees.dependents) ? { youthFlags: encodeYouthFlags(attendees.dependents) } : {}),
         // The real, resolved ticket price (base + whichever Price Option
         // was picked) — deliberately excludes rentals and the platform
         // fee, same as resolveEntryPrice returns it. Read back by the
@@ -1213,7 +1253,7 @@ export const bookFreeEvent = onCall(
       ...(selectedChoice ? { selectedChoiceLabel: selectedChoice.label } : {}),
       ...(selections.length > 0 ? { selections } : {}),
     };
-    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data), ...readYouthAcks(request.data) });
     const attendeeCount = attendees.attendeeCount;
 
     // Walk-On Survivor: earned by creating an account and completing a
@@ -2037,7 +2077,7 @@ export const bookEventWithVoucher = onCall(
       ...(selections.length > 0 ? { selections } : {}),
     };
     assertEventStillOpen(eventData, fieldData);
-    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data) });
+    const attendees = await resolveAttendees(db, { uid, eventId, eventData, fieldData, profileData, dependentIds: request.data?.attendeeDependentIds, guardianPlaying: readGuardianPlaying(request.data), ...readYouthAcks(request.data) });
     const attendeeCount = attendees.attendeeCount;
     // Full-cover only, now for the whole party: the voucher has to cover
     // every attendee's ticket (a voucher from an N-person booking is worth
@@ -2277,7 +2317,10 @@ export const stripeWebhook = onRequest(
                 selectionPairsMeta = [];
               }
             }
-            const dependentSnapshots = dependentIds.length ? await snapshotDependentsForWebhook(db, uid, eventId, dependentIds, webhookGuardianPlaying) : [];
+            const youthFlagsById = decodeYouthFlags(session.metadata.youthFlags);
+            const dependentSnapshots = dependentIds.length
+              ? (await snapshotDependentsForWebhook(db, uid, eventId, dependentIds, webhookGuardianPlaying)).map((s) => ({ ...s, ...(youthFlagsById[s.id] || {}) }))
+              : [];
             const eventRef = db.collection("events").doc(eventId);
             const userBookingRef = db.collection("users").doc(uid).collection("bookings").doc(eventId);
             const bookingRef = eventRef.collection("bookings").doc(uid);
@@ -3810,6 +3853,7 @@ export const checkInByCode = onCall(async (request) => {
     return {
       id: d.id, fullName: a.fullName || "", callsign: a.callsign || "", avatarUrl: a.avatarUrl || null, waiverSignatureId: a.waiverSignatureId || null,
       guardianName: a.guardianName || "", guardianPhone: a.guardianPhone || "", guardianPlaying: a.guardianPlaying !== false,
+      needsGuardianOnSite: a.needsGuardianOnSite === true, fullFaceRequired: a.fullFaceRequired === true,
     };
   }) : [];
   const result = {
@@ -4838,7 +4882,7 @@ async function teamIdsOf(db, memberId) {
 async function resolveTeamRecipient(db, { buyerUid, buyerProfile, recipient, eventId, eventData, fieldData }) {
   let r = recipient;
   if (r.kind === "player" && r.uid === buyerUid) r = { kind: "self" };
-  const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
+  const youth = readYouthRules(fieldData);
 
   if (r.kind === "self" || r.kind === "player") {
     const uid = r.kind === "self" ? buyerUid : r.uid;
@@ -4902,7 +4946,9 @@ async function resolveTeamRecipient(db, { buyerUid, buyerProfile, recipient, eve
   const age = ageOnDateServer(d.dob, eventData.date);
   if (age === null) throw new HttpsError("failed-precondition", `${callsign}'s profile is missing a birthdate.`);
   if (age >= ADULT_AGE) throw new HttpsError("failed-precondition", `${callsign} turns 18 by this event and needs their own account.`);
-  if (minAge && age < minAge) throw new HttpsError("failed-precondition", `${callsign} is under this field's minimum age of ${minAge}.`);
+  // Guardian-band children can be bought a ticket; the guardian-on-site and
+  // full-face ticks are collected when the guardian claims it.
+  if (childYouthStatus(age, youth).blocked) throw new HttpsError("failed-precondition", blockedMessage(callsign, youth));
   if (guardianBooking.exists) {
     const att = await guardianBooking.ref.collection("attendeeDetails").doc(dependentId).get();
     if (att.exists) throw new HttpsError("already-exists", `${callsign} is already booked for this event.`);
@@ -5302,7 +5348,7 @@ async function handleTeamTicketsPaid(db, session) {
 // --- Claim ------------------------------------------------------------------
 // Shared by acceptTeamTicket and the webhook (buyer's own ticket). Creates the
 // recipient's booking (adult) or adds the child to the guardian's booking.
-async function acceptTeamTicketCore(db, ticketId, callerUid) {
+async function acceptTeamTicketCore(db, ticketId, callerUid, acks = {}) {
   const ticketRef = db.collection("teamTickets").doc(ticketId);
   const holderRef = db.collection("teamTicketHolders").doc(ticketId);
   const holder0 = await holderRef.get();
@@ -5319,7 +5365,7 @@ async function acceptTeamTicketCore(db, ticketId, callerUid) {
   const userBookingRef = db.collection("users").doc(callerUid).collection("bookings").doc(eventId);
   const isChild = h0.kind === "child";
   const depId = h0.dependentId;
-  const minAge = typeof fieldData?.minimumAge === "number" && fieldData.minimumAge > 0 ? fieldData.minimumAge : null;
+  const youth = readYouthRules(fieldData);
 
   await db.runTransaction(async (t) => {
     const reads = [
@@ -5391,7 +5437,8 @@ async function acceptTeamTicketCore(db, ticketId, callerUid) {
       if (d.graduatedAt) throw new HttpsError("failed-precondition", `${d.callsign || "This child"} has their own Atlas account now.`);
       const age = ageOnDateServer(d.dob, eventData.date);
       if (age === null || age >= ADULT_AGE) throw new HttpsError("failed-precondition", `${d.callsign || "This child"} can't be booked as a child for this event.`);
-      if (minAge && age < minAge) throw new HttpsError("failed-precondition", `${d.callsign || "This child"} is under this field's minimum age of ${minAge}.`);
+      const youthStatus = childYouthStatus(age, youth);
+      if (youthStatus.blocked) throw new HttpsError("failed-precondition", blockedMessage(d.callsign || "This child", youth));
       if (!hasValidPhone(profileData.phone)) {
         throw new HttpsError("failed-precondition", "Add a 10-digit phone number (with area code) in My Account first — the field needs a way to reach you.");
       }
@@ -5400,6 +5447,14 @@ async function acceptTeamTicketCore(db, ticketId, callerUid) {
       const guardianPlaying = existing ? existing.guardianPlaying !== false : false;
       if (eventData.waiver && !guardianPlaying && absentSnap?.data()?.guardianAbsent !== true) {
         throw new HttpsError("failed-precondition", "Sign the waiver's not-playing section first to claim this ticket.");
+      }
+      // Youth rules (2026-11-28): same ticks as a booking, at claim time.
+      const onSite = guardianPlaying || acks.guardianOnSite === true || existing?.guardianOnSite === true;
+      if (youthStatus.needsGuardian && !onSite) {
+        throw new HttpsError("failed-precondition", `${d.callsign || "This child"} needs their legal guardian on site. Tick "I'll be on site for the whole event" to claim this ticket.`);
+      }
+      if (youthStatus.needsFullFace && acks.fullFaceAck !== true) {
+        throw new HttpsError("failed-precondition", "Please confirm the full face protection requirement to claim this ticket.");
       }
       const prevCount = existing ? Math.max(guardianPlaying ? 1 : 0, existing.attendeeCount || 1) : 0;
       if (prevCount + 1 > MAX_ATTENDEES_PER_BOOKING) {
@@ -5416,6 +5471,8 @@ async function acceptTeamTicketCore(db, ticketId, callerUid) {
         waiverSignatureId: sigSnap?.exists ? sigSnap.id : null,
         waiverVersion: sigSnap?.data()?.waiverVersion || null,
         guardianNoticeVersion: sigSnap?.data()?.guardianNoticeVersion || null,
+        needsGuardian: youthStatus.needsGuardian,
+        fullFace: youthStatus.needsFullFace,
       };
       // Reads (the check-in code reservation) must all happen before writes.
       const childCheckInCode = existing ? null : await reserveBookingCode(t, db, eventId);
@@ -5429,8 +5486,15 @@ async function acceptTeamTicketCore(db, ticketId, callerUid) {
           ? existing.attendees
           : (guardianPlaying ? [{ kind: "adult", callsign: existing.callsign || profileData.callsign || "Player" }] : []);
         const update = {
-          attendees: [...attendees, { kind: "minor", callsign: d.callsign || "Child" }],
+          attendees: [...attendees, {
+            kind: "minor",
+            callsign: d.callsign || "Child",
+            ...(youthStatus.needsGuardian ? { guardianOnSite: true } : {}),
+            ...(youthStatus.needsFullFace ? { fullFace: true } : {}),
+          }],
           attendeeCount: prevCount + 1,
+          ...(!guardianPlaying && youthStatus.needsGuardian ? { guardianOnSite: true } : {}),
+          ...(youthStatus.needsFullFace ? { fullFaceAckVersion: FULL_FACE_ACK_VERSION } : {}),
         };
         t.update(bookingRef, { ...update, teamTicketChildCount: (existing.teamTicketChildCount || 0) + 1 });
         t.set(userBookingRef, update, { merge: true });
@@ -5473,7 +5537,7 @@ export const acceptTeamTicket = onCall({ invoker: "public" }, async (request) =>
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
   const ticketId = request.data?.ticketId;
   if (typeof ticketId !== "string" || !ticketId) throw new HttpsError("invalid-argument", "Missing ticket.");
-  await acceptTeamTicketCore(getFirestore(), ticketId, request.auth.uid);
+  await acceptTeamTicketCore(getFirestore(), ticketId, request.auth.uid, readYouthAcks(request.data));
   return { accepted: true };
 });
 
